@@ -244,7 +244,7 @@ def main():
             if (el && el._x_dataStack) {
                 const d = el._x_dataStack[0];
                 if (typeof d.openResolve === 'function') {
-                    d.openResolve('关-1');
+                    d.openResolve('货-2');
                     return {called: true};
                 }
                 return {noMethod: typeof d.openResolve};
