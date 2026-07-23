@@ -13,6 +13,14 @@
 import urllib.request, urllib.parse, json, time, os, sys, io, zipfile, tempfile
 import openpyxl
 
+# Windows CI 兼容：强制 stdout/stderr 用 UTF-8（cp1252 写中文会炸）
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 base = os.environ.get("PBC_TEST_BASE", "http://127.0.0.1:8111")
 results = []
 

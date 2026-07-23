@@ -45,9 +45,9 @@ jobs:
       - name: Start backend (background)
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath "python" -ArgumentList "-m","uvicorn","app.main:app","--host","127.0.0.1","--port","8111","--log-level","warning" -PassThru -WindowStyle Hidden
-          $proc.Id | Out-File -FilePath server.pid
-          Write-Host "Backend started, PID=$($proc.Id)"
+          $serverProc = Start-Process -FilePath "python" -ArgumentList "-m","uvicorn","app.main:app","--host","127.0.0.1","--port","8111","--log-level","warning" -PassThru -WindowStyle Hidden
+          $serverProc.Id | Out-File -FilePath server.pid
+          Write-Host "Backend started, PID=$($serverProc.Id)"
 
       - name: Wait for server ready
         shell: pwsh
@@ -66,6 +66,7 @@ jobs:
         env:
           PBC_TEST_BASE: http://127.0.0.1:8111
           PBC_SKIP_AI_INIT: '1'
+          PYTHONIOENCODING: utf-8
         run: |
           python scripts/regression_v7.py
           if ($LASTEXITCODE -ne 0) { Write-Error "Regression tests failed"; exit 1 }
@@ -80,8 +81,8 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path server.pid) {
-            $pid = Get-Content server.pid
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            $svrPid = Get-Content server.pid
+            Stop-Process -Id $svrPid -Force -ErrorAction SilentlyContinue
           }
 
       - name: Upload test logs on failure
