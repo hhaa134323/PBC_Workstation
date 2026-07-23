@@ -40,7 +40,7 @@ jobs:
         env:
           PBC_SKIP_AI_INIT: '1'
         run: |
-          python -c "from app.core.db import init_db; init_db(); print('init_db OK')"
+          python -c "from app.core.db import init_db, get_or_create_default_project; init_db(); get_or_create_default_project(); print('init_db + demo project OK')"
 
       - name: Start backend (background)
         shell: pwsh
