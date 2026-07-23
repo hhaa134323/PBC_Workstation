@@ -1,0 +1,64 @@
+name: PBC 工作站 CI
+
+on:
+  push:
+    branches: [main, v7]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare runtime dirs
+        run: |
+          mkdir -p projects data config demo_kit
+          mkdir -p projects/project_demo
+
+      - name: Init SQLite + demo project (without AI call)
+        env:
+          PBC_SKIP_AI_INIT: '1'
+        run: |
+          python -c "from app.core.db import init_db; init_db()"
+
+      - name: Start backend (background)
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8111 --log-level warning
+        background: true
+
+      - name: Wait for server
+        run: |
+          timeout 60 bash -c 'until curl -s http://127.0.0.1:8111/health; do sleep 2; done'
+
+      - name: Run regression tests (v7, 16 项)
+        run: |
+          python scripts/regression_v7.py
+        env:
+          PBC_TEST_BASE: http://127.0.0.1:8111
+
+      - name: JS syntax check
+        run: |
+          node -e "const fs=require('fs');const html=fs.readFileSync('app/static/index.html','utf8');const m=html.match(/<script>([\s\S]*?)<\/script>/g)||[];let all='';for(const s of m){const c=s.replace(/^<script>/,'').replace(/<\/script>$/,'');if(c.includes('src='))continue;all+='\n;\n'+c;}try{new Function(all);console.log('JS OK',all.length,'chars');}catch(e){console.error('JS ERR:',e.message);process.exit(1);}"
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            *.log
+            .workbuddy/tmp/*.log

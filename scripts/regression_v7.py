@@ -13,7 +13,7 @@
 import urllib.request, urllib.parse, json, time, os, sys, io, zipfile, tempfile
 import openpyxl
 
-base = "http://127.0.0.1:8111"
+base = os.environ.get("PBC_TEST_BASE", "http://127.0.0.1:8111")
 results = []
 
 
