@@ -21,6 +21,11 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# 让脚本能 import app 模块（scripts/ 在项目根的子目录）
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 base = os.environ.get("PBC_TEST_BASE", "http://127.0.0.1:8111")
 results = []
 
@@ -47,7 +52,6 @@ def _setup_demo_data():
         from pathlib import Path
         pkg = Path("data/test_data_package")
         if not pkg.exists() or not any(pkg.rglob("*")):
-            # 直接调 generate_test_data 的函数
             import importlib.util
             gen_path = Path("scripts/generate_test_data.py").resolve()
             if gen_path.exists():
@@ -59,25 +63,49 @@ def _setup_demo_data():
     except Exception as e:
         print(f"  [setup] 生成测试数据失败（继续测）: {e}")
 
-    # 2. 给 demo 项目灌入测试 PBC 清单（如果为空）
+    # 2. 确保 demo 项目的 PBC 清单文件存在（先建空清单，CI 上不存在）
+    try:
+        from pathlib import Path
+        demo_pbc = Path("projects/project_demo/01_PBC_List.xlsx")
+        if not demo_pbc.exists():
+            demo_pbc.parent.mkdir(parents=True, exist_ok=True)
+            from app.core.db import _create_empty_pbc_xlsx
+            _create_empty_pbc_xlsx(demo_pbc)
+            print(f"  [setup] demo 空清单已创建: {demo_pbc}")
+    except Exception as e:
+        print(f"  [setup] demo 空清单创建失败（继续测）: {e}")
+
+    # 3. 给 demo 项目灌入测试 PBC 清单（如果当前为空）
     try:
         d = _get("/api/pbc/demo/list")
         if d.get("count", 0) == 0:
             pkg_xlsx = Path("data/test_data_package/01_PBC_List_测试.xlsx")
             if pkg_xlsx.exists():
+                # 用 multipart/form-data 上传（FastAPI UploadFile 要求）
+                import uuid
+                boundary = "----pbc" + uuid.uuid4().hex
                 with open(pkg_xlsx, "rb") as f:
-                    data = f.read()
+                    file_data = f.read()
+                body = (
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="file"; filename="{pkg_xlsx.name}"\r\n'
+                    f"Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n"
+                ).encode("utf-8") + file_data + f"\r\n--{boundary}--\r\n".encode("utf-8")
                 req = urllib.request.Request(
                     base + "/api/pbc/demo/import",
-                    data=data,
-                    headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+                    data=body,
+                    headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
                     method="POST",
                 )
-                r = urllib.request.urlopen(req, timeout=15)
+                r = urllib.request.urlopen(req, timeout=30)
                 result = json.loads(r.read())
                 print(f"  [setup] 灌入测试 PBC 清单: {result.get('imported_rows', 0)} 项")
+            else:
+                print(f"  [setup] 测试 PBC 清单文件不存在: {pkg_xlsx}")
+        else:
+            print(f"  [setup] demo PBC 清单已有 {d.get('count', 0)} 项，跳过灌入")
     except Exception as e:
-        print(f"  [setup] 灌入 PBC 清单失败（继续测）: {e}")
+        print(f"  [setup] 灌入 PBC 清单失败（继续测）: {type(e).__name__}: {e}")
 
 
 def _get(path):
