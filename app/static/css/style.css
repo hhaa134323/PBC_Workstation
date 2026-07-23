@@ -1,0 +1,34 @@
+/* PBC 智能管理工作站 - 占位样式 */
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f5f7fa;
+    color: #333;
+}
+header {
+    background: #1f3a5f;
+    color: #fff;
+    padding: 1.5rem 2rem;
+}
+header h1 { margin: 0 0 0.3rem; font-size: 1.4rem; }
+.subtitle { margin: 0; opacity: 0.8; font-size: 0.9rem; }
+main {
+    max-width: 960px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+.dropzone {
+    border: 2px dashed #6c8cbf;
+    background: #fff;
+    border-radius: 8px;
+    padding: 3rem 1rem;
+    text-align: center;
+    color: #555;
+}
+.status {
+    margin-top: 1rem;
+    color: #666;
+    font-size: 0.9rem;
+}

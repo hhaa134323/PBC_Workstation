@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PBC 审计工作站 · 决策树 v2</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f8f9fa;color:#1a1a2e;line-height:1.6}
+  .app{max-width:1440px;margin:0 auto;padding:24px 32px}
+  .app-header{margin-bottom:28px}
+  .app-header h1{font-size:22px;font-weight:700;display:flex;align-items:center;gap:12px}
+  .app-header h1 small{font-size:13px;font-weight:400;color:#6b7280}
+  .app-header .sub{font-size:13px;color:#6b7280;margin-top:4px}
+  .tabs{display:flex;gap:4px;margin-bottom:28px;flex-wrap:wrap}
+  .tab-btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;background:#e5e7eb;color:#4b5563;transition:all .15s}
+  .tab-btn:hover{background:#d1d5db}
+  .tab-btn.active{background:#1a1a2e;color:#fff;box-shadow:0 2px 8px rgba(26,26,46,.2)}
+  .tab-btn .badge{display:inline-block;margin-left:5px;padding:0 7px;border-radius:9px;font-size:11px;background:rgba(255,255,255,.2)}
+  .tree-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:28px;overflow-x:auto;display:none}
+  .tree-wrap.active{display:block}
+  .phdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid #e5e7eb}
+  .phdr h2{font-size:16px;font-weight:600}
+  .phdr .leg{display:flex;gap:14px;font-size:11px;color:#6b7280}
+  .phdr .leg span{display:flex;align-items:center;gap:3px}
+  .sc-hint{margin-top:14px;padding:6px 14px;background:#f3f4f6;border-radius:8px;font-size:12px;color:#6b7280;text-align:center}
+  .tree{display:flex;flex-direction:row;align-items:flex-start;padding:8px 0;min-width:min-content}
+  .tn{display:flex;flex-direction:row;align-items:flex-start;position:relative}
+  .nm{display:flex;flex-direction:column;align-items:center;position:relative;flex-shrink:0}
+  .card{position:relative;cursor:pointer;user-select:none;transition:filter .15s;display:flex;align-items:center;justify-content:center;text-align:center}
+  .card:hover{filter:brightness(.93)}
+  .diamond{
+    background:#eff6ff;border:2.5px solid #3b82f6;color:#1e40af;font-weight:600;font-size:13px;padding:14px 10px;
+    transform:rotate(45deg);margin:18px 22px;border-radius:0;width:130px;height:130px;
+    display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0
+  }
+  .diamond .tw{transform:rotate(-45deg);max-width:100px;word-break:break-word;line-height:1.4}
+  .leaf{padding:10px 13px;border-radius:10px;font-size:13px;font-weight:500;background:#f3f4f6;border:2px solid #d1d5db;min-width:100px;max-width:160px}
+  .leaf.good{background:#f0fdf4;border-color:#22c55e;color:#166534}
+  .leaf.warning{background:#fefce8;border-color:#eab308;color:#854d0e}
+  .leaf.bad{background:#fef2f2;border-color:#ef4444;color:#991b1b}
+  .leaf .ico{font-size:11px;margin-bottom:3px}
+  .leaf .stg{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;margin-top:3px;background:rgba(0,0,0,.06)}
+  .exp{position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:#6b7280;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;opacity:.8}
+  .brs{display:flex;flex-direction:column;align-items:flex-start;position:relative;margin-left:6px;padding-left:12px;flex-shrink:0}
+  .br{display:flex;flex-direction:row;align-items:flex-start;position:relative;padding:6px 0}
+  .bl{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;font-size:12px;font-weight:700;flex-shrink:0;margin-right:6px;margin-top:10px;position:relative;z-index:2}
+  .bl.yes{background:#dcfce7;color:#166534;border:2px solid #22c55e}
+  .bl.no{background:#fee2e2;color:#991b1b;border:2px solid #ef4444}
+  .bl.ok{background:#dcfce7;color:#166534;border:2px solid #22c55e}
+  .bl.fail{background:#fee2e2;color:#991b1b;border:2px solid #ef4444}
+  .bl.step{background:#f3e8ff;color:#6b21a8;border:2px solid #a855f7;font-size:11px;width:30px;height:30px}
+  .bl.cont{background:#fef3c7;color:#92400e;border:2px solid #f59e0b;font-size:14px}
+  .br::before{content:'';position:absolute;left:15px;top:0;bottom:0;width:2px;background:#d1d5db;z-index:0}
+  .br:last-child::before{bottom:50%}
+  .br:first-child::before{top:50%}
+  .br:only-child::before{display:none}
+  @media(max-width:768px){
+    .app{padding:12px}
+    .diamond{width:100px;height:100px;margin:14px 16px;padding:10px 6px}
+    .diamond .tw{max-width:75px;font-size:11px}
+    .bl{width:26px;height:26px;font-size:10px}
+    .tree-wrap{padding:14px}
+  }
+</style>
+</head>
+<body>
+<div class="app" x-data="appData()">
+  <div class="app-header">
+    <h1>PBC 智能管理工作站 · 决策树 <small>v2.0</small></h1>
+    <div class="sub">每个节点 = 判断条件（以问号结尾），分"是/否""成功/失败"两条分支，覆盖所有可能路径</div>
+  </div>
+
+  <div class="tabs">
+    <template x-for="(t,i) in tabs" :key="i">
+      <button class="tab-btn" :class="{active:tab===i}" @click="tab=i" x-text="t.l + ' ' + t.b"></button>
+    </template>
+  </div>
+
+  <template x-for="(t,i) in tabs" :key="i">
+    <div class="tree-wrap" :class="{active:tab===i}">
+      <div class="phdr">
+        <h2 x-text="t.title"></h2>
+        <div class="leg">
+          <span>✅ <span style="color:#166534">体验好</span></span>
+          <span>⚠️ <span style="color:#854d0e">体验一般</span></span>
+          <span>❌ <span style="color:#991b1b">体验差 / Bug</span></span>
+        </div>
+      </div>
+      <div class="tree" x-html="render(t.root)"></div>
+      <div class="sc-hint">← 横向滚动浏览完整决策树 →</div>
+    </div>
+  </template>
+</div>
+
+<script>
+function appData() {
+  return {
+    tab: 0,
+    tabs: [
+      { l:'场景1', b:'首启', title:'场景1：首启（双击 exe → 启动流程）', root: s1() },
+      { l:'场景2', b:'扫描', title:'场景2：扫描（点"扫描新文件"→ 完整处理链路）', root: s2() },
+      { l:'场景3', b:'复核', title:'场景3：复核（Tab 2 待复核 → 状态变更操作）', root: s3() },
+      { l:'场景4', b:'风险', title:'场景4：风险化解（Tab 3 超期未提供 → 化解流程）', root: s4() },
+      { l:'场景5', b:'项目', title:'场景5：多项目管理（项目切换 → 创建 / 删除）', root: s5() },
+      { l:'场景6', b:'异常', title:'场景6：异常处理（AI / 网络 / 端口 / 文件异常）', root: s6() },
+      { l:'场景7', b:'边界', title:'场景7：边界情况（空清单 / 全终态 / 数据残留）', root: s7() }
+    ],
+    expanded: [],
+
+    render(n) {
+      if (!n) return '';
+      return this._rn(n, 'r');
+    },
+
+    _rn(n, p) {
+      const id = p;
+      const isD = n.t === 'd';
+      const hs = n.b && n.b.length > 0;
+      let h = '<div class="tn">';
+
+      // Card
+      h += '<div class="nm">';
+      if (isD) {
+        h += `<div class="card diamond" @click.stop="toggle('${id}')">`;
+        h += `<div class="tw">${n.text.replace(/\n/g,'<br>')}</div>`;
+        if (hs) h += `<span class="exp" x-text="expanded.includes('${id}')?'▶':'▶'" :style="{opacity:expanded.includes('${id}')?'1':'0.4',background:expanded.includes('${id}')?'#3b82f6':'#6b7280'}"></span>`;
+        h += '</div>';
+      } else {
+        const cls = n.s ? 'leaf '+n.s : 'leaf';
+        h += `<div class="card ${cls}">`;
+        if (n.st) h += `<div class="ico">${n.st}</div>`;
+        h += `<div>${n.text.replace(/\n/g,'<br>')}</div></div>`;
+      }
+      h += '</div>';
+
+      // Branches
+      if (hs) {
+        h += `<div class="brs" x-show="expanded.includes('${id}')">`;
+        n.b.forEach((br,idx) => {
+          const lc = /^[是否成功]|^是$|^否$/.test(br.l||'') ?
+            (['是','成功','有','允许'].includes(br.l) ? 'bl yes' : 'bl no') : 'bl step';
+          h += '<div class="br">';
+          h += `<div class="${lc}">${br.l||'→'}</div>`;
+          const cid = p+'.b'+idx;
+          if (Array.isArray(br.c)) {
+            // Multiple parallel children
+            h += '<div class="tn"><div class="brs">';
+            br.c.forEach((ch,ci) => {
+              h += '<div class="br">';
+              h += `<div class="bl step">${ci+1}</div>`;
+              h += this._rn(ch, cid+'.p'+ci);
+              h += '</div>';
+            });
+            h += '</div></div>';
+          } else if (br.c) {
+            h += this._rn(br.c, cid);
+          }
+          h += '</div>';
+        });
+        h += '</div>';
+      }
+
+      h += '</div>';
+      return h;
+    },
+
+    toggle(id) {
+      const i = this.expanded.indexOf(id);
+      if (i>=0) this.expanded.splice(i,1);
+      else this.expanded.push(id);
+    }
+  };
+}
+
+// ---- Helpers ----
+function D(text, branches) { return { t:'d', text, b:branches||[] }; }
+function B(label, child) { return { l:label, c:child }; }
+function L(text, s) {
+  const m={good:{st:'✅ 体验好',s:'good'},warning:{st:'⚠️ 体验一般',s:'warning'},bad:{st:'❌ 体验差 / Bug',s:'bad'}};
+  const r=m[s]||{st:'',s:''};
+  return { t:'l', text, st:r.st, s:r.s };
+}
+function chain(decisions){
+  // Build a sequential chain: root is first decision, each "是" branch points to next
+  const r = decisions[0];
+  if (!r) return null;
+  let cur = r;
+  for (let i=1; i<decisions.length; i++) {
+    const yesB = cur.b.find(b => ['是','有','成功','允许'].includes(b.l));
+    const noB = cur.b.find(b => ['否','无','失败','不允许'].includes(b.l));
+    if (yesB) {
+      // Transform yesB child from leaf to next decision
+      // Keep existing yes leaf as override
+      // The "是" branch should lead to the next decision
+    }
+    cur = decisions[i];
+  }
+  return r;
+}
+
+// =========== Scene 1: 首启 ===========
+function s1() {
+  return D('双击 exe\n启动应用？', [
+    B('是', D('端口 8000 可用？', [
+      B('否', D('fallback 端口\n可用？', [
+        B('否', L('全占 → "端口全占"提示，\n应用无法启动', 'bad')),
+        B('是', L('使用 fallback 端口\n启动成功', 'warning'))
+      ])),
+      B('是', L('使用 8000 端口\n正常启动', 'good'))
+    ], [
+      // Next decisions after port check
+      D('浏览器自动打开？', [
+        B('否', D('控制台打印 URL →\n用户手动打开了？', [
+          B('否', L('用户需从控制台\n手动复制 URL', 'bad')),
+          B('是', L('手动打开浏览器\n正常使用', 'warning'))
+        ])),
+        B('是', L('浏览器自动打开\n正常访问', 'good'))
+      ]),
+      D('首次使用？\n(localStorage\nonboarded 标记)', [
+        B('是（已引导过）', L('跳过引导\n直接进入工作台', 'good')),
+        B('否（首次）', L('弹出引导流程\n用户完成引导', 'good'))
+      ]),
+      D('有已有项目？', [
+        B('否', L('提示创建项目\n跳转创建流程', 'warning')),
+        B('是', D('demo 项目\n就绪？', [
+          B('否', L('自动创建 demo 数据\n首次加载较慢', 'warning')),
+          B('是', L('加载项目列表\n进入工作台', 'good'))
+        ]))
+      ])
+    ])),
+    B('否', L('应用无响应\n需手动排查', 'bad'))
+  ]);
+}
+
+// =========== Scene 2: 扫描 ===========
+function s2() {
+  return D('点"扫描新文件"', [
+    B('否', L('扫描未触发\n无操作', 'warning')),
+    B('是', D('客户文件夹\n已配置？', [
+      B('否', D('提示配置 →\n用户配置了？', [
+        B('否', L('卡在配置界面\n无强制退出按钮', 'bad')),
+        B('是', D('文件夹存在？', [
+          B('否', L('提示"文件夹\n不存在"', 'bad')),
+          B('是', D('文件夹有文件？', [
+            B('否', L('提示"未发现\n新文件"', 'warning')),
+            B('是', D('文件大小稳定？', [
+              B('否', D('等 2 秒重试 →\n仍然不稳定？', [
+                B('是', L('跳过 + 日志记录\n无用户提示', 'bad')),
+                B('否', L('大小稳定\n继续处理', 'good'))
+              ])),
+              B('是', D('SHA-256\n已处理过？', [
+                B('是', L('去重跳过\n避免重复处理', 'good')),
+                B('否', D('parse_file\n成功？', [
+                  B('否', D('是 PDF？', [
+                    B('是', D('有文字\n≥50 字符？', [
+                      B('是', L('pdfplumber\n提取成功', 'good')),
+                      B('否', D('Qwen-VL\nOCR 成功？', [
+                        B('是', L('OCR 识别成功', 'good')),
+                        B('否', L('PDF 完全不可读\n解析失败', 'bad'))
+                      ]))
+                    ])),
+                    B('否', D('是 Excel？', [
+                      B('是', D('openpyxl\n可解析？', [
+                        B('是', L('Excel 解析成功', 'good')),
+                        B('否', L('Excel 格式异常\n解析失败', 'bad'))
+                      ])),
+                      B('否', L('未支持格式\n跳过不处理', 'warning'))
+                    ]))
+                  ])),
+                  B('是', D('AI classify\n成功？', [
+                    B('否', L('item_id=None\n后续全跳过', 'bad')),
+                    B('是', D('confidence\n≥ 0.7？', [
+                      B('是', L('标绿色\n置信度高', 'good')),
+                      B('否', L('标红色高亮\n需人工复核', 'warning'))
+                    ]))
+                  ]))
+                ]))
+              ]))
+            ]))
+          ]))
+        ]))
+      ])),
+      B('是', D('文件夹存在？', [
+        B('否', L('提示"文件夹\n不存在"', 'bad')),
+        B('是', D('文件夹有文件？', [
+          B('否', L('提示"未发现\n新文件"', 'warning')),
+          B('是', D('文件大小稳定？', [
+            B('否', D('等 2 秒 →\n仍不稳定？', [
+              B('是', L('跳过 + 日志\n无用户提示', 'bad')),
+              B('否', L('继续处理', 'good'))
+            ])),
+            B('是', D('SHA-256\n已处理？', [
+              B('是', L('去重跳过', 'good')),
+              B('否', D('parse_file\n成功？', [
+                B('否', D('PDF？', [
+                  B('是', D('有文字 ≥50？', [
+                    B('是', L('pdfplumber\n成功', 'good')),
+                    B('否', D('Qwen-VL\n成功？', [
+                      B('是', L('OCR 成功', 'good')),
+                      B('否', L('解析失败', 'bad'))
+                    ]))
+                  ])),
+                  B('否', D('Excel？', [
+                    B('是', D('可解析？', [
+                      B('是', L('Excel 成功', 'good')),
+                      B('否', L('解析失败', 'bad'))
+                    ])),
+                    B('否', L('格式跳过', 'warning'))
+                  ]))
+                ])),
+                B('是', D('AI classify\n成功？', [
+                  B('否', L('item_id=None\n后续全跳过', 'bad')),
+                  B('是', D('confidence\n≥ 0.7？', [
+                    B('是', L('标绿自动通过', 'good')),
+                    B('否', L('标红需复核', 'warning'))
+                  ]))
+                ]))
+              ]))
+            ]))
+          ]))
+        ]))
+      ]))
+    ])),
+    // Post-processing chain for all "是" branches from scan
+    B('继续', D('期间检查\ncovered？', [
+      B('否', L('断档 → advisor\n风险提示推送', 'warning')),
+      B('是', L('期间覆盖完整\n无断档', 'good'))
+    ])),
+    B('继续', D('archive_file\n成功？', [
+      B('否', L('归档失败\n文件未归位', 'bad')),
+      B('是', L('归档成功\n文件已归位', 'good'))
+    ])),
+    B('继续', D('write_pbc_list\n条件格式保留？', [
+      B('否', L('条件格式丢失\n已知 bug', 'bad')),
+      B('是', L('Excel 格式保留\n状态颜色正确', 'good'))
+    ])),
+    B('继续', D('update_item_status\n状态机校验通过？', [
+      B('否', L('状态更新失败\n数据不一致', 'bad')),
+      B('是', L('扫描完成\n全链路正常', 'good'))
+    ]))
+  ]);
+}
+
+// =========== Scene 3: 复核 ===========
+function s3() {
+  return D('Tab 2 待复核\n有项？', [
+    B('否', L('提示"无待复核项"\n空状态展示', 'warning')),
+    B('是', D('存在置信度\n< 0.7 的项？', [
+      B('否', L('正常列表\n置信度均合格', 'good')),
+      B('是', D('置顶红色高亮\n点了状态下拉？', [
+        B('复核通过', D('状态机允许\n审核中→已提供？', [
+          B('否', L('提示"状态\n不允许"', 'bad')),
+          B('是', L('审核通过\n已提供', 'good'))
+        ])),
+        B('复核退回', D('状态机允许\n审核中→未提供？', [
+          B('否', L('提示"状态\n不允许退回"', 'bad')),
+          B('是', L('退回成功\n未提供', 'good'))
+        ])),
+        B('标记不适用', D('状态机允许\n任何→不适用？', [
+          B('否', L('提示"无法\n标记不适用"', 'bad')),
+          B('是', L('标记成功\n需备注理由', 'good'))
+        ])),
+        B('撤销归档', D('状态机允许\n已提供→审核中？', [
+          B('否', L('后端不允许撤销\n已知 bug', 'bad')),
+          B('是', L('撤销成功\n回退审核中', 'good'))
+        ])),
+        B('否（未操作）', L('停留在此界面\n等待用户操作', 'warning'))
+      ]))
+    ]))
+  ]);
+}
+
+// =========== Scene 4: 风险化解 ===========
+function s4() {
+  return D('Tab 3 超期\n未提供有超期项？', [
+    B('否', L('提示"无超期项"\n全绿状态', 'good')),
+    B('是', [
+      D('热力图有数据？', [
+        B('否', L('热力图空白\n无数据渲染', 'warning')),
+        B('是', L('热力图正常渲染\n实体×科目矩阵', 'good'))
+      ]),
+      D('用户点高风险项\nAI resolve 成功？', [
+        B('否', D('降级成功？\n(不抛 500)', [
+          B('是', L('降级返回结果\n功能受限', 'warning')),
+          B('否', L('后端抛 500\n服务不可用', 'bad'))
+        ])),
+        B('是', D('返回\nused_fallback？', [
+          B('是', L('知识库兜底方案\n非 AI 直接解决', 'warning')),
+          B('否', L('AI 直接生成\n化解建议', 'good'))
+        ]))
+      ]),
+      D('缺口汇报\n有超期项？', [
+        B('否', L('显示"无超期"\n汇报无内容', 'good')),
+        B('是', L('自动生成缺口汇报\n影响分析+替代程序', 'good'))
+      ])
+    ])
+  ]);
+}
+
+// =========== Scene 5: 多项目 ===========
+function s5() {
+  return D('有其他项目？', [
+    B('否', L('仅当前项目\n无切换选项', 'good')),
+    B('是', D('点项目抽屉\n打开了？', [
+      B('否', L('UI 响应失败\n无法展开', 'bad')),
+      B('是', [
+        D('创建项目\n项目名合法？', [
+          B('否', L('提示"项目名\n不合法"', 'warning')),
+          B('是', L('创建成功\n进入新工作台', 'good'))
+        ]),
+        D('删除项目\n是 demo 项目？', [
+          B('是', L('拒绝删除\n保护演示数据', 'good')),
+          B('否', D('删除方式\nsoft/hard？', [
+            B('soft', L('软删除成功\n数据可恢复', 'good')),
+            B('hard', L('硬删除成功\n不可恢复', 'warning'))
+          ]))
+        ])
+      ])
+    ]))
+  ]);
+}
+
+// =========== Scene 6: 异常 ===========
+function s6() {
+  return D('运行异常\n是否发生？', [
+    B('否', L('所有组件\n正常运行', 'good')),
+    B('是', [
+      D('AI 超时？', [
+        B('否', L('AI 响应\n正常', 'good')),
+        B('是', D('retry 第 2 次\n成功？', [
+          B('是', L('第 2 次成功\n延迟略高', 'warning')),
+          B('否', D('retry 第 3 次\n成功？', [
+            B('是', L('第 3 次成功\n延迟高', 'warning')),
+            B('否', L('3 次均失败\n降级处理', 'bad'))
+          ]))
+        ]))
+      ]),
+      D('API Key 有效？\n(运行时 401)', [
+        B('否', L('突遇 401 认证\n任务中断', 'bad')),
+        B('是', L('API 认证\n正常', 'good'))
+      ]),
+      D('CDN 可用？', [
+        B('否', L('CDN 不可用\n界面不完整', 'bad')),
+        B('是', L('静态资源\n正常加载', 'good'))
+      ]),
+      D('端口被占？', [
+        B('否', L('默认端口\n可用', 'good')),
+        B('是', D('fallback\n全占？', [
+          B('是', L('所有端口占\n无法启动', 'bad')),
+          B('否', L('使用 fallback\n端口启动', 'warning'))
+        ]))
+      ]),
+      D('SQLite 锁竞争？\n(无 WAL)', [
+        B('是', L('写入操作失败\n数据不一致', 'bad')),
+        B('否', L('数据库写入\n正常', 'good'))
+      ]),
+      D('半截文件\n大小不稳定？', [
+        B('否', L('文件完整\n正常处理', 'good')),
+        B('是', D('等 2 秒\n仍不稳定？', [
+          B('是', L('跳过该文件\n文件被丢弃', 'bad')),
+          B('否', L('稳定后处理\n延迟略高', 'warning'))
+        ]))
+      ]),
+      D('浏览器没\n自动开？', [
+        B('否', L('自动打开\n正常', 'good')),
+        B('是', D('打印 URL\n用户手动打开？', [
+          B('否', L('找不到 URL\n无法访问', 'bad')),
+          B('是', L('手动打开\n浏览器访问', 'warning'))
+        ]))
+      ])
+    ])
+  ]);
+}
+
+// =========== Scene 7: 边界 ===========
+function s7() {
+  return D('项目处于\n边界状态？', [
+    B('否', L('项目状态正常\n无边界情况', 'good')),
+    B('是', [
+      D('项目刚创建\nPBC 清单 0 项？', [
+        B('是', L('空清单提示\n需配 PBC 清单', 'warning')),
+        B('否', L('清单非空\n正常展示', 'good'))
+      ]),
+      D('所有项已提供\n全已归档？', [
+        B('是', L('全绿完成状态\n项目完工', 'good')),
+        B('否', L('有未完成项\n继续跟进', 'good'))
+      ]),
+      D('所有项未提供\n全超期？', [
+        B('是', L('全红预警\n严重滞后', 'bad')),
+        B('否', L('部分已处理\n正常跟进', 'good'))
+      ]),
+      D('项目已删除\nlocalStorage\n残留上次项目？', [
+        B('否', L('localStorage\n数据一致', 'good')),
+        B('是', D('fallback\n落到有效项目？', [
+          B('是', L('自动 fallback\n注意残留', 'warning')),
+          B('否', L('卡在无效页面\n无法操作', 'bad'))
+        ]))
+      ])
+    ])
+  ]);
+}
+</script>
+</body>
+</html>

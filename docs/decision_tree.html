@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PBC 智能工作站 · 用户决策树</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+    background: #f8f9fa; color: #1a1a2e; min-height: 100vh;
+  }
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff; padding: 20px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 3px solid #e94560;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  .header h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+  .header h1 span { color: #e94560; }
+  .header .sub { font-size: 13px; color: #8899aa; }
+  .header .badge {
+    background: #e94560; color: #fff; font-size: 11px; padding: 3px 10px;
+    border-radius: 12px; font-weight: 500;
+  }
+
+  /* Root scenario bar */
+  .scenario-bar {
+    display: flex; gap: 8px; padding: 16px 32px; background: #fff;
+    border-bottom: 1px solid #e9ecef; overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .scenario-btn {
+    flex-shrink: 0; padding: 10px 18px; border-radius: 8px;
+    border: 1.5px solid #dee2e6; background: #fff;
+    cursor: pointer; font-size: 13px; font-weight: 500;
+    transition: all 0.2s; white-space: nowrap;
+    color: #495057;
+  }
+  .scenario-btn:hover { border-color: #0f3460; background: #f0f4ff; }
+  .scenario-btn.active {
+    border-color: #0f3460; background: #0f3460; color: #fff;
+    box-shadow: 0 2px 8px rgba(15,52,96,0.3);
+  }
+  .scenario-btn .num {
+    display: inline-block; width: 22px; height: 22px; line-height: 22px;
+    text-align: center; border-radius: 50%;
+    font-size: 11px; font-weight: 700; margin-right: 6px;
+  }
+  .scenario-btn.active .num { background: rgba(255,255,255,0.2); }
+  .scenario-btn:not(.active) .num { background: #e9ecef; }
+
+  /* Main tree area */
+  .tree-area {
+    padding: 24px 32px 64px; overflow-x: auto; overflow-y: visible;
+    min-height: calc(100vh - 130px);
+  }
+
+  /* Horizontal tree layout */
+  .tree-container {
+    display: none; position: relative;
+  }
+  .tree-container.visible { display: flex; flex-direction: row; gap: 0; align-items: flex-start; }
+  .tree-level {
+    display: flex; flex-direction: column; gap: 12px;
+    position: relative; flex-shrink: 0;
+  }
+  .tree-level + .tree-level { margin-left: 48px; }
+  .tree-level + .tree-level::before {
+    content: ''; position: absolute; left: -24px; top: 50%;
+    width: 24px; height: 2px; background: #adb5bd;
+  }
+
+  /* Node card */
+  .node {
+    position: relative; padding: 12px 16px; border-radius: 8px;
+    border: 1.5px solid #dee2e6; background: #fff;
+    min-width: 140px; max-width: 200px;
+    font-size: 13px; line-height: 1.4;
+    transition: all 0.2s; cursor: default;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .node.clickable { cursor: pointer; }
+  .node.clickable:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+  }
+  .node .label { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .node .desc { font-size: 11px; color: #6c757d; }
+  .node .eval { margin-top: 6px; font-size: 12px; font-weight: 500; }
+  .node .arrow {
+    position: absolute; right: -24px; top: 50%; transform: translateY(-50%);
+    color: #adb5bd; font-size: 16px;
+  }
+
+  /* Node types */
+  .node-start {
+    background: #0f3460; color: #fff; border-color: #0f3460;
+  }
+  .node-start .desc { color: #b0c4de; }
+  .node-action {
+    background: #e8f4f8; border-color: #b3d9e8; 
+  }
+  .node-action .label { color: #0f3460; }
+  .node-decision {
+    background: #fff8e1; border-color: #ffc107; position: relative;
+  }
+  .node-decision::before {
+    content: '◆'; position: absolute; top: -10px; left: 12px;
+    color: #ffc107; font-size: 14px;
+  }
+  .node-decision .label { color: #856404; }
+  .node-leaf-good {
+    background: #d4edda; border-color: #28a745;
+  }
+  .node-leaf-good .label { color: #155724; }
+  .node-leaf-good .eval { color: #155724; }
+  .node-leaf-warn {
+    background: #fff3cd; border-color: #ffc107;
+  }
+  .node-leaf-warn .label { color: #856404; }
+  .node-leaf-warn .eval { color: #856404; }
+  .node-leaf-bad {
+    background: #f8d7da; border-color: #dc3545;
+  }
+  .node-leaf-bad .label { color: #721c24; }
+  .node-leaf-bad .eval { color: #721c24; }
+  .node-info {
+    background: #f0f0f0; border-color: #ced4da; border-style: dashed;
+  }
+  .node-info .label { color: #495057; }
+
+  /* Connection lines between levels */
+  .tree-level .node {
+    position: relative;
+  }
+
+  /* Sub-branch container (collapsible) */
+  .sub-branches {
+    display: flex; flex-direction: row; gap: 12px;
+    margin-left: 16px; padding-left: 16px;
+    border-left: 2px solid #dee2e6;
+    position: relative;
+  }
+  .sub-branches.collapsed { display: none; }
+  .sub-branch-column {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .toggle-hint {
+    position: absolute; left: -8px; top: 50%; transform: translateY(-50%);
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #0f3460; color: #fff;
+    font-size: 10px; line-height: 16px; text-align: center;
+    cursor: pointer; z-index: 2;
+  }
+
+  /* Node item with children indicator */
+  .node-has-children {
+    position: relative;
+  }
+  .node-has-children::after {
+    content: '+'; position: absolute; right: -10px; top: 50%;
+    transform: translateY(-50%);
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #0f3460; color: #fff;
+    font-size: 13px; font-weight: 700;
+    text-align: center; line-height: 20px;
+    cursor: pointer; z-index: 3;
+  }
+  .node-has-children.expanded::after {
+    content: '−';
+    background: #e94560;
+  }
+
+  /* Branch group (vertical chain within same level) */
+  .branch-group {
+    display: flex; flex-direction: row; gap: 0; align-items: flex-start;
+  }
+  .branch-chain {
+    display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
+    position: relative;
+  }
+  .branch-chain + .branch-chain {
+    margin-left: 24px; padding-left: 24px;
+    border-left: 2px solid #dee2e6;
+  }
+  .branch-label {
+    font-size: 11px; color: #6c757d; padding: 2px 8px;
+    background: #f8f9fa; border-radius: 4px; margin-bottom: 4px;
+    white-space: nowrap;
+  }
+
+  /* Vertical connector */
+  .v-connector {
+    width: 2px; height: 12px; background: #dee2e6;
+    margin-left: 50%; transform: translateX(-50%);
+  }
+
+  /* Inline row of nodes (parallel choices) */
+  .row-nodes {
+    display: flex; flex-direction: row; gap: 12px; flex-wrap: wrap;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex; gap: 20px; padding: 12px 32px; background: #fff;
+    border-bottom: 1px solid #e9ecef; font-size: 12px; color: #495057;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot {
+    width: 14px; height: 14px; border-radius: 3px; border: 1px solid #dee2e6;
+  }
+  .legend-dot.green { background: #d4edda; border-color: #28a745; }
+  .legend-dot.yellow { background: #fff3cd; border-color: #ffc107; }
+  .legend-dot.red { background: #f8d7da; border-color: #dc3545; }
+  .legend-dot.blue { background: #0f3460; }
+  .legend-dot.amber { background: #fff8e1; border-color: #ffc107; }
+  .legend-dot.gray { background: #f0f0f0; border-color: #ced4da; }
+
+  /* Tooltip */
+  .node .tip {
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%); background: #1a1a2e; color: #fff;
+    padding: 6px 10px; border-radius: 6px; font-size: 11px;
+    white-space: nowrap; z-index: 10; display: none;
+    pointer-events: none;
+  }
+  .node:hover .tip { display: block; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .header { padding: 14px 16px; flex-wrap: wrap; gap: 8px; }
+    .header h1 { font-size: 16px; }
+    .scenario-bar { padding: 12px 16px; gap: 6px; }
+    .scenario-btn { padding: 7px 12px; font-size: 12px; }
+    .tree-area { padding: 16px; }
+    .tree-level + .tree-level { margin-left: 24px; }
+    .node { min-width: 110px; padding: 8px 10px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+<div x-data="decisionTreeApp()">
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>PBC <span>智能工作站</span></h1>
+      <div class="sub">基于 AUD-SOP-PBC-01 V1.0 · 用户决策树</div>
+    </div>
+    <div class="badge">v0.3 · 7 大场景全覆盖</div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span style="font-weight:600;">图例：</span>
+    <div class="legend-item"><div class="legend-dot blue"></div> 起始/操作</div>
+    <div class="legend-item"><div class="legend-dot amber"></div> 判定/条件分支</div>
+    <div class="legend-item"><div class="legend-dot green"></div> ✅ 体验好</div>
+    <div class="legend-item"><div class="legend-dot yellow"></div> ⚠️ 体验一般</div>
+    <div class="legend-item"><div class="legend-dot red"></div> ❌ 体验差/bug</div>
+    <div class="legend-item"><div class="legend-dot gray"></div> 信息/状态</div>
+  </div>
+
+  <!-- Scenario bar -->
+  <div class="scenario-bar">
+    <template x-for="(s, i) in scenarios" :key="i">
+      <button class="scenario-btn" :class="{ active: activeScenario === i }"
+              @click="toggleScenario(i)">
+        <span class="num" x-text="i+1"></span>
+        <span x-text="s.title"></span>
+      </button>
+    </template>
+  </div>
+
+  <!-- Tree area -->
+  <div class="tree-area">
+    <!-- Scenario 1: 首启 -->
+    <div class="tree-container" :class="{ visible: activeScenario === 0 }">
+      <div class="tree-level" style="padding-top:40px;">
+        <div class="node node-start" style="min-width:160px;">
+          <div class="label">双击 PBC.exe</div>
+          <div class="desc">用户双击可执行文件</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:20px;">
+        <div class="node node-decision clickable" @click="toggleBranch('s1-b1')" style="min-width:170px;">
+          <div class="label">浏览器自动打开？</div>
+          <div class="desc">FastAPI 启动 127.0.0.1</div>
+        </div>
+        <div x-show="branchOpen['s1-b1']" class="row-nodes" style="margin-top:4px;">
+          <div class="node node-leaf-good" style="min-width:160px;">
+            <div class="label">✅ 自动打开浏览器</div>
+            <div class="desc">webbrowser.open() 成功</div>
+            <div class="eval">✅ 好</div>
+          </div>
+          <div class="node node-leaf-warn" style="min-width:170px;">
+            <div class="label">⚠️ 手动打印 URL</div>
+            <div class="desc">终端打印 http://127.0.0.1:8765</div>
+            <div class="eval">⚠️ 一般</div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:60px;">
+        <div class="node node-decision clickable" @click="toggleBranch('s1-b2')" style="min-width:170px;">
+          <div class="label">首次使用？</div>
+          <div class="desc">检查本地配置状态</div>
+        </div>
+        <div x-show="branchOpen['s1-b2']" class="row-nodes" style="margin-top:4px;">
+          <!-- 首次 -->
+          <div class="branch-chain">
+            <div class="node node-action" style="min-width:140px;">
+              <div class="label">首次 → 3 步引导</div>
+              <div class="desc">欢迎 → 选项目 → 开始使用</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-decision clickable" @click="toggleBranch('s1-b3')" style="min-width:150px;">
+              <div class="label">有已有项目？</div>
+              <div class="desc">检测 projects/ 目录</div>
+            </div>
+            <div x-show="branchOpen['s1-b3']" class="row-nodes" style="margin-top:4px;">
+              <div class="node node-leaf-good" style="min-width:140px;">
+                <div class="label">✅ 有 → 直接进入</div>
+                <div class="desc">加载现有项目</div>
+                <div class="eval">✅ 好</div>
+              </div>
+              <div class="node node-leaf-warn" style="min-width:150px;">
+                <div class="label">⚠️ 无 → 创建项目</div>
+                <div class="desc">引导用户创建新项目</div>
+                <div class="eval">⚠️ 一般</div>
+              </div>
+            </div>
+          </div>
+          <!-- 非首次 -->
+          <div class="branch-chain">
+            <div class="node node-leaf-good" style="min-width:160px;">
+              <div class="label">✅ 非首次 → 跳过引导</div>
+              <div class="desc">直接进入主界面</div>
+              <div class="eval">✅ 好</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:180px;">
+        <div class="node node-leaf-good" style="min-width:150px;">
+          <div class="label">✅ 进入主界面</div>
+          <div class="desc">4 Tab 状态导航就绪</div>
+          <div class="eval">✅ 好</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 2: 扫描 -->
+    <div class="tree-container" :class="{ visible: activeScenario === 1 }">
+      <div class="tree-level" style="padding-top:20px;">
+        <div class="node node-start">
+          <div class="label">点击"扫描"按钮</div>
+          <div class="desc">Tab 1 顶部大按钮</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:0;">
+        <div class="node node-decision clickable" @click="toggleBranch('s2-b1')" style="min-width:180px;">
+          <div class="label">客户文件夹已配置？</div>
+          <div class="desc">config/api_config.json</div>
+        </div>
+        <div x-show="branchOpen['s2-b1']" class="row-nodes" style="margin-top:4px;">
+          <div class="node node-leaf-bad" style="min-width:170px;">
+            <div class="label">❌ 未配置</div>
+            <div class="desc">弹出配置对话框</div>
+            <div class="eval">❌ 差</div>
+          </div>
+          <div class="branch-chain">
+            <div class="node node-leaf-good" style="min-width:160px;">
+              <div class="label">✅ 已配置</div>
+              <div class="desc">路径有效，继续</div>
+              <div class="eval">✅ 好</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-decision clickable" @click="toggleBranch('s2-b2')" style="min-width:160px;">
+              <div class="label">文件夹有文件？</div>
+              <div class="desc">glob 扫描</div>
+            </div>
+            <div x-show="branchOpen['s2-b2']" class="row-nodes" style="margin-top:4px;">
+              <div class="node node-leaf-warn" style="min-width:160px;">
+                <div class="label">⚠️ 无文件</div>
+                <div class="desc">提示"文件夹为空"</div>
+                <div class="eval">⚠️ 一般</div>
+              </div>
+              <div class="branch-chain">
+                <div class="node node-leaf-good" style="min-width:160px;">
+                  <div class="label">✅ 有文件</div>
+                  <div class="desc">进入处理流水线</div>
+                  <div class="eval">✅ 好</div>
+                </div>
+                <div class="v-connector"></div>
+                <div class="node node-decision clickable" @click="toggleBranch('s2-b3')" style="min-width:170px;">
+                  <div class="label">文件大小稳定？</div>
+                  <div class="desc">等待拷贝完成</div>
+                </div>
+                <div x-show="branchOpen['s2-b3']" class="row-nodes" style="margin-top:4px;">
+                  <div class="node node-leaf-bad" style="min-width:170px;">
+                    <div class="label">❌ 不稳定（正在拷贝）</div>
+                    <div class="desc">跳过，等下次扫描</div>
+                    <div class="eval">❌ 差</div>
+                  </div>
+                  <div class="branch-chain">
+                    <div class="node node-leaf-good" style="min-width:160px;">
+                      <div class="label">✅ 稳定</div>
+                      <div class="desc">可处理</div>
+                      <div class="eval">✅ 好</div>
+                    </div>
+                    <div class="v-connector"></div>
+                    <div class="node node-decision clickable" @click="toggleBranch('s2-b4')" style="min-width:170px;">
+                      <div class="label">SHA-256 去重</div>
+                      <div class="desc">已处理 / 新文件</div>
+                    </div>
+                    <div x-show="branchOpen['s2-b4']" class="row-nodes" style="margin-top:4px;">
+                      <div class="node node-leaf-good" style="min-width:150px;">
+                        <div class="label">✅ 已处理 → 跳过</div>
+                        <div class="desc">hash 匹配</div>
+                        <div class="eval">✅ 好</div>
+                      </div>
+                      <div class="branch-chain">
+                        <div class="node node-leaf-good" style="min-width:150px;">
+                          <div class="label">✅ 新文件 → 处理</div>
+                          <div class="desc">进入 parse_file</div>
+                          <div class="eval">✅ 好</div>
+                        </div>
+                        <div class="v-connector"></div>
+                        <div class="node node-decision clickable" @click="toggleBranch('s2-b5')" style="min-width:160px;">
+                          <div class="label">parse_file 解析</div>
+                          <div class="desc">PDF / 扫描件 / Excel</div>
+                        </div>
+                        <div x-show="branchOpen['s2-b5']" class="row-nodes" style="margin-top:4px;">
+                          <div class="node node-leaf-good" style="min-width:150px;">
+                            <div class="label">✅ PDF 有文字</div>
+                            <div class="desc">pdfplumber 提取</div>
+                            <div class="eval">✅ 好</div>
+                          </div>
+                          <div class="node node-leaf-warn" style="min-width:170px;">
+                            <div class="label">⚠️ 扫描件（PDF 无文字）</div>
+                            <div class="desc">→ QwenVL-Plus 视觉</div>
+                            <div class="eval">⚠️ 一般</div>
+                          </div>
+                          <div class="node node-leaf-good" style="min-width:140px;">
+                            <div class="label">✅ Excel</div>
+                            <div class="desc">openpyxl 读取</div>
+                            <div class="eval">✅ 好</div>
+                          </div>
+                          <div class="node node-leaf-warn" style="min-width:150px;">
+                            <div class="label">⚠️ 其他格式</div>
+                            <div class="desc">跳过处理</div>
+                            <div class="eval">⚠️ 一般</div>
+                          </div>
+                        </div>
+                        <div class="v-connector"></div>
+                        <div class="node node-decision clickable" @click="toggleBranch('s2-b6')" style="min-width:170px;">
+                          <div class="label">AI classify 分类</div>
+                          <div class="desc">LLM 匹配 + 置信度</div>
+                        </div>
+                        <div x-show="branchOpen['s2-b6']" class="row-nodes" style="margin-top:4px;">
+                          <div class="node node-leaf-good" style="min-width:180px;">
+                            <div class="label">✅ 成功 conf ≥ 0.7</div>
+                            <div class="desc">高置信度，自动归档</div>
+                            <div class="eval">✅ 好</div>
+                          </div>
+                          <div class="node node-leaf-warn" style="min-width:190px;">
+                            <div class="label">⚠️ 成功 conf 0.5~0.7</div>
+                            <div class="desc">标黄，建议人工复核</div>
+                            <div class="eval">⚠️ 一般</div>
+                          </div>
+                          <div class="node node-leaf-warn" style="min-width:180px;">
+                            <div class="label">⚠️ 成功 conf &lt; 0.5</div>
+                            <div class="desc">标红，强制人工复核</div>
+                            <div class="eval">⚠️ 一般</div>
+                          </div>
+                          <div class="node node-leaf-bad" style="min-width:160px;">
+                            <div class="label">❌ 分类失败</div>
+                            <div class="desc">AI 调用失败</div>
+                            <div class="eval">❌ 差</div>
+                          </div>
+                        </div>
+                        <div class="v-connector"></div>
+                        <div class="node node-decision clickable" @click="toggleBranch('s2-b7')" style="min-width:170px;">
+                          <div class="label">period_check 期间检查</div>
+                          <div class="desc">三年一期连续性</div>
+                        </div>
+                        <div x-show="branchOpen['s2-b7']" class="row-nodes" style="margin-top:4px;">
+                          <div class="node node-leaf-good" style="min-width:150px;">
+                            <div class="label">✅ 覆盖</div>
+                            <div class="desc">期间连续无断档</div>
+                            <div class="eval">✅ 好</div>
+                          </div>
+                          <div class="node node-leaf-bad" style="min-width:150px;">
+                            <div class="label">❌ 断档</div>
+                            <div class="desc">推送 warning toast</div>
+                            <div class="eval">❌ 差</div>
+                          </div>
+                        </div>
+                        <div class="v-connector"></div>
+                        <div class="node node-decision clickable" @click="toggleBranch('s2-b8')" style="min-width:170px;">
+                          <div class="label">archive_file 归档</div>
+                          <div class="desc">item_id 判断</div>
+                        </div>
+                        <div x-show="branchOpen['s2-b8']" class="row-nodes" style="margin-top:4px;">
+                          <div class="node node-leaf-good" style="min-width:160px;">
+                            <div class="label">✅ item_id 有值</div>
+                            <div class="desc">命名归档到目录</div>
+                            <div class="eval">✅ 好</div>
+                          </div>
+                          <div class="node node-leaf-bad" style="min-width:170px;">
+                            <div class="label">❌ item_id 无 → 未分类</div>
+                            <div class="desc">放到未分类目录</div>
+                            <div class="eval">❌ 差</div>
+                          </div>
+                        </div>
+                        <div class="v-connector"></div>
+                        <div class="node node-leaf-good" style="min-width:150px;">
+                          <div class="label">✅ write_pbc_list</div>
+                          <div class="desc">Excel 回写状态</div>
+                          <div class="eval">✅ 好</div>
+                        </div>
+                        <div class="v-connector"></div>
+                        <div class="node node-leaf-good" style="min-width:160px;">
+                          <div class="label">✅ update_item_status</div>
+                          <div class="desc">SQLite 更新</div>
+                          <div class="eval">✅ 好</div>
+                        </div>
+                        <div class="v-connector"></div>
+                        <div class="node node-leaf-good" style="min-width:170px;">
+                          <div class="label">✅ AI Toast 推送</div>
+                          <div class="desc">扫描完成通知</div>
+                          <div class="eval">✅ 好</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 3: 复核 -->
+    <div class="tree-container" :class="{ visible: activeScenario === 2 }">
+      <div class="tree-level" style="padding-top:40px;">
+        <div class="node node-start">
+          <div class="label">进入 Tab 2 待复核</div>
+          <div class="desc">Senior 复核区</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:20px;">
+        <div class="node node-action" style="min-width:170px;">
+          <div class="label">AI 置信度标红</div>
+          <div class="desc">&lt; 0.7 项红色高亮置顶</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:0;">
+        <div class="node node-action clickable" @click="toggleBranch('s3-b1')" style="min-width:160px;">
+          <div class="label">打开详情</div>
+          <div class="desc">查看 AI 摘要 + 文件</div>
+        </div>
+        <div x-show="branchOpen['s3-b1']" style="margin-top:4px;">
+          <div class="node node-decision" style="min-width:200px;">
+            <div class="label">状态下拉操作</div>
+            <div class="desc">4 种操作选项</div>
+          </div>
+          <div class="v-connector"></div>
+          <div class="row-nodes" style="margin-top:4px;">
+            <div class="branch-chain">
+              <div class="node node-leaf-good" style="min-width:150px;">
+                <div class="label">✅ 复核通过</div>
+                <div class="desc">状态 → "已提供"</div>
+                <div class="eval">✅ 好</div>
+              </div>
+            </div>
+            <div class="branch-chain">
+              <div class="node node-leaf-warn" style="min-width:170px;">
+                <div class="label">⚠️ 复核退回</div>
+                <div class="desc">→ 触发风险化解</div>
+                <div class="eval">⚠️ 一般</div>
+              </div>
+            </div>
+            <div class="branch-chain">
+              <div class="node node-leaf-good" style="min-width:160px;">
+                <div class="label">✅ 标记不适用</div>
+                <div class="desc">独立终态，需备注</div>
+                <div class="eval">✅ 好</div>
+              </div>
+            </div>
+            <div class="branch-chain">
+              <div class="node node-leaf-warn" style="min-width:160px;">
+                <div class="label">⚠️ 撤销归档</div>
+                <div class="desc">退回到上一状态</div>
+                <div class="eval">⚠️ 一般</div>
+              </div>
+            </div>
+          </div>
+          <div class="v-connector"></div>
+          <div class="node node-decision" style="min-width:200px;">
+            <div class="label">后端状态机校验</div>
+            <div class="desc">SOP §4.2 四状态约束</div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:140px;">
+        <div class="node node-leaf-good" style="min-width:160px;">
+          <div class="label">✅ tooltip 悬停说明</div>
+          <div class="desc">hover 看状态说明</div>
+          <div class="eval">✅ 好</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 4: 风险化解 -->
+    <div class="tree-container" :class="{ visible: activeScenario === 3 }">
+      <div class="tree-level" style="padding-top:40px;">
+        <div class="node node-start">
+          <div class="label">进入 Tab 3 超期未提供</div>
+          <div class="desc">Manager 监督区</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:20px;">
+        <div class="node node-action" style="min-width:150px;">
+          <div class="label">热力图展示</div>
+          <div class="desc">实体 × 科目矩阵</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:0;">
+        <div class="node node-action clickable" @click="toggleBranch('s4-b1')" style="min-width:170px;">
+          <div class="label">点击高风险项</div>
+          <div class="desc">超期 &gt; 5 工作日</div>
+        </div>
+        <div x-show="branchOpen['s4-b1']" class="row-nodes" style="margin-top:4px;">
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:180px;">
+              <div class="label">化解卡片 · 影响分析</div>
+              <div class="desc">缺口 → 影响科目/结论</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="row-nodes">
+              <div class="node node-leaf-good" style="min-width:150px;">
+                <div class="label">✅ AI 生成成功</div>
+                <div class="desc">自然语言影响分析</div>
+                <div class="eval">✅ 好</div>
+              </div>
+              <div class="node node-leaf-warn" style="min-width:160px;">
+                <div class="label">⚠️ AI 失败 → 知识库</div>
+                <div class="desc">知识库兜底</div>
+                <div class="eval">⚠️ 一般</div>
+              </div>
+            </div>
+          </div>
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:180px;">
+              <div class="label">化解卡片 · 替代程序</div>
+              <div class="desc">审计程序建议（核心）</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="row-nodes">
+              <div class="node node-leaf-good" style="min-width:150px;">
+                <div class="label">✅ AI 生成成功</div>
+                <div class="desc">基于审计准则推理</div>
+                <div class="eval">✅ 好</div>
+              </div>
+              <div class="node node-leaf-warn" style="min-width:160px;">
+                <div class="label">⚠️ AI 失败 → 知识库</div>
+                <div class="desc">知识库兜底</div>
+                <div class="eval">⚠️ 一般</div>
+              </div>
+            </div>
+          </div>
+          <div class="branch-chain">
+            <div class="node node-leaf-good" style="min-width:170px;">
+              <div class="label">✅ 缺口汇报一键复制</div>
+              <div class="desc">3014 字结构化文本</div>
+              <div class="eval">✅ 好</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:140px;">
+        <div class="node node-leaf-good" style="min-width:150px;">
+          <div class="label">✅ 整体升级汇报</div>
+          <div class="desc">汇总给 Senior/Manager</div>
+          <div class="eval">✅ 好</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 5: 多项目 -->
+    <div class="tree-container" :class="{ visible: activeScenario === 4 }">
+      <div class="tree-level" style="padding-top:60px;">
+        <div class="node node-start">
+          <div class="label">点击"项目"按钮</div>
+          <div class="desc">顶部导航栏</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:20px;">
+        <div class="node node-action" style="min-width:160px;">
+          <div class="label">抽屉弹出</div>
+          <div class="desc">侧边面板</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:0;">
+        <div class="node node-decision clickable" @click="toggleBranch('s5-b1')" style="min-width:170px;">
+          <div class="label">项目列表</div>
+          <div class="desc">有 / 无项目</div>
+        </div>
+        <div x-show="branchOpen['s5-b1']" class="row-nodes" style="margin-top:4px;">
+          <div class="branch-chain">
+            <div class="node node-leaf-good" style="min-width:150px;">
+              <div class="label">✅ 有项目</div>
+              <div class="desc">展示列表</div>
+              <div class="eval">✅ 好</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-warn" style="min-width:160px;">
+              <div class="label">⚠️ 点击切换项目</div>
+              <div class="desc">加载新项目数据</div>
+              <div class="eval">⚠️ 一般</div>
+            </div>
+          </div>
+          <div class="branch-chain">
+            <div class="node node-leaf-warn" style="min-width:150px;">
+              <div class="label">⚠️ 无项目</div>
+              <div class="desc">显示空状态</div>
+              <div class="eval">⚠️ 一般</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:60px;">
+        <div class="node node-action clickable" @click="toggleBranch('s5-b2')" style="min-width:160px;">
+          <div class="label">创建新项目</div>
+          <div class="desc">输入项目名</div>
+        </div>
+        <div x-show="branchOpen['s5-b2']" class="row-nodes" style="margin-top:4px;">
+          <div class="node node-leaf-bad" style="min-width:150px;">
+            <div class="label">❌ 名称为空</div>
+            <div class="desc">报错提示</div>
+            <div class="eval">❌ 差</div>
+          </div>
+          <div class="node node-leaf-good" style="min-width:160px;">
+            <div class="label">✅ 名称合法</div>
+            <div class="desc">创建成功</div>
+            <div class="eval">✅ 好</div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:40px;">
+        <div class="node node-action clickable" @click="toggleBranch('s5-b3')" style="min-width:140px;">
+          <div class="label">删除项目</div>
+          <div class="desc">三种情形</div>
+        </div>
+        <div x-show="branchOpen['s5-b3']" class="row-nodes" style="margin-top:4px;">
+          <div class="node node-leaf-good" style="min-width:150px;">
+            <div class="label">✅ Soft Delete</div>
+            <div class="desc">标记删除可恢复</div>
+            <div class="eval">✅ 好</div>
+          </div>
+          <div class="node node-leaf-warn" style="min-width:150px;">
+            <div class="label">⚠️ Hard Delete</div>
+            <div class="desc">永久删除</div>
+            <div class="eval">⚠️ 一般</div>
+          </div>
+          <div class="node node-leaf-warn" style="min-width:160px;">
+            <div class="label">⚠️ Demo 项目不可删</div>
+            <div class="desc">禁用删除按钮</div>
+            <div class="eval">⚠️ 一般</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 6: 异常 -->
+    <div class="tree-container" :class="{ visible: activeScenario === 5 }">
+      <div class="tree-level" style="padding-top:20px;">
+        <div class="node node-start" style="min-width:160px;">
+          <div class="label">异常场景集合</div>
+          <div class="desc">各环节可能发生的异常</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:0;">
+        <div class="row-nodes" style="flex-direction:column;gap:10px;">
+          <!-- AI 超时 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:200px;">
+              <div class="label">AI 调用超时</div>
+              <div class="desc">LLM API 响应慢</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-warn" style="min-width:180px;">
+              <div class="label">⚠️ retry 3 次</div>
+              <div class="desc">3 次重试后抛出</div>
+              <div class="eval">⚠️ 一般</div>
+            </div>
+          </div>
+          <!-- API Key 失效 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:180px;">
+              <div class="label">API Key 失效</div>
+              <div class="desc">认证 401</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-bad" style="min-width:200px;">
+              <div class="label">❌ 所有 AI 功能不可用</div>
+              <div class="desc">弹出配置窗口改 Key</div>
+              <div class="eval">❌ 差</div>
+            </div>
+          </div>
+          <!-- 半截文件 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:180px;">
+              <div class="label">文件正在拷贝</div>
+              <div class="desc">半截文件 / 大小不稳</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-bad" style="min-width:180px;">
+              <div class="label">❌ 跳过处理</div>
+              <div class="desc">等下次扫描再处理</div>
+              <div class="eval">❌ 差</div>
+            </div>
+          </div>
+          <!-- 中文路径 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:160px;">
+              <div class="label">中文路径</div>
+              <div class="desc">Windows 编码</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-bad" style="min-width:180px;">
+              <div class="label">❌ 路径处理异常</div>
+              <div class="desc">可能导致归档失败</div>
+              <div class="eval">❌ 差</div>
+            </div>
+          </div>
+          <!-- SQLite 锁 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:170px;">
+              <div class="label">SQLite 锁竞争</div>
+              <div class="desc">并发写冲突</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-warn" style="min-width:190px;">
+              <div class="label">⚠️ WAL 模式缓解</div>
+              <div class="desc">retry + 退避</div>
+              <div class="eval">⚠️ 一般</div>
+            </div>
+          </div>
+          <!-- 端口被占 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:160px;">
+              <div class="label">端口被占</div>
+              <div class="desc">8765 已被占用</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-warn" style="min-width:180px;">
+              <div class="label">⚠️ fallback 端口</div>
+              <div class="desc">自动选其他端口</div>
+              <div class="eval">⚠️ 一般</div>
+            </div>
+          </div>
+          <!-- 浏览器没开 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:160px;">
+              <div class="label">浏览器没开</div>
+              <div class="desc">无默认浏览器</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-warn" style="min-width:190px;">
+              <div class="label">⚠️ 手动打开 URL</div>
+              <div class="desc">终端打印 + 用户手动</div>
+              <div class="eval">⚠️ 一般</div>
+            </div>
+          </div>
+          <!-- CDN 不可用 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:160px;">
+              <div class="label">CDN 不可用</div>
+              <div class="desc">Alpine.js 未加载</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-bad" style="min-width:200px;">
+              <div class="label">❌ UI 交互异常</div>
+              <div class="desc">页面显示降级</div>
+              <div class="eval">❌ 差</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario 7: 边界 -->
+    <div class="tree-container" :class="{ visible: activeScenario === 6 }">
+      <div class="tree-level" style="padding-top:40px;">
+        <div class="node node-start" style="min-width:150px;">
+          <div class="label">边界场景集合</div>
+          <div class="desc">极端/边缘条件</div>
+        </div>
+      </div>
+      <div class="tree-level" style="padding-top:0;">
+        <div class="row-nodes" style="flex-direction:column;gap:12px;">
+          <!-- 空项目 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:200px;">
+              <div class="label">空项目</div>
+              <div class="desc">PBC 清单 0 项</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="row-nodes">
+              <div class="node node-leaf-warn" style="min-width:170px;">
+                <div class="label">⚠️ 清单 0 项</div>
+                <div class="desc">Tab 1 显示空列表</div>
+                <div class="eval">⚠️ 一般</div>
+              </div>
+              <div class="node node-leaf-warn" style="min-width:180px;">
+                <div class="label">⚠️ 扫描无匹配项</div>
+                <div class="desc">AI 无法归类</div>
+                <div class="eval">⚠️ 一般</div>
+              </div>
+            </div>
+          </div>
+          <!-- 全已归档 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:170px;">
+              <div class="label">全已归档</div>
+              <div class="desc">所有项已完成</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="row-nodes">
+              <div class="node node-leaf-good" style="min-width:150px;">
+                <div class="label">✅ Tab 3 空</div>
+                <div class="desc">无超期项</div>
+                <div class="eval">✅ 好</div>
+              </div>
+              <div class="node node-leaf-good" style="min-width:170px;">
+                <div class="label">✅ 汇报"无超期"</div>
+                <div class="desc">一切正常</div>
+                <div class="eval">✅ 好</div>
+              </div>
+            </div>
+          </div>
+          <!-- 全超期 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:150px;">
+              <div class="label">全超期</div>
+              <div class="desc">所有项都超 5 天</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-warn" style="min-width:150px;">
+              <div class="label">⚠️ Tab 4 空</div>
+              <div class="desc">无已完成项</div>
+              <div class="eval">⚠️ 一般</div>
+            </div>
+          </div>
+          <!-- 项目被删除 -->
+          <div class="branch-chain">
+            <div class="node node-decision" style="min-width:160px;">
+              <div class="label">项目被删除</div>
+              <div class="desc">当前项目不存在</div>
+            </div>
+            <div class="v-connector"></div>
+            <div class="node node-leaf-warn" style="min-width:180px;">
+              <div class="label">⚠️ fallback 回首页</div>
+              <div class="desc">回到项目选择</div>
+              <div class="eval">⚠️ 一般</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function decisionTreeApp() {
+  return {
+    activeScenario: null,
+    branchOpen: {},
+    scenarios: [
+      { title: '首启场景' },
+      { title: '日常扫描流程' },
+      { title: '复核流程' },
+      { title: '风险化解流程' },
+      { title: '多项目管理' },
+      { title: '异常场景' },
+      { title: '边界场景' }
+    ],
+    toggleScenario(idx) {
+      if (this.activeScenario === idx) {
+        this.activeScenario = null;
+      } else {
+        this.activeScenario = idx;
+        // Auto-scroll into view
+        this.$nextTick(() => {
+          const el = document.querySelector('.tree-container.visible');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+    },
+    toggleBranch(key) {
+      this.branchOpen[key] = !this.branchOpen[key];
+    }
+  }
+}
+</script>
+</body>
+</html>

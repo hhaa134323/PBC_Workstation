@@ -1,0 +1,78 @@
+# ============================================================
+# PBC 智能管理工作站 .gitignore
+# ============================================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ---- venv ----
+venv/
+.venv/
+env/
+
+# ---- PyInstaller 打包产物（很大，不上传）----
+PBC-Agent/
+PBC-Agent-*/
+PBC-Agent*.zip
+PBC-App-*.zip
+PBC-Pro/
+PBC-Pro-*.zip
+PBC-Station-*.zip
+PBC-Workstation/
+PBC-Workstation-*.zip
+*.pkg
+*.spec.bak
+
+# ---- 运行时数据（用户本机生成）----
+projects/
+data/
+demo_kit/
+
+# ---- 配置（含 API Key，绝不上传！）----
+config/api_config.json
+config/user_config.json
+config/*.local.json
+
+# ---- 测试 / 临时文件 ----
+.workbuddy/
+.scratch/
+*.log
+.col_picker_test.py.bak
+
+# ---- IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 其他 ----
+*.tmp
+mock_data_v1_interrupted/
+pbc_frontend_for_review.html
+doc_content*.md
+_sop_full.txt

@@ -1,0 +1,2624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IPO 审计 PBC 管理工作站</title>
+<script>
+// P0-8: tailwind CDN fallback。CDN 不可用时加载本地最小 CSS 兜底
+(function() {
+  var loaded = false;
+  function loadLocalFallback() {
+    if (loaded) return; loaded = true;
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/static/css/tailwind-local.css';
+    document.head.appendChild(link);
+    console.warn('[PBC] tailwind CDN 不可用，已加载本地兜底 CSS');
+  }
+  // 5 秒后若 tailwind 仍未注入（window.tailwind 不存在），加载兜底
+  setTimeout(function() {
+    if (!window.tailwind) loadLocalFallback();
+  }, 5000);
+  // tailwind CDN 加载失败（onerror）也立即兜底
+  document.currentScript.addEventListener('error', loadLocalFallback);
+})();
+</script>
+<script src="https://cdn.tailwindcss.com" onerror="(window.__tw_err=true)"></script>
+<script>
+// P0-8: 立即检测 tailwind 是否加载成功（同步检测）
+if (!window.tailwind) {
+  var link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = '/static/css/tailwind-local.css';
+  document.head.appendChild(link);
+}
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   shadcn/ui dashboard 设计系统（HSL 变量驱动）
+   ============================================================ */
+:root{
+  /* EY 品牌色板（Brand Identity Guidelines Oct 2024） */
+  /* 已转 HSL，通过 CSS 变量驱动 shadcn 设计系统 */
+  --ey-yellow: 54 100% 50%;        /* #FFE600 主品牌色 */
+  --ey-white: 0 0% 100%;           /* #FFFFFF */
+  --ey-off-white: 240 29% 97%;     /* #F6F6FA 数字应用背景 */
+  --ey-gray-02: 240 8% 79%;        /* #C4C4CD 浅灰边框 */
+  --ey-gray-01: 240 5% 48%;        /* #747480 中灰辅助文字 */
+  --ey-off-black: 240 10% 20%;     /* #2E2E38 深色文字/导航 */
+  --ey-confident-black: 240 16% 12%; /* #1A1A24 最深标题 */
+
+  /* shadcn 变量 → EY 品牌色映射 */
+  --background: var(--ey-off-white);
+  --foreground: var(--ey-confident-black);
+  --card: var(--ey-white);
+  --card-foreground: var(--ey-confident-black);
+  --popover: var(--ey-white);
+  --popover-foreground: var(--ey-confident-black);
+  --primary: var(--ey-off-black);          /* 主按钮 = EY Off Black 深黑 */
+  --primary-foreground: var(--ey-yellow);  /* 按钮文字 = EY Yellow 黄色（黑底黄字） */
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: var(--ey-off-black);
+  --muted: 240 29% 95%;                    /* EY Off White 更淡版 */
+  --muted-foreground: var(--ey-gray-01);   /* 辅助文字 = EY Gray 01 */
+  --accent: 240 29% 95%;                   /* hover 背景 = EY Off White（中性，不刺眼） */
+  --accent-foreground: var(--ey-off-black);
+  --ey-yellow-accent: 54 100% 50% / 0.1;   /* EY Yellow 10% 透明 — 点缀用 */
+
+  /* 热力图 5 档色（从浅到深） */
+  --heat-1: 142 35% 65%;     /* ≤7 天，浅绿 */
+  --heat-2: 38 60% 62%;      /* 8-14 天，浅黄 */
+  --heat-3: 28 65% 55%;      /* 15-30 天，橙 */
+  --heat-4: 12 65% 55%;      /* 31-60 天，深橙 */
+  --heat-5: 0 62% 43%;       /* >60 天，深红 */
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: var(--ey-gray-02);             /* 边框 = EY Gray 02 */
+  --input: var(--ey-gray-02);
+  --ring: 54 100% 50%;                     /* focus ring = EY Yellow */
+  --radius: 0.5rem;
+
+  /* 兼容旧 class 命名 */
+  --text: hsl(var(--foreground));
+  --text2: hsl(var(--muted-foreground));
+  --text3: hsl(240 5% 64%);
+  --canvas: hsl(var(--card));
+  --soft: hsl(var(--muted));
+  --surface2: hsl(240 4.8% 93%);
+  --border2: hsl(var(--border));
+  --blue: hsl(var(--primary));
+  --blue-soft: hsl(var(--secondary));
+  --blue-deep: hsl(var(--ey-confident-black));
+  --green: hsl(142 71% 45%);
+  --green-soft: hsl(142 76% 95%);
+  --orange: hsl(38 92% 50%);
+  --orange-soft: hsl(38 92% 95%);
+  --red: hsl(var(--destructive));
+  --red-soft: hsl(0 86% 96%);
+  --red-deep: hsl(0 72% 40%);
+  --purple: hsl(262 60% 55%);
+  --purple-soft: hsl(262 60% 95%);
+
+  /* 审计状态色（保留中国审计/Excel 习惯，转 HSL） */
+  --st-none-bg: hsl(0 84% 92%); --st-none-fg: hsl(0 80% 35%); --st-none-bd: hsl(0 80% 80%);
+  --st-review-bg: hsl(142 60% 88%); --st-review-fg: hsl(142 50% 25%); --st-review-bd: hsl(142 50% 70%);
+  --st-done-bg: hsl(100 50% 90%); --st-done-fg: hsl(100 40% 20%); --st-done-bd: hsl(100 40% 75%);
+  --st-na-bg: hsl(60 4% 89%); --st-na-fg: hsl(60 4% 42%); --st-na-bd: hsl(60 4% 82%);
+
+  --shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 28px rgba(0,0,0,0.12);
+  --r: 0.5rem;            /* 8px（shadcn 标准 --radius） */
+  --r-lg: 0.5rem;         /* 8px */
+  --r-xl: 0.75rem;        /* 12px */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font);color:var(--text);background:hsl(var(--background));font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01"}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit;font-size:14px}
+.hidden{display:none !important}
+.mono{font-family:"SF Mono",Menlo,Consolas,monospace}
+[x-cloak]{display:none !important}
+.ico{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;color:currentColor;flex-shrink:0;vertical-align:middle}
+.ico svg{width:100%;height:100%;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ico-lg{width:20px;height:20px}
+.ico-sm{width:14px;height:14px}
+.ico-xl{width:28px;height:28px}
+
+/* ---------- Layout（sidebar + main） ---------- */
+.app-shell{display:flex;min-height:100vh;background:hsl(var(--background))}
+.sidebar{width:260px;flex-shrink:0;background:hsl(var(--card));border-right:1px solid hsl(var(--border));display:flex;flex-direction:column;position:sticky;top:0;height:100vh;transition:width .2s ease}
+.sidebar.collapsed{width:56px}
+.sidebar-h{padding:12px 16px;border-bottom:1px solid hsl(var(--border));display:flex;align-items:center;gap:8px}
+.sidebar-h .logo{width:28px;height:28px;border-radius:8px;background:hsl(var(--primary));color:hsl(var(--primary-foreground));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
+.sidebar-h .brand-name{font-weight:600;font-size:14px;letter-spacing:-0.1px;white-space:nowrap;overflow:hidden}
+.sidebar-h .brand-sub{font-size:12px;color:hsl(var(--muted-foreground));margin-top:1px;white-space:nowrap;overflow:hidden}
+.sidebar.collapsed .brand-name, .sidebar.collapsed .brand-sub{display:none}
+.sidebar-scroll{flex:1;overflow-y:auto;padding:12px}
+.sidebar-section{font-size:12px;font-weight:600;color:hsl(var(--muted-foreground));text-transform:uppercase;letter-spacing:0.5px;padding:8px 12px 6px}
+.sidebar.collapsed .sidebar-section{display:none}
+.sidebar-toggle{position:absolute;top:18px;right:-12px;width:24px;height:24px;border-radius:99px;background:hsl(var(--card));border:1px solid hsl(var(--border));display:flex;align-items:center;justify-content:center;color:hsl(var(--muted-foreground));cursor:pointer;z-index:30;box-shadow:var(--shadow-sm)}
+.sidebar-toggle:hover{color:hsl(var(--foreground));background:hsl(var(--accent))}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* ---------- Top nav / header ---------- */
+.nav{position:sticky;top:0;z-index:40;background:hsla(0,0%,100%,0.85);backdrop-filter:blur(10px);border-bottom:1px solid hsl(var(--border))}
+.nav-top{display:flex;align-items:center;gap:12px;padding:12px 24px;max-width:1400px;margin:0 auto}
+.nav-sep{width:1px;height:20px;background:hsl(var(--border));flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.brand .logo{width:20px;height:20px;border-radius:6px;background:hsl(var(--primary));color:hsl(var(--primary-foreground));display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;flex-shrink:0}
+.brand .name{font-weight:500;font-size:14px;letter-spacing:-0.1px;line-height:1.3}
+.brand .sub{font-size:13px;color:hsl(var(--muted-foreground));line-height:1.4}
+.brand>div:not(.logo){display:flex;flex-direction:column;gap:2px}
+.nav-spacer{flex:1}
+.nav-progress{display:flex;align-items:center;gap:8px;font-size:12px;color:hsl(var(--muted-foreground))}
+.nav-progress .bar{width:130px;height:8px;border-radius:99px;background:hsl(var(--muted));overflow:hidden}
+.nav-progress .bar>i{display:block;height:100%;background:hsl(var(--ey-yellow));border-radius:99px;transition:width .3s}
+.icon-btn{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:hsl(var(--muted-foreground));position:relative;transition:.15s;border:1px solid transparent}
+.icon-btn:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
+.icon-btn .dot{position:absolute;top:7px;right:7px;width:8px;height:8px;border-radius:99px;background:hsl(var(--destructive));border:1.5px solid hsl(var(--card))}
+
+/* ---------- Tabs ---------- */
+.tabs{display:flex;gap:2px;padding:0 24px;max-width:1400px;margin:0 auto;border-bottom:1px solid hsl(var(--border))}
+.tab{position:relative;display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:14px;color:hsl(var(--muted-foreground));font-weight:500;border-radius:8px 8px 0 0;transition:.15s;white-space:nowrap;border:1px solid transparent;border-bottom:none}
+.tab:hover{color:hsl(var(--foreground));background:hsl(var(--accent))}
+.tab.active{color:hsl(var(--foreground));font-weight:600;background:hsl(var(--card));border-color:hsl(var(--border))}
+.tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:hsl(var(--ey-yellow))}
+.tab .count{font-size:12px;font-weight:600;padding:1px 8px;border-radius:99px;background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+.tab.active .count{background:hsl(var(--primary));color:hsl(var(--primary-foreground))}
+.tab.t-alert .count{background:hsl(var(--destructive));color:hsl(var(--destructive-foreground))}
+
+/* ---------- Main content ---------- */
+.wrap{max-width:1400px;width:100%;margin:0 auto;padding:24px;flex:1}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+
+.page-head h1{font-size:20px;font-weight:600;letter-spacing:-0.3px}
+.page-head .desc{font-size:14px;color:hsl(var(--muted-foreground));margin-top:4px;max-width:640px}
+
+/* ---------- Cards（shadcn card：白底 + border + shadow-sm + rounded-lg） ---------- */
+.card{background:hsl(var(--card));border-radius:var(--r-xl);box-shadow:inset 0 0 0 1px hsla(240 10% 3.9% / 0.1);color:hsl(var(--card-foreground))}
+.card-pad{padding:16px}
+.card-h{display:flex;align-items:center;gap:8px;font-weight:600;font-size:16px;margin-bottom:0}
+.card-h .ico{width:24px;height:24px;border-radius:6px;background:hsl(var(--muted));color:hsl(var(--foreground));display:flex;align-items:center;justify-content:center;font-size:14px}
+.card-desc{font-size:14px;color:hsl(var(--muted-foreground));margin-bottom:12px}
+
+/* ---------- Buttons（shadcn 风格） ---------- */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:var(--r);font-size:14px;font-weight:500;transition:.15s;border:1px solid transparent;white-space:nowrap;height:36px}
+.btn-pri{background:hsl(var(--primary));color:hsl(var(--primary-foreground))}
+.btn-pri:hover{background:hsl(var(--ey-confident-black))}
+.btn-lg{padding:12px 24px;font-size:16px;border-radius:var(--r);height:auto}
+.btn-ghost{background:transparent;border-color:hsl(var(--border));color:hsl(var(--foreground))}
+.btn-ghost:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}
+.btn-soft{background:hsl(var(--secondary));color:hsl(var(--secondary-foreground))}
+.btn-soft:hover{background:hsl(240 4.8% 90%)}
+.btn-green{background:hsl(var(--green));color:hsl(var(--ey-white))}
+.btn-green:hover{filter:brightness(.95)}
+.btn-red{background:hsl(var(--destructive));color:hsl(var(--destructive-foreground))}
+.btn-red:hover{filter:brightness(.95)}
+.btn-xs{padding:4px 8px;font-size:12px;border-radius:var(--r);height:auto;min-height:28px}
+
+/* ---------- Scan 与 progress ---------- */
+.scan-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.scan-hero .big{flex:1;min-width:260px}
+.dashed{border:1.5px dashed hsl(var(--border));border-radius:var(--r-lg);padding:16px;text-align:center;color:hsl(var(--muted-foreground));font-size:14px;transition:.15s;background:hsl(var(--muted))}
+.dashed.drag{border-color:hsl(var(--primary));background:hsl(var(--accent));color:hsl(var(--foreground))}
+.steps{display:flex;align-items:center;gap:0;margin-top:4px}
+.step{flex:1;text-align:center;position:relative}
+.step .dot{width:32px;height:32px;border-radius:99px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;background:hsl(var(--muted));color:hsl(var(--muted-foreground));border:2px solid hsl(var(--muted));transition:.3s}
+.step .lbl{font-size:12px;color:hsl(var(--muted-foreground));font-weight:500}
+.step:not(:last-child)::after{content:"";position:absolute;top:16px;left:60%;right:-40%;height:2px;background:hsl(var(--border));z-index:0}
+.step.done .dot{background:hsl(142 71% 45%);border-color:hsl(142 71% 45%);color:#fff}
+.step.done .lbl{color:hsl(142 71% 30%)}
+.step.active .dot{background:hsl(var(--card));border-color:hsl(var(--primary));color:hsl(var(--primary));box-shadow:0 0 0 4px hsl(var(--accent))}
+.step.active .lbl{color:hsl(var(--foreground));font-weight:600}
+.step.done:not(:last-child)::after{background:hsl(142 71% 45%)}
+.scan-live{margin-top:12px;font-size:14px;color:hsl(var(--muted-foreground));display:flex;align-items:center;gap:8px}
+.spin{display:inline-flex;align-items:center;animation:sp .8s linear infinite}
+.spin svg{width:16px;height:16px;color:hsl(var(--muted-foreground))}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ---------- Filters ---------- */
+.filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters select{padding:8px 12px;border:1px solid hsl(var(--input));border-radius:var(--r);background:hsl(var(--card));color:hsl(var(--foreground));cursor:pointer;font-size:14px;height:36px}
+.filters select:hover{border-color:hsl(240 5.9% 80%)}
+.filters select:focus{outline:2px solid hsl(var(--ring));outline-offset:1px}
+.filter-info{margin-left:auto;font-size:12px;color:hsl(var(--muted-foreground))}
+
+/* ---------- Table（shadcn table） ---------- */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r-lg);border:1px solid hsl(var(--border))}
+table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(--card))}
+.tbl th{text-align:left;font-weight:500;font-size:12px;color:hsl(var(--muted-foreground));text-transform:uppercase;letter-spacing:0.5px;padding:12px 16px;border-bottom:1px solid hsl(var(--border));background:hsl(var(--muted));white-space:nowrap;position:sticky;top:0}
+.tbl td{padding:12px 16px;border-bottom:1px solid hsl(var(--border));vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr{transition:.1s}
+.tbl tbody tr:hover{background:hsl(var(--accent))}
+.tbl tr.lowconf{background:hsl(0 86% 99%)}
+.tbl tr.lowconf:hover{background:hsl(0 86% 97%)}
+.code{font-weight:600;font-size:14px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:4px;font-size:12px;font-weight:600;border:1px solid transparent;line-height:1.4}
+.b-none{background:var(--st-none-bg);color:var(--st-none-fg);border-color:var(--st-none-bd)}
+.b-review{background:var(--st-review-bg);color:var(--st-review-fg);border-color:var(--st-review-bd)}
+.b-done{background:var(--st-done-bg);color:var(--st-done-fg);border-color:var(--st-done-bd)}
+.b-na{background:var(--st-na-bg);color:var(--st-na-fg);border-color:var(--st-na-bd)}
+.b-pending{background:hsl(var(--secondary));color:hsl(var(--muted-foreground));border-color:hsl(var(--border))}
+.conf{display:flex;align-items:center;gap:8px;min-width:120px}
+.conf .bar{flex:1;height:6px;border-radius:99px;background:hsl(var(--muted));overflow:hidden}
+.conf .bar>i{display:block;height:100%;border-radius:99px}
+.conf .val{font-size:12px;font-weight:600;width:34px;text-align:right}
+.conf.low .val{color:hsl(var(--destructive))}
+.overdue{font-weight:600}
+.overdue.warn{color:hsl(38 92% 50%)}
+.overdue.crit{color:hsl(var(--destructive))}
+.path{font-size:12px;color:hsl(var(--muted-foreground));max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctx-menu{background:hsl(var(--background));border:1px solid hsl(var(--border));border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);overflow:hidden;min-width:120px}
+.ctx-menu div{padding:8px 12px;font-size:12px;cursor:pointer;white-space:nowrap}
+.ctx-menu div:hover{background:hsl(var(--accent))}
+.row-acts{display:flex;gap:6px;white-space:nowrap}
+.empty{text-align:center;padding:48px 16px;color:hsl(var(--muted-foreground))}
+.empty .em{font-size:30px;margin-bottom:8px}
+
+/* ---------- Dashboard gauges ---------- */
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
+.gauge{background:hsl(var(--card));border:1px solid hsl(var(--border));border-radius:var(--r-lg);padding:16px 24px;box-shadow:var(--shadow-sm)}
+.gauge .k{font-size:12px;color:hsl(var(--muted-foreground));display:flex;align-items:center;gap:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px}
+.gauge .v{font-size:30px;font-weight:700;margin-top:6px;letter-spacing:-0.5px;color:hsl(var(--foreground))}
+.gauge .sub{font-size:12px;color:hsl(var(--muted-foreground));margin-top:4px}
+.gauge.red{border-color:hsl(0 86% 90%)}
+.gauge.red .v{color:hsl(var(--destructive))}
+.gauge.orange .v{color:hsl(38 92% 50%)}
+.gauge.green .v{color:hsl(142 71% 35%)}
+
+/* ---------- Heatmap ---------- */
+.heat{overflow-x:auto}
+.heat table{border-collapse:separate;border-spacing:3px}
+.heat th{font-size:12px;color:hsl(var(--muted-foreground));font-weight:500;padding:4px 6px;text-align:center;white-space:nowrap}
+.heat th.rowh{text-align:right;padding-right:10px}
+.heat td{width:64px;height:36px;text-align:center;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:.12s;color:#fff}
+.heat td:hover{transform:scale(1.06);box-shadow:var(--shadow-md)}
+.heat td.empty0{background:hsl(var(--muted));color:hsl(var(--muted-foreground));font-weight:400;cursor:default}
+.heat td.empty0:hover{transform:none;box-shadow:none}
+.heat-legend{display:flex;align-items:center;gap:6px;font-size:12px;color:hsl(var(--muted-foreground));margin-top:12px;flex-wrap:wrap}
+.heat-legend .sw{width:18px;height:12px;border-radius:3px}
+
+/* ---------- Toasts ---------- */
+.toast-wrap{position:fixed;top:64px;right:16px;z-index:80;display:flex;flex-direction:column;gap:8px;width:360px;max-width:calc(100vw - 32px)}
+.toast{background:hsl(var(--popover));border:1px solid hsl(var(--border));border-left-width:4px;border-radius:var(--r-lg);box-shadow:var(--shadow-lg);padding:12px 16px;animation:slideIn .25s ease}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+.toast.p-high{border-left-color:hsl(var(--destructive))}
+.toast.p-mid{border-left-color:hsl(38 92% 50%)}
+.toast.p-low{border-left-color:hsl(240 5.9% 20%)}
+.toast .th{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-bottom:4px;color:hsl(var(--popover-foreground))}
+.toast .th .lv{font-size:12px;font-weight:700;padding:1px 7px;border-radius:99px}
+.toast.p-high .th .lv{background:hsl(var(--destructive));color:#fff}
+.toast.p-mid .th .lv{background:hsl(38 92% 95%);color:hsl(38 92% 40%)}
+.toast.p-low .th .lv{background:hsl(var(--secondary));color:hsl(var(--foreground))}
+.toast .tx{font-size:14px;color:hsl(var(--muted-foreground));line-height:1.55}
+.toast .ta{display:flex;gap:8px;margin-top:8px}
+.toast .close{margin-left:auto;color:hsl(var(--muted-foreground));font-size:16px;line-height:1}
+.toast .close:hover{color:hsl(var(--foreground))}
+
+/* ---------- Modal 与 drawer ---------- */
+.overlay{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;padding:16px;animation:fade .15s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{background:hsl(var(--popover));border-radius:var(--r-lg);box-shadow:var(--shadow-lg);width:100%;max-width:512px;max-height:88vh;overflow:auto;animation:pop .18s ease}
+@keyframes pop{from{transform:scale(.97);opacity:.6}to{transform:none;opacity:1}}
+.modal-h{display:flex;align-items:flex-start;gap:12px;padding:24px;position:sticky;top:0;background:hsl(var(--popover));z-index:2}
+.modal-h .tt{font-weight:600;font-size:16px;color:hsl(var(--popover-foreground))}
+.modal-h .st{font-size:14px;color:hsl(var(--muted-foreground));margin-top:2px}
+.modal-h .x{margin-left:auto;font-size:20px;color:hsl(var(--muted-foreground));line-height:1}
+.modal-h .x:hover{color:hsl(var(--foreground))}
+.modal-b{padding:24px}
+.drawer{position:fixed;top:0;left:0;bottom:0;width:360px;max-width:92vw;background:hsl(var(--popover));border-right:1px solid hsl(var(--border));z-index:95;box-shadow:var(--shadow-lg);overflow:auto;animation:slideL .22s ease}
+@keyframes slideL{from{transform:translateX(-100%)}to{transform:none}}
+.drawer-r{left:auto;right:0;border-right:none;border-left:1px solid hsl(var(--border));animation:slideR .22s ease}
+@keyframes slideR{from{transform:translateX(100%)}to{transform:none}}
+
+/* ---------- resolve blocks ---------- */
+.rblock{border:1px solid hsl(var(--border));border-radius:var(--r);padding:16px;margin-bottom:12px;background:hsl(var(--card))}
+.rblock .bh{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-bottom:8px;color:hsl(var(--foreground))}
+.src-tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;margin-left:auto}
+.src-ai{background:hsl(var(--secondary));color:hsl(var(--foreground))}
+.src-kb{background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+.rblock.impact{background:hsl(0 86% 99%);border-color:hsl(0 86% 90%)}
+.rblock.alt{background:hsl(142 76% 97%);border-color:hsl(142 76% 90%)}
+.rblock.esc{background:hsl(var(--muted))}
+.alt-item{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-top:1px dashed hsl(142 76% 85%)}
+.alt-item:first-of-type{border-top:none}
+.alt-item .num{width:20px;height:20px;border-radius:99px;background:hsl(142 71% 45%);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.alt-item .txt{flex:1;font-size:14px;color:hsl(var(--foreground))}
+.esc-text{font-size:14px;color:hsl(var(--muted-foreground));white-space:pre-wrap;line-height:1.6;max-height:300px;overflow:auto;background:hsl(var(--card));border:1px solid hsl(var(--border));border-radius:var(--r);padding:12px;margin-top:8px}
+.impact-item{font-size:14px;padding:4px 0;display:flex;gap:8px;color:hsl(var(--foreground))}
+.impact-item::before{content:"\25B8";color:hsl(var(--destructive));font-size:12px}
+
+/* ---------- onboarding ---------- */
+.ob-modal{max-width:520px;text-align:center}
+.ob-steps{display:flex;justify-content:center;gap:8px;margin:16px 0}
+.ob-steps i{width:26px;height:5px;border-radius:99px;background:hsl(var(--muted))}
+.ob-steps i.on{background:hsl(var(--primary));width:34px}
+.ob-illus{width:76px;height:76px;border-radius:20px;margin:8px auto 14px;display:flex;align-items:center;justify-content:center;font-size:36px;background:hsl(var(--secondary))}
+.ob-title{font-size:20px;font-weight:700;letter-spacing:-0.3px}
+.ob-desc{font-size:14px;color:hsl(var(--muted-foreground));margin-top:8px;line-height:1.6}
+.ob-actions{display:flex;gap:8px;justify-content:center;margin-top:16px}
+.ob-choose{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.ob-card{border:2px solid hsl(var(--border));border-radius:var(--r-lg);padding:16px 12px;text-align:left;cursor:pointer;transition:.15s;background:hsl(var(--card))}
+.ob-card:hover{border-color:hsl(var(--primary));box-shadow:var(--shadow-md)}
+.ob-card .t{font-weight:600;font-size:14px;margin-bottom:4px}
+.ob-card .d{font-size:12px;color:hsl(var(--muted-foreground));line-height:1.5}
+
+.note{font-size:14px;color:hsl(var(--muted-foreground));background:hsl(var(--muted));border:1px solid hsl(var(--border));border-radius:var(--r-lg);padding:12px 16px;line-height:1.6}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 9px;border-radius:99px;background:hsl(var(--secondary));color:hsl(var(--muted-foreground));font-weight:500}
+
+/* ---------- tooltip ---------- */
+.tip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:99px;background:hsl(var(--muted));color:hsl(var(--muted-foreground));font-size:12px;font-weight:700;cursor:help;vertical-align:middle}
+.tip:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
+.tip .tip-box{display:none;position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:hsl(var(--popover));color:hsl(var(--popover-foreground));border:1px solid hsl(var(--border));padding:8px 12px;border-radius:var(--r);font-size:12px;line-height:1.6;width:220px;z-index:50;font-weight:400;box-shadow:var(--shadow-lg);text-align:left;white-space:pre-line}
+.tip:hover .tip-box{display:block}
+
+/* ---------- status select ---------- */
+.st-sel{padding:8px 12px;border:1px solid hsl(var(--input));border-radius:var(--r);background:hsl(var(--card));font-size:12px;cursor:pointer;color:hsl(var(--foreground))}
+.st-sel:hover{border-color:hsl(240 5.9% 70%)}
+.st-sel:focus{outline:2px solid hsl(var(--ring));outline-offset:1px}
+
+/* ---------- project drawer item ---------- */
+.proj-item{padding:12px 16px;border:1px solid hsl(var(--border));border-radius:var(--r-lg);margin-bottom:8px;cursor:pointer;transition:.15s;background:hsl(var(--card))}
+.proj-item:hover{border-color:hsl(240 5.9% 80%);background:hsl(var(--accent))}
+.proj-item.cur{border-color:hsl(var(--primary));background:hsl(var(--accent))}
+.proj-item .nm{font-weight:600;font-size:14px;color:hsl(var(--foreground))}
+.proj-item .cl{font-size:12px;color:hsl(var(--muted-foreground));margin-top:2px}
+.proj-item .pg{font-size:12px;color:hsl(var(--muted-foreground));margin-top:6px}
+.proj-item .pgbar{height:6px;border-radius:99px;background:hsl(var(--muted));overflow:hidden;margin-top:4px}
+.proj-item .pgbar>i{display:block;height:100%;background:hsl(var(--ey-yellow));border-radius:99px}
+
+/* ---------- Risk badge（风险等级标签） ---------- */
+.risk-bg-high{background:hsl(var(--red-soft))}
+.risk-bg-medium{background:hsl(var(--orange-soft))}
+.risk-bg-low{background:hsl(var(--green-soft))}
+.risk-fg-high{color:hsl(var(--ey-white));background:hsl(var(--destructive))}
+.risk-fg-medium{color:hsl(var(--orange));background:hsl(var(--orange-soft))}
+.risk-fg-low{color:hsl(var(--green));background:hsl(var(--green-soft))}
+
+/* ---------- scrollbar ---------- */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:hsl(var(--border));border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:hsl(var(--muted-foreground))}
+
+@media (max-width:640px){.wrap{padding:14px}.nav-progress .bar{width:80px}.tab .txt{display:none}.sidebar{display:none}}
+
+/* ============================================================
+   版本B · 柔和分层 — 视觉微调（追加覆盖，不改原有规则）
+   ============================================================ */
+.wrap{padding:28px}
+.gauges{gap:16px;margin-bottom:24px !important}
+.card{margin-bottom:24px}
+.gauge{box-shadow:none;padding:18px 20px 18px 22px;position:relative;overflow:hidden;border-color:hsl(var(--border))}
+.gauge::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:hsl(var(--ey-yellow))}
+.gauge.green::before{background:hsl(142 71% 45%)}
+.gauge.orange::before{background:hsl(38 92% 50%)}
+.gauge.red::before{background:hsl(var(--destructive))}
+.gauge.green{background:hsl(142 55% 98%);border-color:hsl(142 40% 90%)}
+.gauge.orange{background:hsl(38 90% 98%);border-color:hsl(38 70% 90%)}
+.gauge.red{background:hsl(0 80% 99%);border-color:hsl(0 70% 92%)}
+.gauge .k{font-weight:500}
+.gauge .v{font-size:24px;margin-top:8px;color:hsl(var(--foreground))}
+.gauge.red .v{color:hsl(var(--destructive))}
+.gauge.orange .v{color:hsl(38 92% 42%)}
+.gauge.green .v{color:hsl(142 71% 32%)}
+.gauge .sub{margin-top:6px}
+.card-h{font-size:15px;padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid hsl(var(--border))}
+.card-h .ico{background:hsl(54 100% 92%);color:hsl(240 10% 20%)}
+.tbl th{padding:13px 16px}
+.tbl td{padding:14px 16px}
+.tbl tbody tr:nth-child(even){background:hsl(240 29% 98.6%)}
+.tbl tbody tr:hover{background:hsl(54 100% 96%)}
+.filters{margin-bottom:14px}
+
+/* ============================================================
+   列设置 · 按需显示列
+   ============================================================ */
+.col-tools{display:flex;justify-content:flex-end;margin-bottom:10px}
+.colcfg{position:relative;display:inline-block}
+.colcfg-btn{display:inline-flex;align-items:center;gap:6px}
+.colcfg-panel{position:absolute;right:0;top:calc(100% + 6px);z-index:50;background:hsl(var(--card));border:1px solid hsl(var(--border));border-radius:10px;box-shadow:0 12px 32px -8px rgba(0,0,0,.20);padding:6px;width:220px;max-height:70vh;overflow:auto}
+.colcfg-panel .hd{font-size:12px;color:hsl(var(--muted-foreground));padding:8px 10px 6px;border-bottom:1px solid hsl(var(--border));margin-bottom:4px}
+.colcfg-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;font-size:13px;cursor:pointer;color:hsl(var(--foreground));user-select:none}
+.colcfg-item:hover{background:hsl(var(--accent))}
+.colcfg-item .cb{width:15px;height:15px;border-radius:4px;border:1.5px solid hsl(var(--border));display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.colcfg-item.on .cb{background:hsl(var(--foreground));border-color:hsl(var(--foreground))}
+.colcfg-item.on .cb svg{width:10px;height:10px}
+.colcfg-item.lock{color:hsl(var(--muted-foreground));cursor:default}
+.colcfg-item.lock .cb{background:hsl(var(--border));border-color:hsl(var(--border))}
+.colcfg-overlay{position:fixed;inset:0;z-index:40}
+  /* v7 文件区 & 路径 & AI 配置 */
+  .fz-flow{display:flex;gap:0;align-items:stretch;flex-wrap:wrap}
+  .fz-col{flex:1;min-width:260px;border:1px solid var(--border);border-radius:12px;background:#fff;overflow:hidden}
+  .fz-col .fz-h{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+  .fz-col.raw .fz-h{background:hsl(240 29% 98.6%)}
+  .fz-col.done .fz-h{background:hsl(142 55% 97%)}
+  .fz-tag{font-size:11px;font-weight:500;padding:2px 8px;border-radius:99px;margin-left:auto}
+  .fz-tag.raw{background:var(--soft);color:var(--text2)}
+  .fz-tag.done{background:hsl(142 55% 92%);color:hsl(142 60% 28%)}
+  .fz-body{padding:12px 16px;font-size:13px}
+  .fz-arrow{display:flex;align-items:center;justify-content:center;padding:0 14px;color:var(--text3)}
+  .fz-path{font-family:monospace;font-size:12px;color:var(--text2);word-break:break-all;background:var(--soft);padding:6px 10px;border-radius:6px;margin-bottom:10px}
+  .fz-cat{font-weight:600;font-size:13px;margin:12px 0 4px;display:flex;align-items:center;gap:6px}
+  .fz-cat .cnt{font-size:11px;color:var(--text3);font-weight:400}
+  .fz-file{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;color:var(--text)}
+  .fz-file:hover{background:var(--soft)}
+  .fz-file .nm{flex:1;font-size:12px;word-break:break-all}
+  .path-link{color:var(--text);cursor:pointer;text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:2px}
+  .path-link:hover{color:hsl(var(--primary));text-decoration-color:hsl(var(--primary))}
+  td.path-invalid .path-link{color:var(--red-deep);text-decoration-color:var(--red)}
+  .ai-field{margin-bottom:14px}
+  .ai-field label{display:block;font-size:12px;font-weight:500;margin-bottom:6px}
+  .ai-field input[type=text],.ai-field input[type=number],.ai-field select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff}
+  .ai-switch{display:flex;align-items:center;gap:8px;font-size:13px}
+  .ai-test-ok{color:var(--green)}.ai-test-err{color:var(--red)}
+</style>
+</head>
+<body>
+<div x-data="pbcApp()" x-init="init()" x-cloak>
+
+  <!-- Toast 区 -->
+  <div class="toast-wrap">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="toast" :class="'p-'+t.priority">
+        <div class="th">
+          <span class="lv" x-text="{high:'高',mid:'中',low:'低'}[t.priority]"></span>
+          <span x-text="t.title"></span>
+          <button class="close" @click="dismissToast(t.id)">×</button>
+        </div>
+        <div class="tx" x-text="t.text"></div>
+      </div>
+    </template>
+  </div>
+
+  <!-- 首启引导 -->
+  <div x-show="showOnboarding" class="overlay" style="display:none" :style="showOnboarding && 'display:flex'">
+    <div class="modal ob-modal">
+      <div class="modal-b" style="padding:34px 30px">
+        <div class="ob-steps">
+          <i :class="obStep>=1?'on':''"></i><i :class="obStep>=2?'on':''"></i><i :class="obStep>=3?'on':''"></i>
+        </div>
+
+        <template x-if="obStep===1">
+          <div>
+            <div class="ob-illus"><span class="ico ico-xl"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span></div>
+            <div class="ob-title">欢迎使用 PBC 管理工作站</div>
+            <div class="ob-desc">面向 IPO 审计场景，集中管理客户提供的 PBC 资料。<br>核心功能：</div>
+            <div class="note" style="text-align:left;margin-top:14px">
+              自动识别客户资料并分类归档<br>
+              三角色协作审阅工作流<br>
+              缺料风险雷达与替代程序建议<br>
+              双击即用，本地运行
+            </div>
+            <div class="ob-actions"><button class="btn btn-pri btn-lg" @click="obStep=2">开始</button></div>
+          </div>
+        </template>
+
+        <template x-if="obStep===2">
+          <div>
+            <div class="ob-title">选择一个项目开始</div>
+            <div class="ob-desc">推荐从空项目开始，完整走一遍主流程；也可以加载示例数据。</div>
+            <div class="ob-choose">
+              <div class="ob-card" @click="chooseDemoProject()">
+                <div class="t"><span class="ico ico-lg"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>进入空的示例项目</div>
+                <div class="d">进入空项目，自行导入 PBC 清单、配置客户文件夹、扫描文件，走一遍完整流程。</div>
+              </div>
+              <div class="ob-card" @click="obStep=3; obMode='create'">
+                <div class="t"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>创建新项目</div>
+                <div class="d">开始一个真实项目，先填项目名与客户名。</div>
+              </div>
+            </div>
+            <div style="margin-top:14px;padding:12px 14px;background:var(--soft);border:1px dashed var(--border2);border-radius:10px;text-align:center">
+              <div style="font-size:14px;color:var(--text);margin-bottom:8px">加载示例数据到新项目：</div>
+              <button class="btn btn-soft btn-lg" @click="loadDemoData()" :disabled="demoLoading">
+                <span x-show="!demoLoading" class="ico"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7v8l10-12h-7V2z"/></svg></span>
+                <span x-show="!demoLoading">加载示例数据</span>
+                <span x-show="demoLoading"><span class="spin"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 正在加载示例数据…</span>
+              </button>
+              <div style="font-size:12px;color:var(--text3);margin-top:6px">将复制 6 项 PBC 清单和 3 个模拟文件到新项目</div>
+            </div>
+            <div class="ob-actions"><button class="btn btn-soft" @click="obStep=1">上一步</button></div>
+          </div>
+        </template>
+
+        <template x-if="obStep===3 && obMode==='create'">
+          <div>
+            <div class="ob-title">创建新项目</div>
+            <div class="ob-desc">填写项目与客户名称即可开始。</div>
+            <div style="text-align:left;margin-top:14px">
+              <input class="ob-input" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px" placeholder="项目名称，例如：ABC集团 IPO 审计" x-model="newProj.name">
+              <input class="ob-input" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-top:10px" placeholder="客户名称，例如：ABC科技" x-model="newProj.client_name">
+            </div>
+            <div class="ob-actions">
+              <button class="btn btn-soft" @click="obStep=2">上一步</button>
+              <button class="btn btn-pri" @click="createProjectFromOnboarding()">创建并进入</button>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="obStep===3 && obMode==='demo'">
+          <div>
+            <div class="ob-illus">✅</div>
+            <div class="ob-title">设置完成</div>
+            <div class="ob-desc">接下来你可以：</div>
+            <div class="note" style="text-align:left;margin-top:14px">
+              1. 点击“扫描新文件”体验 AI 自动分类<br>
+              2. 查看“待复核”队列<br>
+              3. 点击“超期未提供”看风险雷达与缺口汇报
+            </div>
+            <div class="ob-actions"><button class="btn btn-pri btn-lg" @click="finishOnboarding()">开始使用</button></div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- 项目切换抽屉（左侧） -->
+  <div x-show="showProjectDrawer" class="overlay" style="display:none;justify-content:flex-start;padding:0" :style="showProjectDrawer && 'display:flex'" @click.self="showProjectDrawer=false">
+    <div class="drawer" @click.stop>
+      <div class="modal-h">
+        <div><div class="tt">项目列表</div><div class="st">共 <span x-text="projects.length"></span> 个项目</div></div>
+        <button class="x" @click="showProjectDrawer=false">×</button>
+      </div>
+      <div class="modal-b">
+        <!-- P1-20: 加载失败错误边界 + 重试按钮 -->
+        <div x-show="projectsLoadError" style="padding:24px;text-align:center;color:var(--red-deep)">
+          <div style="margin-bottom:8px"><span class="ico ico-lg"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg></span></div>
+          <div style="font-size:14px;margin-bottom:12px" x-text="projectsLoadError"></div>
+          <button class="btn btn-soft btn-xs" @click="loadProjects()"><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></span>重试加载</button>
+        </div>
+        <template x-if="!projectsLoadError">
+          <div>
+            <template x-for="p in projects" :key="p.project_id">
+              <div class="proj-item" :class="p.project_id===currentProjectId && 'cur'" style="display:flex;align-items:center">
+                <div style="flex:1;overflow:hidden" @click="switchProject(p)">
+                  <div class="nm" x-text="p.name"></div>
+                  <div class="cl" x-text="p.client_name"></div>
+                  <div class="pg">
+                    <span x-text="(p._provided||0)+' / '+(p._total||0)+' 已提供'"></span>
+                    <div class="pgbar"><i :style="'width:'+(p._pct||0)+'%'"></i></div>
+                  </div>
+                </div>
+                <div style="position:relative;flex-shrink:0" x-show="p.project_id!=='demo'">
+                  <button class="btn btn-ghost btn-xs" @click.stop="projMenu.show=p.project_id; projMenu.target=p">…</button>
+                  <div x-show="projMenu.show===p.project_id" class="ctx-menu" @click.stop style="position:absolute;right:0;top:100%;z-index:50">
+                    <div @click="openRenameProject(p); projMenu.show=''">重命名</div>
+                    <div @click="confirmDeleteProject(p); projMenu.show=''" style="color:var(--red)">删除项目</div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div x-show="projects.length===0" style="padding:24px;text-align:center;color:var(--text3);font-size:14px">
+              暂无项目，可点下方按钮创建
+            </div>
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+              <button class="btn btn-pri" style="width:100%" @click="showCreateProject=true"><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>创建新项目</button>
+              <div style="font-size:12px;color:var(--text3);margin-top:8px;text-align:center;line-height:1.5">
+                此应用运行在本地，数据存在你的电脑。<br>分享 exe 给别人后是独立环境，需各自配置。
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- 客户文件夹配置 modal -->
+  <div x-show="folderConfig.show" class="overlay" style="display:none" :style="folderConfig.show && 'display:flex'" @click.self="folderConfig.show=false">
+    <div class="modal" style="max-width:520px" @click.stop>
+      <div class="modal-h"><div class="tt"><span class="ico" style="vertical-align:middle;margin-right:6px"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>客户共享文件夹设置</div><button class="x" @click="folderConfig.show=false">×</button></div>
+      <div class="modal-b">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">
+          后端直接读本地路径，零上传。<br>
+          推荐指向 OneDrive 挂载点，例如 <code style="background:var(--soft);padding:1px 5px;border-radius:3px">C:/Users/审计员/OneDrive - 客户公司/PBC资料</code>。
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">客户共享文件夹路径</div>
+          <input type="text" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:12px"
+                 x-model="folderConfig.input" placeholder="例如：D:/客户资料/PBC共享文件夹">
+        </div>
+        <div x-show="folderConfig.info" style="font-size:12px;color:var(--text2);margin-bottom:10px" x-text="folderConfig.info"></div>
+        <div x-show="folderConfig.error" style="font-size:12px;color:var(--red);margin-bottom:10px" x-text="folderConfig.error"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-bottom:16px">
+          <button class="btn btn-pri" @click="saveFolderConfig()">保存客户文件夹</button>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:14px">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">归档根目录<span style="color:var(--text3);margin-left:6px">AI 按一级分类在此目录下自动建子文件夹，根目录由你指定</span></div>
+          <input type="text" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:12px" x-model="folderConfig.archiveInput" placeholder="例如：D:/Desktop/PBC归档">
+          <div x-show="folderConfig.archiveInfo" style="font-size:12px;color:var(--text3);margin-top:6px" x-text="folderConfig.archiveInfo"></div>
+          <div x-show="folderConfig.archiveError" style="font-size:12px;color:var(--red);margin-top:6px" x-text="folderConfig.archiveError"></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+            <button class="btn btn-ghost" @click="folderConfig.show=false">关闭</button>
+            <button class="btn btn-pri" @click="saveArchiveRoot()">保存归档目录</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- v7 AI 配置 modal -->
+  <div x-show="aiConfig.show" class="overlay" style="display:none" :style="aiConfig.show && 'display:flex'" @click.self="aiConfig.show=false">
+    <div class="modal" style="max-width:540px" @click.stop>
+      <div class="modal-h"><div class="tt"><span class="ico" style="vertical-align:middle;margin-right:6px"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg></span>AI 配置</div><button class="x" @click="aiConfig.show=false">×</button></div>
+      <div class="modal-b">
+        <template x-if="aiConfig.loading"><div style="text-align:center;color:var(--text3);padding:16px">读取中…</div></template>
+        <template x-if="!aiConfig.loading">
+          <div>
+            <div class="ai-field">
+              <label>API Key<span x-show="aiConfig.keySet" style="color:var(--text3);font-weight:400;margin-left:6px">（已设置，保留 *** 表示不修改）</span></label>
+              <input type="text" x-model="aiConfig.form.api_key" placeholder="sk-...">
+            </div>
+            <div class="ai-field">
+              <label>Base URL</label>
+              <input type="text" x-model="aiConfig.form.base_url" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
+            </div>
+            <div class="ai-field">
+              <label>分类模型</label>
+              <select x-model="aiConfig.form.model_classification">
+                <option value="">（选择模型）</option>
+                <template x-for="m in aiConfig.models" :key="'c'+m.id"><option :value="m.id" x-text="m.name+(m.use_case?(' — '+m.use_case):'')"></option></template>
+              </select>
+            </div>
+            <div class="ai-field">
+              <label>视觉模型</label>
+              <select x-model="aiConfig.form.model_vision">
+                <option value="">（选择模型）</option>
+                <template x-for="m in aiConfig.models" :key="'v'+m.id"><option :value="m.id" x-text="m.name"></option></template>
+              </select>
+            </div>
+            <div class="ai-field">
+              <label>推理模型</label>
+              <select x-model="aiConfig.form.model_reasoning">
+                <option value="">（选择模型）</option>
+                <template x-for="m in aiConfig.models" :key="'r'+m.id"><option :value="m.id" x-text="m.name"></option></template>
+              </select>
+            </div>
+            <div class="ai-field">
+              <label>置信度阈值（0–1，低于此值标红需人工复核）</label>
+              <input type="number" min="0" max="1" step="0.05" x-model.number="aiConfig.form.confidence_threshold">
+            </div>
+            <div class="ai-field">
+              <label class="ai-switch"><input type="checkbox" x-model="aiConfig.form.filename_match_enabled"> 启用文件名直配（文件名带编号时跳过 AI，加速）</label>
+            </div>
+            <div x-show="aiConfig.testResult" style="font-size:13px;margin-bottom:4px" :class="aiConfig.testResult && aiConfig.testResult.ok ? 'ai-test-ok':'ai-test-err'" x-text="aiConfig.testResult ? (aiConfig.testResult.ok ? ('✓ '+(aiConfig.testResult.message||'连接成功')) : ('✕ '+(aiConfig.testResult.hint||aiConfig.testResult.error||'连接失败'))) : ''"></div>
+          </div>
+        </template>
+        <div style="display:flex;gap:10px;justify-content:space-between;border-top:1px solid var(--border);padding-top:14px;margin-top:6px">
+          <button class="btn btn-ghost" @click="testAiConfig()" :disabled="aiConfig.testing"><span x-show="!aiConfig.testing">测试连接</span><span x-show="aiConfig.testing">测试中…</span></button>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-ghost" @click="aiConfig.show=false">取消</button>
+            <button class="btn btn-pri" @click="saveAiConfig()" :disabled="aiConfig.saving"><span x-show="!aiConfig.saving">保存</span><span x-show="aiConfig.saving">保存中…</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- v7 重新定位 modal -->
+  <div x-show="relocateModal.show" class="overlay" style="display:none" :style="relocateModal.show && 'display:flex'" @click.self="relocateModal.show=false">
+    <div class="modal" style="max-width:480px" @click.stop>
+      <div class="modal-h"><div class="tt">重新定位文件</div><button class="x" @click="relocateModal.show=false">×</button></div>
+      <div class="modal-b">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">
+          该编号对应的归档文件已移动或删除。输入文件新位置，后端按 sha256 重新绑定（编号不变）。
+        </div>
+        <div x-show="relocateModal.item" style="font-size:12px;color:var(--text3);margin-bottom:8px" x-text="relocateModal.item ? ('编号：'+relocateModal.item.item_id+(relocateModal.item.description?('　'+relocateModal.item.description):'')) : ''"></div>
+        <input type="text" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:12px" x-model="relocateModal.input" placeholder="例如：D:/Desktop/PBC归档/历史沿革/历-1_股权架构图_2024_v1.pdf">
+        <div x-show="relocateModal.error" style="font-size:12px;color:var(--red);margin-top:8px" x-text="relocateModal.error"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" @click="relocateModal.show=false">取消</button>
+          <button class="btn btn-pri" @click="doRelocate()" :disabled="relocateModal.saving"><span x-show="!relocateModal.saving">重新绑定</span><span x-show="relocateModal.saving">处理中…</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- v7 测试数据包 modal -->
+  <div x-show="testDataModal.show" class="overlay" style="display:none" :style="testDataModal.show && 'display:flex'" @click.self="testDataModal.show=false">
+    <div class="modal" style="max-width:520px" @click.stop>
+      <div class="modal-h"><div class="tt">测试数据包</div><button class="x" @click="testDataModal.show=false">×</button></div>
+      <div class="modal-b">
+        <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:12px">
+          下载一份现成测试数据包，用来快速跑通完整流程：
+        </div>
+        <div style="background:var(--soft);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.8;margin-bottom:12px">
+          <div><strong>01_PBC_List_测试.xlsx</strong> — 10 项 PBC 清单（5 个一级分类、3 个实体）</div>
+          <div><strong>客户共享文件夹/</strong> — 10 个散文件 + 1 个穿行测试子目录（3 文件）</div>
+          <div><strong>README_测试数据说明.txt</strong></div>
+        </div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.7;margin-bottom:14px">
+          用法：下载解压 → 创建项目 → 向导第 2 步上传清单 → 第 3 步客户文件夹指向解压目录 → 扫描看 AI 自动分类归档。
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost" @click="testDataModal.show=false">关闭</button>
+          <button class="btn btn-pri" @click="downloadTestPackage()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>下载测试数据包</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 创建项目 modal（3 步向导） -->
+  <div x-show="showCreateProject" class="overlay" style="display:none" :style="showCreateProject && 'display:flex'" @click.self="showCreateProject=false">
+    <div class="modal" style="max-width:480px" @click.stop>
+      <div class="modal-h">
+        <div>
+          <div class="tt">创建新项目</div>
+          <div class="st" x-text="'第 '+createWizardStep+' / 3 步'"></div>
+        </div>
+        <button class="x" @click="showCreateProject=false; createWizardStep=1">×</button>
+      </div>
+      <div class="modal-b">
+        <!-- 步骤指示器 -->
+        <div style="display:flex;gap:6px;margin-bottom:20px">
+          <template x-for="s in [1,2,3]" :key="s">
+            <div style="flex:1;height:4px;border-radius:2px" :style="'background:'+(s<=createWizardStep?'hsl(var(--primary))':'hsl(var(--border))')"></div>
+          </template>
+        </div>
+
+        <!-- 第 1 步：项目信息 -->
+        <div x-show="createWizardStep===1">
+          <div style="margin-bottom:14px">
+            <div style="font-size:12px;font-weight:500;margin-bottom:6px">项目名称</div>
+            <input style="width:100%;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:8px" x-model="newProj.name" placeholder="例如：ABC集团 IPO 审计">
+          </div>
+          <div style="margin-bottom:14px">
+            <div style="font-size:12px;font-weight:500;margin-bottom:6px">客户名称</div>
+            <input style="width:100%;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:8px" x-model="newProj.client_name" placeholder="例如：ABC科技">
+          </div>
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:500;margin-bottom:6px">备注<span style="color:var(--text3);font-weight:400;margin-left:4px">选填</span></div>
+            <input style="width:100%;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:8px" x-model="newProj.note" placeholder="项目背景信息">
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button class="btn btn-ghost" @click="cancelCreateProject()">取消并查看示例</button>
+            <button class="btn btn-pri" @click="createWizardStep=2" :disabled="!newProj.name.trim()">下一步</button>
+          </div>
+        </div>
+
+        <!-- 第 2 步：导入 PBC 清单 -->
+        <div x-show="createWizardStep===2">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+            PBC 清单是审计师发给客户、要求其提供的资料列表，通常是 Excel 格式。<br>可以先导入，也可以创建项目后再导入。
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+            <button class="btn btn-ghost btn-xs" @click="downloadTemplate()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>下载模板</button>
+          </div>
+          <div style="border:2px dashed hsl(var(--border));border-radius:10px;padding:24px;text-align:center;margin-bottom:14px">
+            <div style="font-size:14px;margin-bottom:10px">选择 .xlsx 文件导入</div>
+            <label class="btn btn-soft" style="cursor:pointer">
+              选择文件
+              <input type="file" accept=".xlsx,.xls" style="display:none" @change="wizardImportPbc($event)">
+            </label>
+            <div x-show="wizardPbcFile" style="font-size:12px;color:var(--green);margin-top:8px" x-text="'已选择：'+wizardPbcFile"></div>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button class="btn btn-ghost" @click="createWizardStep=1">上一步</button>
+            <button class="btn btn-ghost" @click="createWizardStep=3">跳过，稍后导入</button>
+            <button class="btn btn-pri" @click="createWizardStep=3" x-show="!wizardPbcFile" style="display:none">下一步</button>
+            <button class="btn btn-pri" @click="createWizardStep=3" x-show="wizardPbcFile">下一步</button>
+          </div>
+        </div>
+
+        <!-- 第 3 步：配置客户文件夹 -->
+        <div x-show="createWizardStep===3">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+            这是客户提供资料的实际文件夹路径。应用将直接读取其中的文件并自动分类归档。<br>推荐指向 OneDrive 挂载点。可以先留空，稍后在设置中配置。
+          </div>
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:500;margin-bottom:6px">客户共享文件夹路径</div>
+            <input type="text" style="width:100%;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:8px;font-family:monospace;font-size:12px" x-model="wizardFolderPath" placeholder="留空则稍后配置，例如：D:/客户资料/PBC">
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button class="btn btn-ghost" @click="createWizardStep=2">上一步</button>
+            <button class="btn btn-ghost" @click="showCreateProject=false; createWizardStep=1">取消</button>
+            <button class="btn btn-pri" @click="createProjectWizard()" :disabled="!newProj.name.trim()">创建项目</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 风险化解卡片 modal -->
+  <div x-show="resolveModal.show" class="overlay" style="display:none" :style="resolveModal.show && 'display:flex'" @click.self="resolveModal.show=false">
+    <div class="modal" style="max-width:720px" @click.stop>
+      <div class="modal-h">
+        <div>
+          <div class="tt" x-text="'风险化解助手：'+(resolveModal.item?.item_id||'')"></div>
+          <div class="st" x-text="(resolveModal.item?.entity||'')+'　'+(resolveModal.item?.category||'')+'　逾期 '+(resolveModal.item?.overdue_days||0)+' 天'"></div>
+        </div>
+        <button class="x" @click="resolveModal.show=false">×</button>
+      </div>
+      <div class="modal-b" x-show="resolveModal.loading">
+        <div style="text-align:center;padding:40px;color:var(--text3)"><span class="spin"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 加载中…</div>
+      </div>
+      <div class="modal-b" x-show="!resolveModal.loading">
+        <!-- 风险信号卡（毫秒级秒回，不走 AI） -->
+        <template x-if="resolveModal.data?.risk_signal">
+          <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px">
+            <div :class="'risk-bg-'+(resolveModal.data.risk_signal.ipo_inquiry_risk||'medium')" style="padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
+              <span :class="'risk-fg-'+(resolveModal.data.risk_signal.ipo_inquiry_risk||'medium')" style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:4px" x-text="{high:'高风险',medium:'中风险',low:'低风险',none:'无风险'}[resolveModal.data.risk_signal.ipo_inquiry_risk]||'中风险'"></span>
+              <div style="font-weight:600;font-size:14px;flex:1;line-height:1.4" x-text="resolveModal.data.risk_signal.risk_signal_text"></div>
+            </div>
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+              <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">影响的审计结论</div>
+              <template x-for="c in (resolveModal.data.risk_signal.affected_conclusions||[])" :key="c">
+                <div style="font-size:14px;padding:4px 0;display:flex;gap:8px;color:var(--text)"><span style="color:var(--red);font-weight:700">▸</span><span x-text="c"></span></div>
+              </template>
+            </div>
+            <div style="padding:16px 20px">
+              <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">IPO 发审委问询热度</div>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--soft);border-radius:6px;font-size:14px;margin-bottom:8px">
+                <span :class="'risk-fg-'+(resolveModal.data.risk_signal.ipo_inquiry_risk||'medium')" style="font-size:12px;font-weight:700;padding:2px 9px;border-radius:4px" x-text="{high:'高频问询',medium:'常规问询',low:'辅助披露',none:'无关'}[resolveModal.data.risk_signal.ipo_inquiry_risk]||'常规'"></span>
+                <span style="font-size:12px;color:var(--text2)">此项缺失可能触发发审委问询</span>
+              </div>
+              <template x-for="s in (resolveModal.data.risk_signal.ipo_inquiry_scenarios||[])" :key="s">
+                <div style="font-size:14px;color:var(--text2);padding:3px 0 3px 14px;display:flex;gap:8px;line-height:1.5"><span style="color:var(--text2)">·</span><span x-text="s"></span></div>
+              </template>
+            </div>
+          </div>
+        </template>
+        <!-- 影响分析 -->
+        <div class="rblock impact">
+          <div class="bh">① 影响分析
+            <span class="src-tag" :class="(resolveModal.data?.impact_analysis?.used_fallback || resolveModal.data?.impact_analysis?.source==='knowledge_base') ? 'src-kb' : 'src-ai'" x-text="(resolveModal.data?.impact_analysis?.used_fallback || resolveModal.data?.impact_analysis?.source==='knowledge_base') ? '知识库兜底' : 'AI 生成'"></span>
+          </div>
+          <template x-if="resolveModal.data?.impact_analysis?.affected_areas">
+            <div>
+              <template x-for="imp in resolveModal.data.impact_analysis.affected_areas" :key="imp">
+                <div class="impact-item" x-text="imp"></div>
+              </template>
+              <div class="note" style="margin-top:10px" x-show="resolveModal.data?.impact_analysis?.audit_risk" x-text="resolveModal.data?.impact_analysis?.audit_risk"></div>
+            </div>
+          </template>
+          <div x-show="!resolveModal.data?.impact_analysis?.affected_areas" style="font-size:12px;color:var(--text2)" x-text="resolveModal.data?.impact_analysis?.audit_risk || resolveModal.data?.impact_analysis?.summary || '暂无影响分析'"></div>
+        </div>
+        <!-- 替代程序 -->
+        <div class="rblock alt">
+          <div class="bh">② 替代程序建议
+            <span class="src-tag" :class="(resolveModal.data?.alternative_procedures?.source==='knowledge_base' || resolveModal.data?.alternative_procedures?.used_fallback) ? 'src-kb' : 'src-ai'" x-text="(resolveModal.data?.alternative_procedures?.source==='knowledge_base' || resolveModal.data?.alternative_procedures?.used_fallback) ? '知识库兜底' : 'AI 生成'"></span>
+          </div>
+          <template x-for="(alt, i) in (resolveModal.data?.alternative_procedures?.procedures || [])" :key="i">
+            <div class="alt-item">
+              <div class="num" x-text="i+1"></div>
+              <div class="txt">
+                <div style="font-weight:600;margin-bottom:3px" x-text="alt.name || alt"></div>
+                <template x-if="alt.steps">
+                  <ul style="margin:4px 0 4px 16px;font-size:12px;color:var(--text2)">
+                    <template x-for="(s, si) in alt.steps" :key="si">
+                      <li x-text="s"></li>
+                    </template>
+                  </ul>
+                </template>
+                <div x-show="alt.basis" style="font-size:12px;color:var(--text3);margin-top:3px">依据：<span x-text="alt.basis"></span></div>
+              </div>
+              <button class="btn btn-green btn-xs" @click="adoptProcedure(i, $event)">采纳</button>
+            </div>
+          </template>
+          <div x-show="!(resolveModal.data?.alternative_procedures?.procedures||[]).length" style="font-size:12px;color:var(--text2)">暂无替代程序建议</div>
+        </div>
+        <!-- 缺口汇报 -->
+        <div class="rblock esc">
+          <div class="bh">③ 缺口汇报<span class="src-tag src-kb">结构化模板</span></div>
+          <button class="btn btn-pri btn-xs" @click="copyText(resolveModal.data?.escalation_report?.report_text || '')">复制汇报文本</button>
+          <div class="esc-text" x-text="resolveModal.data?.escalation_report?.report_text || ''"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 整体缺口汇报 modal -->
+  <div x-show="escalationModal.show" class="overlay" style="display:none" :style="escalationModal.show && 'display:flex'" @click.self="escalationModal.show=false">
+    <div class="modal" style="max-width:720px" @click.stop>
+      <div class="modal-h">
+        <div>
+          <div class="tt">整体缺口汇报</div>
+          <div class="st">按优先级汇总全部超期未提供项</div>
+        </div>
+        <button class="x" @click="escalationModal.show=false">×</button>
+      </div>
+      <div class="modal-b" x-show="escalationModal.loading">
+        <div style="text-align:center;padding:40px;color:var(--text3)"><span class="spin"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 生成中…</div>
+      </div>
+      <div class="modal-b" x-show="!escalationModal.loading">
+        <div style="margin-bottom:10px"><button class="btn btn-pri btn-xs" @click="copyText(escalationModal.text)">复制全部</button></div>
+        <div class="esc-text" style="max-height:400px" x-text="escalationModal.text"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 文件详情 modal -->
+  <div x-show="fileDetail.show" class="overlay" style="display:none" :style="fileDetail.show && 'display:flex'" @click.self="fileDetail.show=false">
+    <div class="modal" style="max-width:560px" @click.stop>
+      <div class="modal-h">
+        <div>
+          <div class="tt" x-text="'文件详情：'+(fileDetail.item?.subject||fileDetail.item?.item_id||'')"></div>
+          <div class="st" x-text="'清单编号：'+(fileDetail.item?.item_id||'')+'　实体：'+(fileDetail.item?.entity||'')"></div>
+        </div>
+        <button class="x" @click="fileDetail.show=false">×</button>
+      </div>
+      <div class="modal-b" x-show="fileDetail.loading">
+        <div style="text-align:center;padding:40px;color:var(--text3)"><span class="spin"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 加载中…</div>
+      </div>
+      <div class="modal-b" x-show="!fileDetail.loading">
+        <div x-show="fileDetail.archives && fileDetail.archives.length>0">
+          <template x-for="a in fileDetail.archives" :key="a.id">
+            <div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px">
+              <div style="font-weight:600;font-size:14px;margin-bottom:8px" x-text="a.original_path ? a.original_path.split(/[\\\\/]/).pop() : '-'"></div>
+              <div style="display:grid;grid-template-columns:80px 1fr;gap:6px 10px;font-size:12px">
+                <span style="color:var(--text3)">原始路径</span>
+                <code style="font-size:12px;word-break:break-all" x-text="a.original_path||'-'"></code>
+                <span style="color:var(--text3)">归档路径</span>
+                <code style="font-size:12px;word-break:break-all" x-text="a.archived_path||'-'"></code>
+                <span style="color:var(--text3)">分类方式</span>
+                <span>
+                  <span x-text="a.archived_by==='filename-match'?'文件名自动匹配':a.archived_by==='ai-auto'?'AI 内容分析':a.archived_by==='scan-folder'?'扫描文件夹':a.archived_by||'-'" style="font-weight:500"></span>
+                  <span style="color:var(--text3);font-size:12px;margin-left:6px" x-show="a.archived_by==='filename-match'">文件名含清单编号，跳过 AI 调用直接归档</span>
+                  <span style="color:var(--text3);font-size:12px;margin-left:6px" x-show="a.archived_by==='ai-auto'">AI 从文件内容识别归属项</span>
+                  <span style="color:var(--text3);font-size:12px;margin-left:6px" x-show="a.archived_by==='scan-folder'">从客户文件夹扫描后归档</span>
+                </span>
+                <span style="color:var(--text3)">文件大小</span>
+                <span x-text="a.file_size ? (a.file_size>1048576 ? (a.file_size/1048576).toFixed(1)+' MB' : (a.file_size/1024).toFixed(0)+' KB') : '-'"></span>
+                <span style="color:var(--text3)">归档时间</span>
+                <span x-text="a.archived_at||'-'"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div x-show="!fileDetail.archives || fileDetail.archives.length===0" style="text-align:center;padding:20px;color:var(--text3);font-size:14px">
+          暂无归档文件。扫描新文件后会自动归档到此。
+        </div>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">
+          <span x-show="fileDetail.item?.confidence!=null">AI 置信度：<b :style="'color:'+(fileDetail.item.confidence<0.7?'var(--red)':fileDetail.item.confidence<0.85?'var(--orange)':'var(--green)')" x-text="(fileDetail.item.confidence||0).toFixed(2)"></b></span>
+          <span x-show="fileDetail.item?.confidence==null">此项目前未经过 AI 分类</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 重命名项目 modal -->
+  <div x-show="renameProjectModal.show" class="overlay" style="display:none" :style="renameProjectModal.show && 'display:flex'" @click.self="renameProjectModal.show=false">
+    <div class="modal" style="max-width:380px" @click.stop>
+      <div class="modal-h"><div class="tt">重命名项目</div><button class="x" @click="renameProjectModal.show=false">×</button></div>
+      <div class="modal-b">
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">项目名称</div>
+          <input type="text" style="width:100%;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:8px" x-model="renameProjectModal.name">
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost" @click="renameProjectModal.show=false">取消</button>
+          <button class="btn btn-pri" @click="doRenameProject()">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除项目 modal -->
+  <div x-show="deleteProjectModal.show" class="overlay" style="display:none" :style="deleteProjectModal.show && 'display:flex'" @click.self="deleteProjectModal.show=false">
+    <div class="modal" style="max-width:400px" @click.stop>
+      <div class="modal-h"><div class="tt">确认删除</div><button class="x" @click="deleteProjectModal.show=false">×</button></div>
+      <div class="modal-b">
+        <div style="font-size:14px;margin-bottom:16px;line-height:1.6">确定删除项目“<b x-text="deleteProjectModal.project?.name||''"></b>”？<br>数据不会被物理删除，仅标记为归档状态，可恢复。</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost" @click="deleteProjectModal.show=false">取消</button>
+          <button class="btn btn-pri" style="background:var(--red);border-color:var(--red)" @click="doDeleteProject()">确认删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 顶部导航 -->
+  <header class="nav">
+    <div class="nav-top">
+      <button class="btn btn-ghost btn-xs" @click="openProjectDrawer()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></span>项目</button>
+      <span class="nav-sep"></span>
+      <div class="brand">
+        <div class="logo">P</div>
+        <div>
+          <div class="name" x-text="currentProject?.name || 'IPO 审计 PBC 管理工作站'"></div>
+          <div class="sub" x-text="currentProject ? currentProject.client_name : '协作审阅工作流　缺料风险雷达　AI 原生'"></div>
+        </div>
+      </div>
+      <div class="nav-spacer"></div>
+      <div class="nav-progress" x-show="dashboard">
+        <span>总体进度</span>
+        <div class="bar"><i :style="'width:'+progressPct+'%'"></i></div>
+        <b style="color:var(--text)" x-text="progressPct+'%'"></b>
+        <span x-text="'('+progressProvided+'/'+progressTotal+')'"></span>
+      </div>
+      <button class="btn btn-ghost btn-xs" @click="reloadAll()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span>刷新</button>
+      <button class="btn btn-pri btn-xs" @click="openEscalation()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>生成汇报</button>
+      <button class="btn btn-ghost btn-xs" @click="openFolderConfig()"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>设置</button>
+      <button class="btn btn-ghost btn-xs" @click="openAiConfig()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg></span>AI 配置</button>
+    </div>
+    <nav class="tabs">
+      <template x-for="t in tabs" :key="t.id">
+        <button class="tab" :class="[currentTab===t.id && 'active', t.alert && tabCounts[t.id]>0 && 't-alert']" @click="switchTab(t.id)">
+          <span class="txt" x-text="t.label"></span>
+          <span class="count" x-show="!t.noCount" x-text="tabCounts[t.id]||0"></span>
+        </button>
+      </template>
+    </nav>
+  </header>
+
+  <!-- 主区域 -->
+  <main class="wrap" x-show="currentProjectId">
+    <div x-show="loading" style="text-align:center;padding:60px;color:var(--text3)"><span class="spin" style="width:20px;height:20px"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 加载中…</div>
+
+    <!-- 今日简报首屏（L3 主动化产品） -->
+    <div x-show="!loading && briefing && briefing.events.length" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
+      <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--soft)">
+        <span style="width:10px;height:10px;border-radius:99px;background:var(--red);animation:pulse 2s infinite"></span>
+        <style>@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,0.5)}70%{box-shadow:0 0 0 8px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}</style>
+        <b style="font-size:16px">今日简报</b>
+        <span class="risk-fg-low" style="padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px"><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7v8l10-12h-7V2z"/></svg></span>今天已自动处理 <span x-text="efficiencyCount"></span> 份文件</span>
+        <span style="font-size:12px;color:var(--text2);margin-left:auto">产品已主动识别 <b x-text="briefing?.summary?.total_events||0"></b> 条风险信号，最高优 <b x-text="briefing?.summary?.high_count||0"></b> 条</span>
+      </div>
+      <div style="padding:6px">
+        <template x-for="e in briefing.events" :key="e.item_id+'-'+e.event_type">
+          <div :class="'brief-item '+e.priority" @click="jumpToBriefingItem(e)" style="display:flex;align-items:flex-start;gap:14px;padding:13px 16px;border-radius:8px;cursor:pointer;transition:.12s;border:1px solid transparent">
+            <span style="width:8px;height:8px;border-radius:99px;margin-top:7px;flex-shrink:0" :style="'background:'+(e.priority==='high'?'var(--red)':e.priority==='medium'?'var(--orange)':'var(--green)')"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:14px" x-text="e.title"></div>
+              <div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.55" x-text="e.detail"></div>
+              <div style="font-size:12px;color:var(--text2);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap">
+                <span style="background:var(--soft);padding:2px 8px;border-radius:4px" x-text="e.category"></span>
+                <span style="background:var(--soft);padding:2px 8px;border-radius:4px" x-text="e.entity"></span>
+                <span :class="'risk-fg-'+(e.ipo_inquiry_risk||'medium')" style="padding:2px 8px;border-radius:4px" x-text="'IPO '+(e.ipo_inquiry_risk==='high'?'高频':e.ipo_inquiry_risk==='medium'?'常规':'辅助')+'问询'"></span>
+                <span x-show="e.overdue_days" x-text="'逾期 '+e.overdue_days+' 天'"></span>
+              </div>
+            </div>
+            <span style="color:var(--text2);font-size:12px;align-self:center;white-space:nowrap">看风险信号 →</span>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Tab 1 待初检 -->
+    <div x-show="!loading && currentTab==='triage'">
+      <div class="page-head">
+        <div><h1>待初检</h1><div class="desc">AI 已自动分类归档，待你确认。</div></div>
+      </div>
+
+      <!-- 空清单提示：从 0 到 1 导入 PBC 清单 -->
+      <div x-show="pbcList.length === 0" class="card card-pad" style="margin-bottom:16px;border:2px dashed var(--border2)">
+        <div style="text-align:center;padding:24px 16px">
+          <div style="margin-bottom:8px"><span class="ico ico-lg" style="color:var(--text2)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span></div>
+          <div style="font-weight:600;font-size:16px;margin-bottom:4px">PBC 清单为空</div>
+          <div style="font-size:14px;color:var(--text2);margin-bottom:16px">先导入 PBC 清单，再配置客户文件夹，最后扫描文件体验 AI 自动分类</div>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+            <label class="btn btn-pri btn-lg" style="cursor:pointer">
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span>导入 PBC 清单
+              <input type="file" accept=".xlsx,.xls" style="display:none" @change="importPbcList($event)">
+            </label>
+            <button class="btn btn-soft btn-lg" @click="loadDemoData()" :disabled="demoLoading">
+              <span x-show="!demoLoading" class="ico"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7v8l10-12h-7V2z"/></svg></span>
+              <span x-show="!demoLoading">加载示例数据</span>
+              <span x-show="demoLoading"><span class="spin"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 加载中…</span>
+            </button>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px">
+            <button class="btn btn-ghost btn-sm" @click="downloadTemplate()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>下载导入模板</button>
+            <button class="btn btn-ghost btn-sm" @click="openTestData()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>测试数据包</button>
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-top:8px">导入支持 .xlsx 格式；模板含 15 列，带 * 为必填（含「需求期间」）。</div>
+        </div>
+      </div>
+
+      <div class="card card-pad" style="margin-bottom:16px">
+        <div x-show="currentFolderInfo.exists" style="font-size:12px;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px;flex-wrap:wrap">
+          <span style="color:var(--text3);white-space:nowrap">文件夹</span>
+          <code style="font-size:12px;background:var(--bg);padding:2px 8px;border-radius:4px;border:1px solid var(--border);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="currentFolderInfo.path" :title="currentFolderInfo.path"></code>
+          <span class="badge b-done" x-text="currentFolderInfo.count + ' 个文件'" style="white-space:nowrap"></span>
+          <button class="btn btn-ghost btn-xs" style="margin-left:auto;white-space:nowrap" @click="openExplorer(currentFolderInfo.path)">打开文件夹</button>
+          <button class="btn btn-ghost btn-xs" style="white-space:nowrap" @click="openFolderConfig()">更改</button>
+        </div>
+        <div x-show="!currentFolderInfo.exists && currentFolderInfo.path" style="font-size:12px;color:var(--orange);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--red-soft);padding:8px 12px;border-radius:8px">
+          <span>文件夹不存在：<code x-text="currentFolderInfo.path"></code></span>
+          <button class="btn btn-ghost btn-xs" style="margin-left:auto" @click="openFolderConfig()">重新配置</button>
+        </div>
+        <div x-show="!currentFolderInfo.path" style="font-size:12px;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px">
+          尚未配置客户共享文件夹
+          <button class="btn btn-soft btn-xs" style="margin-left:auto" @click="openFolderConfig()">配置文件夹</button>
+        </div>
+        <div class="scan-hero">
+          <div class="big">
+            <div style="font-weight:600;font-size:16px;margin-bottom:2px">环节 1：从客户共享文件夹取件</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:12px">后端直接读本地路径，零上传。主路径为扫描，拖拽为兜底。</div>
+            <div style="display:flex;gap:10px;align-items:center">
+              <button class="btn btn-pri btn-lg" @click="startScan()" :disabled="scan.active">扫描新文件</button>
+              <button class="btn btn-soft btn-sm" @click="openExplorer(currentFolderInfo.path)" x-show="currentFolderInfo.path">查看测试资料</button>
+            </div>
+          </div>
+          <div style="flex:1;min-width:240px">
+            <div class="dashed" id="dropZone"
+                 @dragover.prevent="$el.classList.add('drag')"
+                 @dragleave="$el.classList.remove('drag')"
+                 @drop.prevent="onDrop($event)">拖拽文件到此作为兜底，单文件超过 50MB 建议改用扫描文件夹</div>
+          </div>
+        </div>
+        <div style="margin-top:18px" x-show="scan.active || scan.finished">
+          <div class="steps">
+            <template x-for="(s, i) in ['解析','分类','归档','回写']" :key="i">
+              <div class="step" :class="[scan.step>i && 'done', scan.step===i && scan.active && 'active']">
+                <div class="dot" x-text="scan.step>i ? '✓' : (i+1)"></div>
+                <div class="lbl" x-text="s"></div>
+              </div>
+            </template>
+          </div>
+          <div class="scan-live" x-show="scan.active">
+            <span class="spin"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span><span x-html="scan.liveText"></span>
+          </div>
+          <div class="scan-live" style="color:var(--green)" x-show="!scan.active && scan.finished">
+            ✓ <span x-text="scan.summary"></span>
+          </div>
+        </div>
+      </div>
+      <div class="filters" x-html="filtersBarHtml()"></div>
+      <div x-html="tableViewHtml(filteredItems())"></div>
+    </div>
+
+    <!-- Tab 2 待复核 -->
+    <div x-show="!loading && currentTab==='review'">
+      <div class="page-head">
+        <div><h1>待复核</h1><div class="desc">已初检，待高级审计员复核；低置信度项已置顶标红。</div></div>
+      </div>
+      <div class="filters" x-html="filtersBarHtml()"></div>
+      <div x-html="tableViewHtml(filteredItems())"></div>
+    </div>
+
+    <!-- Tab 3 超期未提供（风险雷达） -->
+    <div x-show="!loading && currentTab==='overdue'">
+      <div class="page-head">
+        <div><h1>超期未提供与缺料风险雷达</h1><div class="desc">识别超期与缺口，定位风险热点；点高风险项查看处理建议。</div></div>
+        <button class="btn btn-pri" @click="openEscalation()">生成缺口汇报</button>
+      </div>
+      <div class="gauges" style="margin-bottom:16px">
+        <div class="gauge green"><div class="k">已收齐</div><div class="v" x-text="gauges.done"></div><div class="sub">复核通过已归档</div></div>
+        <div class="gauge orange"><div class="k">待复核</div><div class="v" x-text="gauges.review"></div><div class="sub">已收整理，待复核</div></div>
+        <div class="gauge red"><div class="k">超期未提供</div><div class="v" x-text="gauges.overdue"></div><div class="sub">超 5 工作日未提供</div></div>
+        <div class="gauge"><div class="k">高风险（&gt;30 天）</div><div class="v" style="color:var(--red-deep)" x-text="gauges.high"></div><div class="sub">需优先处理</div></div>
+      </div>
+      <div class="card card-pad" style="margin-bottom:16px">
+        <div class="card-h">风险热力图<span class="pill" style="margin-left:8px">点击单元格钻取</span></div>
+        <div class="desc" style="font-size:12px;color:var(--text2);margin:2px 0 12px">单元格数字=该分类该实体下最长逾期天数，颜色随超期加深，绿黄橙红依次递进。</div>
+        <div class="heat" x-html="heatmapHtml()"></div>
+        <div class="heat-legend"><span class="sw" style="background:var(--surface2)"></span>无缺料<span class="sw" style="background:hsl(var(--heat-1))"></span>≤7<span class="sw" style="background:hsl(var(--heat-2))"></span>8-14<span class="sw" style="background:hsl(var(--heat-3))"></span>15-30<span class="sw" style="background:hsl(var(--heat-4))"></span>31-60<span class="sw" style="background:hsl(var(--heat-5))"></span>&gt;60 天</div>
+      </div>
+      <div class="card-h" style="margin:6px 0 10px;font-size:16px">高风险项<span class="pill" style="margin-left:8px">按逾期降序</span></div>
+      <div class="filters" x-html="filtersBarHtml()"></div>
+      <div x-html="tableViewHtml(filteredItems())"></div>
+    </div>
+
+    <!-- Tab 4 已完成 -->
+    <div x-show="!loading && currentTab==='done'">
+      <div class="page-head">
+        <div><h1>已完成</h1><div class="desc">已复核归档的资料与不适用项。</div></div>
+      </div>
+      <div class="gauges" style="margin-bottom:16px">
+        <div class="gauge green"><div class="k">总体完成率</div><div class="v" x-text="progressPct+'%'"></div><div class="sub" x-text="'已提供或审核中 '+progressProvided+'，共 '+progressTotal"></div></div>
+        <div class="gauge"><div class="k">已归档</div><div class="v" x-text="gauges.done"></div><div class="sub">终态，复核通过</div></div>
+        <div class="gauge"><div class="k">不适用</div><div class="v" x-text="gauges.na"></div><div class="sub">不涉及本公司</div></div>
+      </div>
+      <div class="filters" x-html="filtersBarHtml()"></div>
+      <div x-html="tableViewHtml(filteredItems())"></div>
+    </div>
+
+    <!-- v7 文件区 -->
+    <div x-show="currentTab==='files'">
+      <div class="page-head">
+        <div><h1>文件区</h1><div class="desc">左侧是客户共享文件夹（未整理），右侧是 AI 按一级分类归档后的目录树。</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" @click="loadFileZone()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span>刷新</button>
+          <button class="btn btn-ghost btn-sm" @click="checkAllValid()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></span>检查文件失效</button>
+        </div>
+      </div>
+      <template x-if="fileZone.loading"><div class="card card-pad" style="text-align:center;color:var(--text3)">加载中…</div></template>
+      <template x-if="fileZone.error"><div class="card card-pad" style="color:var(--red)" x-text="fileZone.error"></div></template>
+      <template x-if="!fileZone.loading && !fileZone.error && fileZone.paths">
+        <div>
+          <div class="fz-flow" style="margin-bottom:14px">
+            <div class="fz-col raw">
+              <div class="fz-h"><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>客户共享文件夹<span class="fz-tag raw">未整理</span></div>
+              <div class="fz-body">
+                <div class="fz-path" x-text="(fileZone.paths.client_folder&&fileZone.paths.client_folder.path)||'未配置'"></div>
+                <div style="font-size:12px;color:var(--text2)">
+                  <span x-text="'文件数：'+((fileZone.paths.client_folder&&fileZone.paths.client_folder.file_count)||0)"></span>
+                  <span x-show="fileZone.paths.client_folder && !fileZone.paths.client_folder.exists" style="color:var(--red);margin-left:8px">路径不存在</span>
+                </div>
+                <button class="btn btn-ghost btn-xs" style="margin-top:8px" x-show="fileZone.paths.client_folder&&fileZone.paths.client_folder.path" @click="openArchivePath(fileZone.paths.client_folder.path)">打开文件夹</button>
+              </div>
+            </div>
+            <div class="fz-arrow"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="fz-col done">
+              <div class="fz-h"><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M9 14l2 2 4-4"/></svg></span>归档目录<span class="fz-tag done">已整理</span></div>
+              <div class="fz-body">
+                <div class="fz-path" x-text="(fileZone.paths.archive_root&&fileZone.paths.archive_root.path)||'未配置'"></div>
+                <div style="font-size:12px;color:var(--text2)">
+                  <span x-text="'分类数：'+((fileZone.paths.archive_root&&fileZone.paths.archive_root.category_count)||0)"></span>
+                  <span x-text="'　文件数：'+((fileZone.paths.archive_root&&fileZone.paths.archive_root.file_count)||0)"></span>
+                </div>
+                <button class="btn btn-ghost btn-xs" style="margin-top:8px" x-show="fileZone.paths.archive_root&&fileZone.paths.archive_root.path" @click="openArchivePath(fileZone.paths.archive_root.path)">打开归档目录</button>
+              </div>
+            </div>
+          </div>
+          <div x-show="fileZone.paths.archive_naming_hint" style="font-size:12px;color:var(--text3);margin-bottom:14px" x-text="fileZone.paths.archive_naming_hint"></div>
+          <div class="card card-pad">
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">已归档树</div>
+            <template x-if="!fileZone.tree || !fileZone.tree.length">
+              <div style="color:var(--text3);font-size:13px;padding:10px 0">暂无归档文件。扫描客户文件夹后，AI 会按一级分类归档到此。</div>
+            </template>
+            <template x-for="cat in (fileZone.tree||[])" :key="cat.category">
+              <div>
+                <div class="fz-cat"><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span x-text="cat.category"></span><span class="cnt" x-text="'（'+cat.count+'）'"></span></div>
+                <template x-for="f in (cat.files||[])" :key="f.path">
+                  <div class="fz-file" @click="openArchivePath(f.path)">
+                    <span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+                    <span class="nm" x-text="f.name"></span>
+                    <span style="font-size:11px;color:var(--text3)" x-text="(((f.size||0)/1024)).toFixed(1)+' KB'"></span>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+  </main>
+
+  <!-- 空状态：无项目 -->
+  <main class="wrap" x-show="!currentProjectId && !loading">
+    <div class="card"><div class="empty">
+      <div class="em"><span class="ico ico-lg"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span></div>
+      <div>尚未选择项目。点击左上角“项目”选择或创建一个项目。</div>
+    </div></div>
+  </main>
+
+</div>
+
+<script>
+'use strict';
+
+/* =========================================================
+   API 封装
+   ========================================================= */
+const API = {
+  async get(url){ const r = await fetch(url); if(!r.ok) throw new Error('GET '+url+' '+r.status); return r.json(); },
+  async post(url, body){ const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); if(!r.ok) throw new Error('POST '+url+' '+r.status); return r.json(); },
+  async put(url, body){ const r = await fetch(url, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})}); if(!r.ok) throw new Error('PUT '+url+' '+r.status); return r.json(); },
+  async del(url){ const r = await fetch(url, {method:'DELETE'}); if(!r.ok) throw new Error('DELETE '+url+' '+r.status); return r.json(); },
+
+  listProjects(){ return this.get('/api/projects/list'); },
+  createProject(b){ return this.post('/api/projects/create', b); },
+  updateProject(pid, b){ return this.put('/api/projects/'+pid, b); },
+  deleteProject(pid){ return this.del('/api/projects/'+pid+'?soft=true'); },
+  pbcList(pid, filters){
+    const params = new URLSearchParams(filters||{});
+    return this.get('/api/pbc/'+pid+'/list?'+params);
+  },
+  updateStatus(pid, itemId, status, changedBy, note){
+    return this.put('/api/pbc/'+pid+'/'+itemId+'/status', {status, changed_by: changedBy||'前端用户', note: note||''});
+  },
+  dashboard(pid){ return this.get('/api/risk/'+pid+'/dashboard'); },
+  heatmap(pid){ return this.get('/api/risk/'+pid+'/heatmap'); },
+  resolve(pid, itemId){ return this.get('/api/risk/'+pid+'/resolve/'+itemId); },
+  escalation(pid){ return this.get('/api/risk/'+pid+'/escalation'); },
+  scanFolder(pid){ return this.post('/api/files/'+pid+'/scan-folder', {}); },
+  taskStatus(pid, taskId){ return this.get('/api/files/'+pid+'/task/'+taskId); },
+  getFolderConfig(pid){ return this.get('/api/files/'+pid+'/config/folder'); },
+  setFolderConfig(pid, path){ return this.post('/api/files/'+pid+'/config/folder', {client_folder: path}); },
+  briefing(pid){ return pid ? this.get('/api/briefing/'+pid) : this.get('/api/briefing'); },
+  briefingEvents(since){ return this.get('/api/files/briefing-events?since='+(since||0)); },
+  recentTasks(pid){ return this.get('/api/files/'+pid+'/recent-tasks'); },
+  archiveDetail(pid, itemId){ return this.get('/api/files/'+pid+'/archive-detail/'+itemId); },
+  openFolder(pid){ return this.post('/api/open-folder/'+pid, {}); },
+  importPbcList(pid, file){
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch('/api/pbc/'+pid+'/import', {method:'POST', body: fd}).then(r=>r.json());
+  },
+  dragDrop(pid, files){
+    const fd = new FormData();
+    for(const f of files) fd.append('files', f);
+    return fetch('/api/files/'+pid+'/drag-drop', {method:'POST', body: fd}).then(r=>r.json());
+  },
+  /* v7 新增 */
+  filePaths(pid){ return this.get('/api/files/'+pid+'/paths'); },
+  archiveTree(pid){ return this.get('/api/files/'+pid+'/archive-tree'); },
+  setArchiveRoot(pid, root){ return this.post('/api/files/'+pid+'/config/archive-root', {archive_root: root}); },
+  openFolderPath(pid, path){ return this.post('/api/files/'+pid+'/open-folder-path', {path: path}); },
+  checkValid(pid, itemId){ return this.get('/api/files/'+pid+'/check-valid/'+encodeURIComponent(itemId)); },
+  relocate(pid, itemId, newPath){ return this.post('/api/files/'+pid+'/relocate/'+encodeURIComponent(itemId), {new_path: newPath}); },
+  aiGetConfig(){ return this.get('/api/config/ai'); },
+  aiSaveConfig(b){ return this.put('/api/config/ai', b); },
+  aiModels(){ return this.get('/api/config/ai/models'); },
+  aiTest(b){ return this.post('/api/config/ai/test', b); },
+};
+
+/* =========================================================
+   Alpine 主组件
+   ========================================================= */
+function pbcApp(){
+  return {
+    /* ---- 全局状态 ---- */
+    projects: [],
+    currentProject: null,
+    currentProjectId: null,
+    pbcList: [],
+    dashboard: null,
+    heatmapData: null,
+    loading: false,
+    briefing: null,
+    efficiencyCount: 0,
+    currentFolderInfo: {path:'', count:0, exists:false},
+    _briefingPollTimer: null,
+    _briefingLastTs: 0,
+
+    /* tab */
+    tabs: [
+      {id:'triage',  label:'待初检'},
+      {id:'review',  label:'待复核'},
+      {id:'overdue', label:'超期未提供', alert:true},
+      {id:'done',    label:'已完成'},
+      {id:'files',   label:'文件区', noCount:true},
+    ],
+    currentTab: 'triage',
+
+    /* 过滤器 */
+    filters: {entity:'', category:'', risk:''},
+
+    /* 列设置：按需显示列（每个 Tab 记住各自勾选） */
+    colVisible: {},
+    colMenuOpen: false,
+
+    /* toast */
+    toasts: [],
+    toastSeq: 0,
+
+    /* 抽屉 / 模态 */
+    showProjectDrawer: false,
+    showCreateProject: false,
+    newProj: {name:'', client_name:'', note:''},
+    /* 客户文件夹配置 modal */
+    folderConfig: {show:false, input:'', info:'', error:'', archiveInput:'', archiveInfo:'', archiveError:''},
+    /* v7 文件区 */
+    fileZone: {loading:false, paths:null, tree:[], error:''},
+    /* v7 路径失效缓存 & 重新定位 */
+    pathValid: {},
+    relocateModal: {show:false, item:null, input:'', error:'', saving:false},
+    /* v7 AI 配置 */
+    aiConfig: {show:false, loading:false, saving:false, testing:false, testResult:null, models:[], masked:'', keySet:false, form:{api_key:'', base_url:'', model_classification:'', model_vision:'', model_reasoning:'', confidence_threshold:0.7, filename_match_enabled:true}},
+    /* v7 测试数据包说明 */
+    testDataModal: {show:false},
+    fileDetail: {show:false, loading:false, item:null, archives:[]},
+    projMenu: {show:'', target:null},
+    renameProjectModal: {show:false, project:null, name:''},
+    deleteProjectModal: {show:false, project:null},
+    createWizardStep: 1,
+    wizardPbcFile: '',
+    wizardPbcFileObj: null,
+    wizardFolderPath: '',
+    /* P1-20: 项目抽屉错误边界 */
+    projectsLoadError: '',
+
+    /* 首启引导 */
+    showOnboarding: false,
+    obStep: 1,
+    obMode: 'demo',
+    demoLoading: false,
+
+    /* 扫描进度 */
+    scan: {active:false, step:-1, liveText:'', finished:false, summary:''},
+    _pollTimer: null,
+    /* P1-12: 项目加载中状态 */
+    loadingProjects: false,
+
+    /* 化解卡片 */
+    resolveModal: {show:false, loading:false, item:null, data:null},
+
+    /* 整体缺口汇报 */
+    escalationModal: {show:false, loading:false, text:''},
+
+    /* =========================================================
+       初始化
+       ========================================================= */
+    async init(){
+      this.initColCfg();
+      // 首启检测
+      if(!localStorage.getItem('pbc_onboarded')){
+        this.showOnboarding = true;
+        this.obStep = 1;
+      }
+      this.loadingProjects = true;
+      await this.loadProjects();
+      this.loadingProjects = false;
+      // 默认选中上次项目或第一个项目
+      const lastPid = localStorage.getItem('pbc_last_project');
+      const target = this.projects.find(p=>p.project_id===lastPid) || this.projects[0];
+      if(target){
+        await this.switchProject(target, true);
+        // P1-22: 上次访问的项目已被删除，fallback 到第一个项目时弹 toast
+        if(lastPid && lastPid !== target.project_id){
+          this.pushToast('mid','上次访问的项目已删除',
+            '已切换到“'+(target.name||target.project_id)+'”，可在“项目”中查看全部项目');
+        }
+      } else if(!this.showOnboarding){
+        // P1-12: 没有项目且非首启，提示正在初始化
+        this.pushToast('mid','正在初始化示例项目…','后端正在异步创建 demo 项目，请稍候刷新');
+      }
+      // 启动 briefing 事件轮询（watchdog 解除风险事件 → 主动推 toast）
+      this._startBriefingPoll();
+    },
+
+    _startBriefingPoll(){
+      const tick = async ()=>{
+        try{
+          const r = await API.briefingEvents(this._briefingLastTs);
+          if(r && r.events && r.events.length){
+            for(const e of r.events){
+              if(e.event_type==='file_resolved_risk'){ this.pushToast('low', '解除风险', e.title+'，'+e.detail); }
+              else { this.pushToast(e.priority==='high'?'high':'mid', e.title, e.detail); }
+            }
+            await this.reloadBriefing();
+            if(r.latest_ts) this._briefingLastTs = r.latest_ts;
+          }
+        }catch(e){}
+        this._briefingPollTimer = setTimeout(tick, 5000);
+      };
+      setTimeout(tick, 3000);
+    },
+    async reloadBriefing(){
+      try{ this.briefing = await API.briefing(this.currentProjectId); }
+      catch(e){}
+    },
+    jumpToBriefingItem(e){
+      const it = this.pbcList.find(x=>x.item_id===e.item_id);
+      if(it){ const stage = this.stageOf(it); if(stage) this.currentTab = stage; this.openResolve(e.item_id); }
+      else { this.openResolve(e.item_id); }
+    },
+
+    /* =========================================================
+       项目
+       ========================================================= */
+    async loadProjects(){
+      this.projectsLoadError = '';
+      try{
+        const data = await API.listProjects();
+        this.projects = data.projects || [];
+        // P1-12: 没有项目时延迟重试一次（后端可能在异步创建 demo）
+        if(this.projects.length === 0){
+          await new Promise(r=>setTimeout(r, 1500));
+          const data2 = await API.listProjects();
+          this.projects = data2.projects || [];
+        }
+        // 为每个项目拉进度（并行，不串行）
+        await Promise.all(this.projects.map(async p=>{
+          try{
+            const d = await API.dashboard(p.project_id);
+            const op = d?.overall_progress || {};
+            p._total = op['总计'] ?? 0;
+            p._provided = (op['已提供']||0) + (op['已提供，审核中']||0);
+            p._pct = p._total ? Math.round(p._provided/p._total*100) : 0;
+          }catch(e){ p._total=0; p._provided=0; p._pct=0; }
+        }));
+      }catch(e){
+        // P1-20: 错误边界，捕获异常显示重试按钮
+        this.projectsLoadError = '项目列表加载失败：'+(e.message||e);
+        this.pushToast('mid','项目列表加载失败', e.message);
+      }
+    },
+
+    async switchProject(p, silent){
+      this.currentProject = p;
+      this.currentProjectId = p.project_id;
+      localStorage.setItem('pbc_last_project', p.project_id);
+      this.showProjectDrawer = false;
+      // 立即清空旧数据，显示 loading（不残留上一个项目内容）
+      this.pbcList = [];
+      this.dashboard = null;
+      this.heatmapData = null;
+      this.briefing = null;
+      await this.reloadAll();
+      if(!silent) this.pushToast('low','已切换项目', p.name);
+    },
+
+    openProjectDrawer(){ this.showProjectDrawer = true; this.loadProjects(); },
+
+    async createProject(){
+      // 打开 3 步向导第 1 步
+      this.createWizardStep = 1;
+      this.wizardPbcFile = '';
+      this.wizardPbcFileObj = null;
+      this.wizardFolderPath = '';
+      this.newProj = {name:'', client_name:'', note:''};
+      this.showCreateProject = true;
+    },
+    wizardImportPbc(event){
+      const file = event.target.files[0];
+      if(!file) return;
+      this.wizardPbcFile = file.name;
+      this.wizardPbcFileObj = file;
+    },
+    async createProjectWizard(){
+      if(!this.newProj.name){ this.pushToast('mid','请填写项目名称',''); return; }
+      try{
+        const p = await API.createProject(this.newProj);
+        const pid = p.project?.project_id || p.project_id;
+        this.showCreateProject = false;
+        this.createWizardStep = 1;
+        this.pushToast('low','项目已创建', this.newProj.name);
+
+        // 如果向导中选择了 PBC 清单文件，导入
+        if(this.wizardPbcFileObj){
+          try{
+            const importR = await API.importPbcList(pid, this.wizardPbcFileObj);
+            if(importR?.ok) this.pushToast('low','清单已导入', importR.message || '');
+          }catch(e){ this.pushToast('mid','清单导入失败', e.message); }
+        }
+
+        // 如果向导中填写了客户文件夹，配置
+        if(this.wizardFolderPath && this.wizardFolderPath.trim()){
+          try{
+            const cfgR = await API.setFolderConfig(pid, this.wizardFolderPath.trim());
+            if(cfgR?.ok) this.pushToast('low','文件夹已配置', this.wizardFolderPath);
+          }catch(e){ this.pushToast('mid','文件夹配置失败', e.message); }
+        }
+
+        // 清理
+        this.newProj = {name:'', client_name:'', note:''};
+        this.wizardPbcFile = '';
+        this.wizardPbcFileObj = null;
+        this.wizardFolderPath = '';
+        await this.loadProjects();
+        const target = this.projects.find(x=>x.project_id===pid) || p.project || p;
+        await this.switchProject(target);
+        this.pushToast('low','下一步', '点“扫描新文件”开始体验。可在设置中修改客户文件夹。');
+      }catch(e){ this.pushToast('mid','创建失败', e.message); }
+    },
+
+    /* 首启引导 */
+    async chooseDemoProject(){
+      this.obMode = 'demo';
+      // 选第一个项目（demo）
+      if(this.projects.length){
+        await this.switchProject(this.projects[0], true);
+        this.obStep = 3;
+      } else {
+        this.pushToast('mid','暂无示例项目','后端未返回项目，请创建新项目');
+        this.obStep = 3; this.obMode = 'create';
+      }
+    },
+    /* P1-13: 取消创建项目，回到/加载示例 demo */
+    async cancelCreateProject(){
+      this.showCreateProject = false;
+      this.createWizardStep = 1;
+      this.wizardPbcFile = '';
+      this.wizardPbcFileObj = null;
+      this.wizardFolderPath = '';
+      this.newProj = {name:'', client_name:'', note:''};
+      // 优先切换到 demo 项目，让用户能先看示例
+      const demo = this.projects.find(p=>p.project_id==='demo') || this.projects[0];
+      if(demo){
+        await this.switchProject(demo, true);
+        this.pushToast('low','已切换到示例项目','可随时打开项目菜单，选择创建新项目继续配置');
+      } else {
+        // 重新加载项目列表，看后端是否已创建 demo
+        await this.loadProjects();
+        const d2 = this.projects[0];
+        if(d2) await this.switchProject(d2, true);
+      }
+    },
+    /* P1-11: 一键加载示例数据到新项目 */
+    async loadDemoData(){
+      if(this.demoLoading) return;
+      this.demoLoading = true;
+      try{
+        const ts = new Date().toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(/[\/\s:]/g,'');
+        const body = {
+          name: '示例数据项目 '+new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),
+          client_name: 'ABC 集团示例数据',
+          note: '从首启引导一键加载示例数据'
+        };
+        const r = await API.post('/api/projects/create-with-demo-data', body);
+        if(!r || !r.ok){
+          this.pushToast('mid','加载示例数据失败', (r && r.detail) || '后端返回失败');
+          return;
+        }
+        await this.loadProjects();
+        const target = this.projects.find(x=>x.project_id===(r.project && r.project.project_id)) || (r.project || {});
+        await this.switchProject(target, true);
+        this.obMode = 'demo'; this.obStep = 3;
+        const cnt = (r.copied_files && r.copied_files.length) || 0;
+        this.pushToast('low','示例数据已加载', '已复制 '+cnt+' 份文件到新项目，可点击“扫描新文件”开始体验');
+      }catch(e){
+        this.pushToast('mid','加载示例数据失败', e.message);
+      }finally{
+        this.demoLoading = false;
+      }
+    },
+    async createProjectFromOnboarding(){
+      if(!this.newProj.name){ this.pushToast('mid','请填写项目名称',''); return; }
+      try{
+        const p = await API.createProject(this.newProj);
+        const target = p.project || p;
+        this.newProj = {name:'', client_name:'', note:''};
+        this.createWizardStep = 1;
+        this.wizardPbcFile = '';
+        this.wizardPbcFileObj = null;
+        this.wizardFolderPath = '';
+        await this.loadProjects();
+        const t2 = this.projects.find(x=>x.project_id===target.project_id) || target;
+        await this.switchProject(t2, true);
+        this.obMode = 'demo'; this.obStep = 3;
+        this.pushToast('low','项目已创建', '下一步：导入 PBC 清单或直接扫描文件开始体验');
+      }catch(e){ this.pushToast('mid','创建失败', e.message); }
+    },
+    finishOnboarding(){
+      localStorage.setItem('pbc_onboarded','1');
+      this.showOnboarding = false;
+    },
+
+    /* =========================================================
+       客户文件夹配置
+       ========================================================= */
+    async openFolderConfig(){
+      this.folderConfig = {show:true, input:'', info:'', error:'', archiveInput:'', archiveInfo:'', archiveError:''};
+      try{
+        const r = await API.getFolderConfig(this.currentProjectId);
+        const cur = r.current || {};
+        this.folderConfig.input = cur.path || '';
+        if(cur.is_default){
+          this.folderConfig.info = '当前是默认路径，共 ' + (cur.file_count||0) + ' 个文件。可改成 OneDrive 挂载点。';
+        } else {
+          this.folderConfig.info = '当前路径有 ' + (cur.file_count||0) + ' 个文件';
+        }
+      }catch(e){
+        this.folderConfig.error = '读取当前配置失败：' + e.message;
+      }
+      try{
+        const p = await API.filePaths(this.currentProjectId);
+        this.folderConfig.archiveInput = (p && p.archive_root && p.archive_root.path) || '';
+        this.folderConfig.archiveInfo = (p && p.archive_naming_hint) || '';
+      }catch(e){}
+    },
+    async saveFolderConfig(){
+      this.folderConfig.error = '';
+      const path = (this.folderConfig.input || '').trim();
+      if(!path){
+        this.folderConfig.error = '路径不能为空';
+        return;
+      }
+      try{
+        const r = await API.setFolderConfig(this.currentProjectId, path);
+        if(r.ok){
+          this.folderConfig.show = false;
+          this.pushToast('low', '配置已保存', '客户共享文件夹路径已更新：' + path);
+          await this.reloadAll();
+        } else {
+          this.folderConfig.error = r.error || '保存失败';
+          if(r.suggestion) this.folderConfig.error += '，' + r.suggestion;
+        }
+      }catch(e){
+        this.folderConfig.error = '保存失败：' + e.message;
+      }
+    },
+
+    openExplorer(filePath){
+      if(!filePath) return;
+      API.openFolder(this.currentProjectId).then(r=>{
+        if(!r.ok) this.pushToast('mid','打开失败', r.error||'');
+      }).catch(e=>this.pushToast('mid','打开失败', e.message));
+    },
+
+    /* =========================================================
+       v7 文件区 / 路径 / 归档目录 / AI 配置 / 测试数据
+       ========================================================= */
+    baseName(p){ var s=String(p||''); var a=s.lastIndexOf('/'); var b=s.lastIndexOf(String.fromCharCode(92)); var i=a>b?a:b; return i>=0?s.slice(i+1):s; },
+    async loadFileZone(){
+      if(!this.currentProjectId) return;
+      this.fileZone.loading = true; this.fileZone.error = '';
+      try{
+        const results = await Promise.all([
+          API.filePaths(this.currentProjectId),
+          API.archiveTree(this.currentProjectId).catch(()=>({tree:[]})),
+        ]);
+        this.fileZone.paths = results[0];
+        this.fileZone.tree = (results[1] && results[1].tree) || [];
+      }catch(e){ this.fileZone.error = '读取文件流向失败：'+(e.message||e); }
+      finally{ this.fileZone.loading = false; }
+    },
+    openPathByItem(itemId){
+      const it = this.pbcList.find(x=>x.item_id===itemId);
+      if(!it || !it.file_path) return;
+      this.openArchivePath(it.file_path);
+    },
+    openArchivePath(path){
+      if(!path) return;
+      API.openFolderPath(this.currentProjectId, path)
+        .then(r=>{ if(!r.ok) this.pushToast('mid','打开失败', r.error||''); })
+        .catch(e=>this.pushToast('mid','打开失败', e.message));
+    },
+    async checkAllValid(){
+      const items = this.pbcList.filter(i=>i.file_path);
+      if(!items.length){ this.pushToast('mid','无归档文件','当前项目还没有已归档的文件可校验'); return; }
+      this.pushToast('low','正在校验','校验 '+items.length+' 个归档文件的有效性…');
+      let bad = 0;
+      await Promise.all(items.map(async it=>{
+        try{
+          const r = await API.checkValid(this.currentProjectId, it.item_id);
+          this.pathValid[it.item_id] = {valid: r.valid!==false, reason: r.reason||''};
+          if(r.valid===false) bad++;
+        }catch(e){}
+      }));
+      this.pathValid = Object.assign({}, this.pathValid);
+      this.pushToast(bad?'mid':'low','校验完成', bad? (bad+' 个文件已移动或删除，已在文件路径列标红'):'全部归档文件有效');
+    },
+    openRelocate(itemId){
+      const it = this.pbcList.find(x=>x.item_id===itemId);
+      if(!it) return;
+      this.relocateModal = {show:true, item:it, input:'', error:'', saving:false};
+    },
+    async doRelocate(){
+      const it = this.relocateModal.item; const np = (this.relocateModal.input||'').trim();
+      if(!it) return;
+      if(!np){ this.relocateModal.error = '请填写新的文件路径'; return; }
+      this.relocateModal.saving = true; this.relocateModal.error='';
+      try{
+        const r = await API.relocate(this.currentProjectId, it.item_id, np);
+        if(r.ok){
+          this.pathValid[it.item_id] = {valid:true, reason:''};
+          this.pathValid = Object.assign({}, this.pathValid);
+          this.relocateModal.show = false;
+          this.pushToast('low','已重新定位', it.item_id+' 已绑定到新位置'+(r.sha_changed?'（文件内容已变，记为新版本）':''));
+          await this.reloadAll();
+        } else {
+          this.relocateModal.error = r.error || '重新定位失败';
+        }
+      }catch(e){ this.relocateModal.error = '重新定位失败：'+e.message; }
+      finally{ this.relocateModal.saving = false; }
+    },
+    async saveArchiveRoot(){
+      this.folderConfig.archiveError = '';
+      const root = (this.folderConfig.archiveInput||'').trim();
+      if(!root){ this.folderConfig.archiveError = '归档根目录不能为空'; return; }
+      try{
+        const r = await API.setArchiveRoot(this.currentProjectId, root);
+        if(r.ok){ this.pushToast('low','归档目录已保存', root); if(this.currentTab==='files') this.loadFileZone(); }
+        else { this.folderConfig.archiveError = (r.error||'保存失败')+(r.suggestion?('，'+r.suggestion):''); }
+      }catch(e){ this.folderConfig.archiveError = '保存失败：'+e.message; }
+    },
+    downloadTemplate(){
+      const pid = this.currentProjectId || 'demo';
+      const a = document.createElement('a');
+      a.href = '/api/pbc/'+pid+'/download-template';
+      a.download = 'PBC导入模板.xlsx';
+      document.body.appendChild(a); a.click(); a.remove();
+      this.pushToast('low','正在下载模板','模板含 15 列，带 * 为必填（含「需求期间」）');
+    },
+    openTestData(){ this.testDataModal.show = true; },
+    downloadTestPackage(){
+      const a = document.createElement('a');
+      a.href = '/api/config/test-data-package';
+      a.download = 'PBC_测试数据包.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      this.pushToast('low','正在下载测试数据包','解压后按弹窗里的步骤跑一遍完整流程');
+    },
+    async openAiConfig(){
+      this.aiConfig.show = true; this.aiConfig.loading = true; this.aiConfig.testResult = null;
+      try{
+        const results = await Promise.all([
+          API.aiGetConfig(),
+          API.aiModels().catch(()=>({models:[]})),
+        ]);
+        this.aiConfig.models = (results[1] && results[1].models) || [];
+        const c = (results[0] && results[0].config) || {};
+        this.aiConfig.masked = c.api_key_masked || '';
+        this.aiConfig.keySet = !!c.api_key_set;
+        this.aiConfig.form = {
+          api_key: c.api_key_masked || '',
+          base_url: c.base_url || '',
+          model_classification: c.model_classification || '',
+          model_vision: c.model_vision || '',
+          model_reasoning: c.model_reasoning || '',
+          confidence_threshold: (c.confidence_threshold!=null? c.confidence_threshold : 0.7),
+          filename_match_enabled: (c.filename_match_enabled!==false),
+        };
+      }catch(e){ this.pushToast('mid','读取 AI 配置失败', e.message); }
+      finally{ this.aiConfig.loading = false; }
+    },
+    async saveAiConfig(){
+      this.aiConfig.saving = true;
+      try{
+        const f = this.aiConfig.form;
+        const r = await API.aiSaveConfig({
+          api_key: f.api_key, base_url: f.base_url,
+          model_classification: f.model_classification,
+          model_vision: f.model_vision, model_reasoning: f.model_reasoning,
+          confidence_threshold: Number(f.confidence_threshold),
+          filename_match_enabled: !!f.filename_match_enabled,
+        });
+        if(r.ok){
+          this.pushToast('low','AI 配置已保存', (r.changed&&r.changed.length)? ('已更新：'+r.changed.join('、')) : (r.message||'配置已写入'));
+          this.aiConfig.show = false;
+        } else { this.pushToast('mid','保存失败', r.error||''); }
+      }catch(e){ this.pushToast('mid','保存失败', e.message); }
+      finally{ this.aiConfig.saving = false; }
+    },
+    async testAiConfig(){
+      this.aiConfig.testing = true; this.aiConfig.testResult = null;
+      try{
+        const f = this.aiConfig.form;
+        const r = await API.aiTest({api_key: f.api_key, base_url: f.base_url, model: f.model_classification});
+        this.aiConfig.testResult = r.ok
+          ? {ok:true, msg: r.message || ('连接成功，模型 '+(r.model||'')+' 响应正常')}
+          : {ok:false, msg: (r.hint||r.error||'连接失败')};
+      }catch(e){ this.aiConfig.testResult = {ok:false, msg:'连接失败：'+e.message}; }
+      finally{ this.aiConfig.testing = false; }
+    },
+
+    /* 项目重命名/删除 */
+    openRenameProject(p){
+      this.projMenu.show = '';
+      this.renameProjectModal = {show:true, project:p, name:p.name};
+    },
+    async doRenameProject(){
+      const p = this.renameProjectModal.project;
+      const name = (this.renameProjectModal.name||'').trim();
+      if(!name || !p) return;
+      try{
+        await API.updateProject(p.project_id, {name});
+        this.renameProjectModal.show = false;
+        // 本地直接更新，不重新 loadProjects（避免 dashboard 拖慢）
+        p.name = name;
+        if(this.currentProjectId === p.project_id && this.currentProject){
+          this.currentProject.name = name;
+        }
+        this.pushToast('low','已重命名', '已从 "'+p.name+'" 改为 "'+name+'"');
+      }catch(e){
+        this.pushToast('mid','重命名失败', e.message);
+      }
+    },
+    confirmDeleteProject(p){
+      this.projMenu.show = '';
+      if(p.project_id === 'demo'){ this.pushToast('mid','无法删除', '示例项目是系统默认项目'); return; }
+      this.deleteProjectModal = {show:true, project:p};
+    },
+    async doDeleteProject(){
+      const p = this.deleteProjectModal.project;
+      if(!p) return;
+      try{
+        await API.deleteProject(p.project_id);
+        this.deleteProjectModal.show = false;
+        this.pushToast('low','已删除', '"'+p.name+'" 已归档');
+        if(this.currentProjectId === p.project_id) this.switchProject({project_id:'demo'});
+        await this.loadProjects();
+      }catch(e){
+        this.pushToast('mid','删除失败', e.message);
+      }
+    },
+
+    /* 导入 PBC 清单（从 0 到 1） */
+    async importPbcList(event){
+      const file = event.target.files[0];
+      if(!file) return;
+      try{
+        this.loading = true;
+        const r = await API.importPbcList(this.currentProjectId, file);
+        if(r.ok){
+          this.pushToast('low', '导入成功', r.message || `已导入 ${r.imported_rows} 项`);
+          await this.reloadAll();
+        } else {
+          this.pushToast('mid', '导入失败', r.detail || r.error || '未知错误');
+        }
+      }catch(e){
+        this.pushToast('mid', '导入失败', e.message);
+      }finally{
+        this.loading = false;
+        event.target.value = '';  // 清空 input 以便重复选同一文件
+      }
+    },
+
+    /* =========================================================
+       数据加载
+       ========================================================= */
+    async reloadAll(){
+      if(!this.currentProjectId) return;
+      this.loading = true;
+      try{
+        // 全部并行（6 个 API 同时发，不等彼此）
+        const [list, dash, heat, brief, rt, fc] = await Promise.all([
+          API.pbcList(this.currentProjectId),
+          API.dashboard(this.currentProjectId).catch(()=>null),
+          API.heatmap(this.currentProjectId).catch(()=>null),
+          API.briefing(this.currentProjectId).catch(()=>null),
+          API.recentTasks(this.currentProjectId).catch(()=>null),
+          API.getFolderConfig(this.currentProjectId).catch(()=>null),
+        ]);
+        this.pbcList = list.items || [];
+        this.dashboard = dash;
+        this.heatmapData = heat;
+        this.briefing = brief;
+        // 效率锚点
+        const done = (rt?.tasks||[]).filter(t=>t.status==='done'||t.status==='done_with_errors');
+        this.efficiencyCount = done.reduce((s,t)=>s+(t.done_count||0),0);
+        // 文件夹路径
+        this.currentFolderInfo = {path: fc?.current?.path||'', count: fc?.current?.file_count||0, exists: fc?.current?.exists||false};
+      }catch(e){
+        this.pushToast('mid','数据加载失败', e.message);
+      }finally{
+        this.loading = false;
+      }
+    },
+
+    /* =========================================================
+       Tab / 过滤
+       ========================================================= */
+    switchTab(id){ this.currentTab = id; if(id==='files') this.loadFileZone(); },
+
+    stageOf(it){
+      const st = it.status_normalized || it.status;
+      const od = it.overdue_days || 0;
+      if(st==='已提供' || st==='不适用') return 'done';
+      if(st==='已提供，审核中') return 'review';
+      // 未提供
+      if(od>0) return 'overdue';
+      return 'triage';
+    },
+
+    displayName(it){
+      // 从 description 提取简短名（前 18 字）
+      const d = it.description || '';
+      return d.length > 24 ? d.slice(0,24)+'…' : d;
+    },
+
+    get tabCounts(){
+      const c = {triage:0, review:0, overdue:0, done:0};
+      for(const it of this.pbcList) c[this.stageOf(it)]++;
+      return c;
+    },
+
+    get gauges(){
+      const g = {done:0, review:0, overdue:0, high:0, na:0};
+      for(const it of this.pbcList){
+        const st = it.status_normalized || it.status;
+        if(st==='已提供') g.done++;
+        else if(st==='不适用') g.na++;
+        else if(st==='已提供，审核中') g.review++;
+        else if(st==='未提供'){
+          if((it.overdue_days||0)>0){ g.overdue++; if(it.overdue_days>30) g.high++; }
+        }
+      }
+      return g;
+    },
+
+    get progressTotal(){
+      const op = this.dashboard?.overall_progress;
+      if(!op) return this.pbcList.length;
+      return op['总计'] ?? this.pbcList.length;
+    },
+    get progressProvided(){
+      const op = this.dashboard?.overall_progress;
+      if(!op) return 0;
+      return (op['已提供']||0) + (op['已提供，审核中']||0);
+    },
+    get progressPct(){
+      const t = this.progressTotal;
+      if(!t) return 0;
+      return Math.round(this.progressProvided/t*100);
+    },
+
+    filteredItems(){
+      let list = this.pbcList.filter(it=>this.stageOf(it)===this.currentTab);
+      const f = this.filters;
+      if(f.entity) list = list.filter(i=>i.entity===f.entity);
+      if(f.category) list = list.filter(i=>(i.category||'').includes(f.category));
+      if(f.risk){
+        list = list.filter(i=>{
+          const od = i.overdue_days||0;
+          if(f.risk==='high') return od>30;
+          if(f.risk==='mid') return od>0 && od<=30;
+          if(f.risk==='low') return od===0;
+          return true;
+        });
+      }
+      if(this.currentTab==='review') list = list.slice().sort((a,b)=>(a.confidence??1)-(b.confidence??1));
+      if(this.currentTab==='overdue') list = list.slice().sort((a,b)=>(b.overdue_days||0)-(a.overdue_days||0));
+      return list;
+    },
+
+    allColumns(){
+      return [
+        {k:'code',label:'编号',lock:true},
+        {k:'category',label:'一级分类'},
+        {k:'subject',label:'相关科目'},
+        {k:'desc',label:'资料描述'},
+        {k:'entity',label:'实体归属'},
+        {k:'status',label:'状态'},
+        {k:'statusEdit',label:'修改状态'},
+        {k:'conf',label:'置信度'},
+        {k:'overdue',label:'逾期'},
+        {k:'filename',label:'文件名称'},
+        {k:'format',label:'格式'},
+        {k:'period',label:'需求期间'},
+        {k:'path',label:'文件路径'},
+        {k:'actions',label:'操作',lock:true},
+      ];
+    },
+    defaultColsFor(tab){
+      const base = ['code','category','desc','entity','status'];
+      const map = {
+        triage:  base.concat(['statusEdit','conf','actions']),
+        review:  base.concat(['statusEdit','conf','actions']),
+        overdue: base.concat(['overdue','actions']),
+        done:    base.concat(['filename','path','actions']),
+      };
+      return map[tab] || base.concat(['actions']);
+    },
+    initColCfg(){
+      // 读 localStorage（per-tab 列配置持久化）
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem('pbc_col_visible') || 'null'); } catch(e) {}
+      const vis = {};
+      for(const t of this.tabs){
+        const def = this.defaultColsFor(t.id);
+        const cfg = {};
+        for(const c of this.allColumns()){
+          // lock 列强制 true
+          if(c.lock){ cfg[c.k] = true; continue; }
+          // 已保存的配置优先
+          if(saved && saved[t.id] && typeof saved[t.id][c.k] === 'boolean'){
+            cfg[c.k] = saved[t.id][c.k];
+          } else {
+            cfg[c.k] = def.indexOf(c.k) >= 0;
+          }
+        }
+        vis[t.id] = cfg;
+      }
+      this.colVisible = vis;
+    },
+    saveColCfg(){
+      // 写 localStorage（per-tab 列配置持久化）
+      try { localStorage.setItem('pbc_col_visible', JSON.stringify(this.colVisible)); } catch(e) {}
+    },
+    activeColumns(){
+      const cfg = this.colVisible[this.currentTab] || {};
+      return this.allColumns().filter(c=>cfg[c.k]);
+    },
+    isColOn(k){
+      const cfg = this.colVisible[this.currentTab] || {};
+      return !!cfg[k];
+    },
+    toggleCol(k){
+      const col = this.allColumns().find(c=>c.k===k);
+      if(col && col.lock) return;
+      const cfg = this.colVisible[this.currentTab];
+      if(!cfg) return;
+      cfg[k] = !cfg[k];
+      this.saveColCfg();
+    },
+    colToolbarHtml(){
+      const items = this.allColumns().map(c=>{
+        const on = this.isColOn(c.k);
+        const cls = 'colcfg-item'+(on?' on':'')+(c.lock?' lock':'');
+        const chk = on ? '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '';
+        const click = c.lock ? '' : ' onclick="window.__toggleCol(\''+c.k+'\')"';
+        return '<div class="'+cls+'"'+click+'><span class="cb">'+chk+'</span><span>'+this.esc(c.label)+'</span></div>';
+      }).join('');
+      const gear = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M10 18h4"/></svg>';
+      const panel = this.colMenuOpen
+        ? '<div class="colcfg-overlay" onclick="window.__closeColMenu()"></div><div class="colcfg-panel"><div class="hd">选择要显示的列</div>'+items+'</div>'
+        : '';
+      return '<div class="col-tools"><div class="colcfg"><button class="btn btn-ghost btn-xs colcfg-btn" onclick="window.__toggleColMenu()"><span class="ico" style="width:14px;height:14px;background:none;color:inherit">'+gear+'</span>列设置</button>'+panel+'</div></div>';
+    },
+    colCell(it,k){
+      const low = it.confidence!=null && it.confidence<0.7;
+      switch(k){
+        case 'code': return '<td class="code">'+this.esc(it.item_id)+'</td>';
+        case 'category': return '<td>'+this.esc(it.category||'')+'</td>';
+        case 'subject': return '<td>'+this.esc(it.subject||'')+'</td>';
+        case 'desc': return '<td title="'+this.esc(it.description||'')+'">'+this.esc(this.displayName(it))+(low?' <span class="pill" style="background:var(--red-soft);color:var(--red-deep)">待复核</span>':'')+'</td>';
+        case 'entity': return '<td>'+this.esc(it.entity||'')+'</td>';
+        case 'status': return '<td>'+this.badgeHtml(it)+'</td>';
+        case 'statusEdit': return '<td>'+this.statusOptions(it)+'</td>';
+        case 'conf': return '<td>'+this.confCell(it)+' '+this.confTip()+'</td>';
+        case 'overdue': return '<td>'+this.overdueCell(it)+' '+this.overdueTip()+'</td>';
+        case 'path': {
+          if(!it.file_path) return '<td><span class="path" style="color:var(--text3)">未归档</span></td>';
+          const pv = this.pathValid[it.item_id];
+          const invalid = pv && pv.valid===false;
+          const link = '<a class="path-link" title="'+this.esc(it.file_path)+'" onclick="window.__openPath(\''+this.esc(it.item_id)+'\')">'+this.esc(it.file_path)+'</a>';
+          const relo = invalid ? ' <span class="pill" style="background:var(--red-soft);color:var(--red-deep)">文件已移动或删除</span> <button class="btn btn-ghost btn-xs" onclick="window.__relocate(\''+this.esc(it.item_id)+'\')">重新定位</button>' : '';
+          return '<td class="'+(invalid?'path-invalid':'')+'"><span class="path">'+link+'</span>'+relo+'</td>';
+        }
+        case 'filename': return '<td>'+this.esc(it.file_name || this.baseName(it.file_path) || '—')+'</td>';
+        case 'format': return '<td>'+this.esc(it.file_format||'—')+'</td>';
+        case 'period': return '<td>'+this.esc(it.required_period||'—')+'</td>';
+        case 'actions': return '<td>'+this.rowActions(it)+'</td>';
+        default: return '';
+      }
+    },
+    filtersBarHtml(){
+      const f = this.filters;
+      const entities = [...new Set(this.pbcList.map(i=>i.entity).filter(Boolean))];
+      const cats = [...new Set(this.pbcList.map(i=>i.category).filter(Boolean))];
+      const opt = (v,l,cur)=>'<option value="'+this.esc(v)+'" '+(cur===v?'selected':'')+'>'+this.esc(l)+'</option>';
+      return ''+
+        '<select onchange="window.__setFilter(\'entity\', this.value)">'+opt('','全部实体',f.entity)+entities.map(e=>opt(e,e,f.entity)).join('')+'</select>'+
+        '<select onchange="window.__setFilter(\'category\', this.value)">'+opt('','全部分类',f.category)+cats.map(c=>opt(c,c,f.category)).join('')+'</select>'+
+        '<select onchange="window.__setFilter(\'risk\', this.value)">'+opt('','全部风险',f.risk)+opt('high','高风险(>30天)',f.risk)+opt('mid','中风险(≤30天)',f.risk)+opt('low','未逾期',f.risk)+'</select>'+
+        '<span class="filter-info">共 '+this.filteredItems().length+' 项</span>';
+    },
+
+    /* =========================================================
+       表格渲染（用 HTML 字符串，保留 index3 设计）
+       ========================================================= */
+    badgeHtml(it){
+      const st = it.status_normalized || it.status;
+      const m = {
+        '未提供': ['b-none','●'],
+        '已提供，审核中': ['b-review','●'],
+        '已提供': ['b-done','●'],
+        '不适用': ['b-na','●'],
+      };
+      const [cls, dot] = m[st] || ['b-pending','○'];
+      return '<span class="badge '+cls+'">'+dot+' '+this.esc(st||'-')+'</span>';
+    },
+
+    confTip(){
+      return '<span class="tip">?<span class="tip-box">AI 匹配置信度\n0.9-1.0：高置信，可放心\n0.7-0.9：中置信，建议人工确认\n&lt;0.7：低置信，必须人工确认</span></span>';
+    },
+    overdueTip(){
+      return '<span class="tip">?<span class="tip-box">逾期天数 = 今天 - 期望提供日期\n&gt;30 天：高风险，建议启动替代程序\n&gt;5 工作日：按 SOP §6 应向 Senior 汇报\n已提供 = 0 天</span></span>';
+    },
+
+    confCell(it){
+      const c = it.confidence;
+      if(c==null || c===undefined) return '<span style="color:var(--text3)">-</span>';
+      const low = c<0.7;
+      const col = low ? 'var(--red)' : c<0.85 ? 'var(--orange)' : 'var(--green)';
+      return '<div class="conf '+(low?'low':'')+'"><div class="bar"><i style="width:'+Math.round(c*100)+'%;background:'+col+'"></i></div><span class="val">'+c.toFixed(2)+'</span></div>';
+    },
+
+    overdueCell(it){
+      const d = it.overdue_days || 0;
+      if(!d) return '<span style="color:var(--text3)">-</span>';
+      const cls = d>30 ? 'crit' : d>0 ? 'warn' : '';
+      return '<span class="overdue '+cls+'">'+d+' 天</span>';
+    },
+
+    statusOptions(it){
+      // 状态机：未提供→审核中 / 审核中→已提供|未提供 / 已提供→审核中 / 任何→不适用
+      const cur = it.status_normalized || it.status;
+      const flows = {
+        '未提供': ['已提供，审核中','不适用'],
+        '已提供，审核中': ['已提供','未提供','不适用'],
+        '已提供': ['已提供，审核中','不适用'],
+        '不适用': ['未提供','已提供，审核中','已提供'],
+      };
+      const nexts = flows[cur] || [];
+      const labels = {
+        '已提供，审核中':'标记初检',
+        '已提供':'复核通过',
+        '未提供':'复核退回',
+        '不适用':'标记不适用',
+      };
+      const opts = ['<option value="">当前：'+this.esc(cur||'-')+'</option>'];
+      for(const n of nexts){
+        opts.push('<option value="'+this.esc(n)+'">标记：'+this.esc(labels[n]||n)+'</option>');
+      }
+      return '<select class="st-sel" onchange="window.__changeStatus(\''+this.esc(it.item_id)+'\', this.value); this.value=\'\';">'+opts.join('')+'</select>';
+    },
+
+    rowActions(it){
+      const acts = [];
+      if(this.currentTab==='overdue'){
+        acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__openResolve(\''+this.esc(it.item_id)+'\')">看影响分析</button>');
+      }
+      acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__viewDetail(\''+this.esc(it.item_id)+'\')">文件详情</button>');
+      return '<div class="row-acts">'+acts.join('')+'</div>';
+    },
+
+    tableViewHtml(list){
+      if(!list.length){
+        // P1-17/P1-18/P1-19: 按 Tab 给不同的空状态文案
+        const emptyMsg = {
+          triage:  '暂无待初检项。AI 已自动完成初检的文件进入“待复核”。点“扫描新文件”从客户文件夹取件。',
+          review:  '暂无待复核项，请先扫描文件',
+          overdue: '健康度优秀，项目无超期项',
+          done:    '尚未完成任何项，等复核通过后会自动归档到这里',
+        };
+        const msg = emptyMsg[this.currentTab] || '当前筛选下没有事项';
+        // review Tab 加"去扫描"按钮
+        const actionBtn = (this.currentTab==='review' || this.currentTab==='triage')
+          ? '<button class="btn btn-pri btn-xs" style="margin-top:10px" onclick="window.__goToTriageAndScan()">去扫描文件</button>'
+          : (this.currentTab==='overdue'
+              ? '<div style="margin-top:10px;font-size:14px;color:var(--green);font-weight:600">项目完成度 '+(this.progressPct||0)+'%，所有 PBC 项均按时提供或审核中</div>'
+              : '');
+        // 用 SVG icon 替代 emoji
+        const iconSvg = this.currentTab==='overdue'
+          ? '<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>'
+          : '<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+        const cls = this.currentTab==='overdue' ? ' style="animation:pop .5s ease .3s"' : '';
+        return '<div class="card"><div class="empty">'+
+          '<div class="em"'+cls+'><span class="ico ico-lg">'+iconSvg+'</span></div>'+
+          '<div>'+this.esc(msg)+'</div>'+actionBtn+
+        '</div></div>';
+      }
+      const cols = this.activeColumns();
+      const rows = list.map(it=>{
+        const low = it.confidence!=null && it.confidence<0.7;
+        return '<tr class="'+(low?'lowconf':'')+'">'+cols.map(c=>this.colCell(it,c.k)).join('')+'</tr>';
+      }).join('');
+      const ths = cols.map(c=>'<th>'+this.esc(c.label)+'</th>').join('');
+      return this.colToolbarHtml()+'<div class="card tbl-wrap"><table class="tbl"><thead><tr>'+ths+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    },
+
+    heatColor(d){
+      if(d<=0) return null;
+      if(d<=7) return 'hsl(var(--heat-1))';
+      if(d<=14) return 'hsl(var(--heat-2))';
+      if(d<=30) return 'hsl(var(--heat-3))';
+      if(d<=60) return 'hsl(var(--heat-4))';
+      return 'hsl(var(--heat-5))';
+    },
+
+    heatmapHtml(){
+      const hm = this.heatmapData;
+      if(!hm || !hm.entities || !hm.categories){
+        // 从 pbcList 自己算
+        const overdue = this.pbcList.filter(i=>i.status==='未提供' && (i.overdue_days||0)>0);
+        if(!overdue.length) return '<div class="empty">'+
+          '<div class="em"><span class="ico ico-lg"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg></span></div>'+
+          '<div>暂无风险数据</div>'+
+          '<div style="font-size:12px;margin-top:6px">待有超期项后自动填充</div>'+
+        '</div>';
+        const entities = [...new Set(overdue.map(i=>i.entity))];
+        const cats = [...new Set(overdue.map(i=>i.category))];
+        const cell = {};
+        overdue.forEach(i=>{
+          const k = i.category+'|'+i.entity;
+          cell[k] = Math.max(cell[k]||0, i.overdue_days||0);
+        });
+        const head = '<th class="rowh"></th>'+entities.map(e=>'<th>'+this.esc(e)+'</th>').join('');
+        const body = cats.map(c=>{
+          const tds = entities.map(e=>{
+            const d = cell[c+'|'+e] || 0;
+            const col = this.heatColor(d);
+            if(!col) return '<td class="empty0">-</td>';
+            return '<td style="background:'+col+'" onclick="window.__heatDrill(\''+this.esc(c)+'\',\''+this.esc(e)+'\')" title="'+this.esc(c)+' × '+this.esc(e)+'：最长逾期 '+d+' 天">'+d+'</td>';
+          }).join('');
+          return '<tr><th class="rowh">'+this.esc(c)+'</th>'+tds+'</tr>';
+        }).join('');
+        return '<table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';
+      }
+      // 用后端返回的 cells
+      const ents = hm.entities || [], cats = hm.categories || [];
+      if(!ents.length || !cats.length){
+        return '<div class="empty">'+
+          '<div class="em"><span class="ico ico-lg"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg></span></div>'+
+          '<div>暂无风险数据</div>'+
+          '<div style="font-size:12px;margin-top:6px">待有超期项后自动填充</div>'+
+        '</div>';
+      }
+      const cellMap = {};
+      (hm.cells||[]).forEach(c=>{ cellMap[c.category+'|'+c.entity] = c.max_overdue || c.max_overdue_days || c.overdue_days || 0; });
+      const head = '<th class="rowh"></th>'+ents.map(e=>'<th>'+this.esc(e)+'</th>').join('');
+      const body = cats.map(c=>{
+        const tds = ents.map(e=>{
+          const d = cellMap[c+'|'+e] || 0;
+          const col = this.heatColor(d);
+          if(!col) return '<td class="empty0">-</td>';
+          return '<td style="background:'+col+'" onclick="window.__heatDrill(\''+this.esc(c)+'\',\''+this.esc(e)+'\')" title="'+this.esc(c)+' × '+this.esc(e)+'：最长逾期 '+d+' 天">'+d+'</td>';
+        }).join('');
+        return '<tr><th class="rowh">'+this.esc(c)+'</th>'+tds+'</tr>';
+      }).join('');
+      return '<table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';
+    },
+
+    /* =========================================================
+       状态修改
+       ========================================================= */
+    async changeStatus(itemId, newStatus){
+      if(!newStatus) return;
+      const noteMap = {
+        '已提供，审核中':'标记初检完成',
+        '已提供':'复核通过',
+        '未提供':'复核退回',
+        '不适用':'标记不适用',
+      };
+      try{
+        await API.updateStatus(this.currentProjectId, itemId, newStatus, '前端用户', noteMap[newStatus]||'');
+        this.pushToast('low','状态已更新', '已改为“'+newStatus+'”');
+        await this.reloadAll();
+      }catch(e){
+        this.pushToast('mid','状态更新失败', e.message);
+      }
+    },
+
+    /* =========================================================
+       扫描 + 进度可视化
+       ========================================================= */
+    async startScan(){
+      if(this.scan.active) return;
+      this._stuckSince = null;  // 改进：重置 stuck 计时器
+      this.scan = {active:true, step:0, liveText:'正在提交扫描请求…', finished:false, summary:''};
+      try{
+        const r = await API.scanFolder(this.currentProjectId);
+        const taskId = r.task_id;
+        // P1-15: 空文件夹友好提示
+        if(r.status === 'empty' || r.files_found === 0){
+          this.scan.active = false;
+          this.scan.finished = true;
+          this.scan.summary = '客户共享文件夹为空，请先放入文件';
+          this.pushToast('mid','文件夹为空', r.suggestion || '请先在客户共享文件夹里放文件');
+          return;
+        }
+        // P1-14: 文件夹不存在友好提示
+        if(r.status === 'not_found'){
+          this.scan.active = false;
+          this.pushToast('mid','文件夹不存在', r.suggestion || ('路径：'+r.folder));
+          return;
+        }
+        if(!taskId){
+          this.scan.active = false;
+          this.pushToast('mid','扫描启动失败','后端未返回 task_id');
+          return;
+        }
+        this.pollTask(taskId);
+      }catch(e){
+        this.scan.active = false;
+        this.pushToast('mid','扫描启动失败', e.message);
+      }
+    },
+
+    pollTask(taskId){
+      const stepMap = ['解析中','分类中','归档中','Excel 回写中'];
+      const parseResults = (t)=>{
+        let r = t.results_json;
+        if(!r) return [];
+        if(typeof r === 'string'){ try{ return JSON.parse(r); }catch(e){ return []; } }
+        return Array.isArray(r) ? r : [];
+      };
+      const tick = async ()=>{
+        try{
+          const t = await API.taskStatus(this.currentProjectId, taskId);
+          const prog = t.progress || 0; // 0-100
+          const step = Math.min(3, Math.floor(prog/25));
+          this.scan.step = step;
+          const results = parseResults(t);
+          const doing = results.find(r=>r.status==='processing') || results[results.length-1];
+          const cur = doing ? (doing.name || doing.file_name || '') : '';
+          // 细节-1: 4 步进度条加百分比 + 当前文件名 + 完成数/总数
+          const doneCount = (t.done_count || 0);
+          const totalCount = (t.total || results.length || 0);
+          const pctText = totalCount > 0 ? `${doneCount}/${totalCount} (${prog}%)` : `${prog}%`;
+          // 改进：progress 长时间为 0% 且未完成时，提示用户"AI 正在重试中"
+          let waitHint = '';
+          if(prog === 0 && t.status === 'processing'){
+            if(!this._stuckSince) this._stuckSince = Date.now();
+            const stuckSec = Math.floor((Date.now() - this._stuckSince) / 1000);
+            if(stuckSec > 30){
+              waitHint = `，AI 响应慢，已等待 ${stuckSec} 秒，可能在重试中，请耐心…`;
+            }
+          } else {
+            this._stuckSince = null;
+          }
+          this.scan.liveText = `正在${stepMap[step]} ${pctText}：<b style="color:var(--text)">${this.esc(cur||'…')}</b>${waitHint}`;
+
+          // 提取 advisory_notes → toast
+          if(!this._advSeen) this._advSeen = new Set();
+          for(const r of results){
+            // P1-21: skipped 文件 → toast（P0-2 已在 results 里包含 advisory_notes）
+            if(r.skipped && r.reason === 'file_unstable'){
+              const key = 'skip_'+(r.name||'')+'_'+(r.path||'');
+              if(!this._advSeen.has(key)){
+                this._advSeen.add(key);
+                this.pushToast('mid','文件被跳过',
+                  '文件 '+(r.name||'')+' 正在被写入，已跳过，稍后请重新扫描');
+              }
+            }
+            if(r.advisory_notes && Array.isArray(r.advisory_notes)){
+              for(const n of r.advisory_notes){
+                const key = 'adv_'+(r.name||'')+'_'+(typeof n==='string'?n:JSON.stringify(n));
+                if(!this._advSeen.has(key)){
+                  this._advSeen.add(key);
+                  const txt = typeof n === 'string' ? n : (n.message || JSON.stringify(n));
+                  this.pushToast(n && n.level === 'high' ? 'high' : 'mid',
+                    n && n.trigger === 'unclassified_archive' ? 'AI 无法识别' : 'AI 提示',
+                    this.esc(txt));
+                }
+              }
+            }
+          }
+
+          const done = ['completed','done','done_with_errors'].includes(t.status) || prog>=100;
+          const failed = ['failed','error'].includes(t.status);
+          if(done){
+            this.scan.active = false;
+            this.scan.step = 4;
+            this.scan.finished = true;
+            this.scan.summary = '扫描完成，处理 '+results.length+' 份文件，已自动分类归档';
+            this.pushToast('low','扫描完成','处理 '+results.length+' 份文件，已自动分类归档');
+            await this.reloadAll();
+            return;
+          }
+          if(failed){
+            this.scan.active = false;
+            this.pushToast('mid','扫描失败', t.error || '未知错误');
+            return;
+          }
+          this._pollTimer = setTimeout(tick, 800);
+        }catch(e){
+          this.scan.active = false;
+          this.pushToast('mid','任务查询失败', e.message);
+        }
+      };
+      setTimeout(tick, 600);
+    },
+
+    /* 拖拽上传 */
+    async onDrop(ev){
+      ev.currentTarget.classList.remove('drag');
+      const files = ev.dataTransfer.files;
+      if(!files || !files.length) return;
+      try{
+        await API.dragDrop(this.currentProjectId, files);
+        this.pushToast('low','已接收拖拽文件', files.length+' 个文件已上传，开始处理');
+        await this.reloadAll();
+      }catch(e){
+        this.pushToast('mid','上传失败', e.message);
+      }
+    },
+
+    /* =========================================================
+       风险化解卡片
+       ========================================================= */
+    async openResolve(itemId){
+      const item = this.pbcList.find(i=>i.item_id===itemId);
+      this.resolveModal = {show:true, loading:true, item, data:null};
+      try{
+        const data = await API.resolve(this.currentProjectId, itemId);
+        this.resolveModal.data = data;
+      }catch(e){
+        this.pushToast('mid','加载失败', e.message);
+        this.resolveModal.show = false;
+      }finally{
+        this.resolveModal.loading = false;
+      }
+    },
+
+    adoptProcedure(idx, ev){
+      const btn = ev.currentTarget;
+      btn.textContent = '已采纳';
+      btn.classList.remove('btn-green');
+      btn.classList.add('btn-soft');
+      btn.disabled = true;
+      this.pushToast('low','已采纳替代程序','替代程序 #'+(idx+1)+' 已纳入底稿');
+    },
+
+    /* =========================================================
+       整体缺口汇报
+       ========================================================= */
+    async openEscalation(){
+      this.escalationModal = {show:true, loading:true, text:''};
+      try{
+        const data = await API.escalation(this.currentProjectId);
+        this.escalationModal.text = data.report_text || JSON.stringify(data, null, 2);
+      }catch(e){
+        this.pushToast('mid','生成失败', e.message);
+        this.escalationModal.show = false;
+      }finally{
+        this.escalationModal.loading = false;
+      }
+    },
+
+    /* =========================================================
+       详情
+       ========================================================= */
+    async viewDetail(itemId){
+      const it = this.pbcList.find(i=>i.item_id===itemId);
+      if(!it) return;
+      this.fileDetail = {show:true, loading:true, item:it, archives:[]};
+      try{
+        const r = await API.archiveDetail(this.currentProjectId, itemId);
+        this.fileDetail.archives = r.archives || [];
+        this.fileDetail.loading = false;
+      }catch(e){
+        this.fileDetail.loading = false;
+        this.fileDetail.archives = [];
+        this.pushToast('mid','加载失败', e.message);
+      }
+    },
+
+    /* =========================================================
+       Toast
+       ========================================================= */
+    pushToast(priority, title, text){
+      const id = 't'+(++this.toastSeq);
+      this.toasts.push({id, priority, title, text});
+      if(priority==='low') setTimeout(()=>this.dismissToast(id), 3000);
+      if(priority==='mid') setTimeout(()=>this.dismissToast(id), 5000);
+    },
+    dismissToast(id){ this.toasts = this.toasts.filter(t=>t.id!==id); },
+
+    /* =========================================================
+       工具
+       ========================================================= */
+    copyText(txt){
+      const ta = document.createElement('textarea');
+      ta.value = txt;
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand('copy'); }catch(e){}
+      document.body.removeChild(ta);
+      this.pushToast('low','已复制到剪贴板','汇报文本已复制，可直接粘贴到邮件或汇报文档');
+    },
+
+    esc(s){
+      if(s==null) return '';
+      return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    },
+  };
+}
+
+/* 全局桥接：让 HTML 字符串里的 onclick 能调到 Alpine 组件 */
+window.__setFilter = function(k, v){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.filters[k] = v;
+};
+window.__changeStatus = function(itemId, status){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.changeStatus(itemId, status);
+};
+window.__openResolve = function(itemId){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.openResolve(itemId);
+};
+window.__viewDetail = function(itemId){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.viewDetail(itemId);
+};
+window.__heatDrill = function(cat, ent){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.filters.category = cat;
+  app.filters.entity = ent;
+};
+window.__toggleColMenu = function(){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.colMenuOpen = !app.colMenuOpen;
+};
+window.__closeColMenu = function(){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.colMenuOpen = false;
+};
+window.__toggleCol = function(k){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.toggleCol(k);
+};
+/* P1-17: review 空状态"去扫描"按钮 — 切到 triage Tab 并触发扫描 */
+window.__goToTriageAndScan = function(){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.currentTab = 'triage';
+  app.startScan();
+};
+window.__openPath = function(itemId){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.openPathByItem(itemId);
+};
+window.__relocate = function(itemId){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.openRelocate(itemId);
+};
+</script>
+</body>
+</html>

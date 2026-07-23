@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPO 审计 PBC 智能管理工作站 总览</title>
+<style>
+  :root{
+    --ink:#2C2C2B; --sub:#7D7A75; --canvas:#FFFFFF; --soft:#F9F8F7; --soft2:#F0EFED; --line:#E6E5E3;
+    --blue:#2783DE; --blueSoft:#E5F2FC; --green:#46A171; --greenSoft:#E8F1EC;
+    --orange:#D5803B; --orangeSoft:#FBEBDE; --red:#E56458; --redSoft:#FCE9E7;
+    --purple:#8E5FBF; --purpleSoft:#F1E9FA;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:-apple-system,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif; background:var(--soft); color:var(--ink); line-height:1.5; -webkit-font-smoothing:antialiased;}
+  .poster{max-width:1160px; margin:0 auto; padding:40px 36px 56px;}
+
+  /* header */
+  .hd{background:linear-gradient(135deg,#1f3a5f 0%,#2783DE 100%); border-radius:16px; padding:30px 34px; color:#fff; position:relative; overflow:hidden;}
+  .hd::after{content:""; position:absolute; right:-60px; top:-60px; width:220px; height:220px; background:rgba(255,255,255,.08); border-radius:50%;}
+  .hd h1{font-size:32px; font-weight:800; letter-spacing:.5px;}
+  .hd .sub{margin-top:8px; font-size:15px; color:rgba(255,255,255,.9);}
+  .hd .tags{margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;}
+  .hd .tag{background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28); padding:5px 12px; border-radius:20px; font-size:12.5px; font-weight:600;}
+
+  /* section shell */
+  .sec{background:var(--canvas); border:1px solid var(--line); border-radius:14px; margin-top:22px; padding:22px 24px; box-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.03);}
+  .sec.tinted{background:var(--soft);}
+  .sechd{display:flex; align-items:center; gap:12px; margin-bottom:18px;}
+  .badge{width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; color:#fff; flex:none;}
+  .b-blue{background:var(--blue);} .b-green{background:var(--green);} .b-orange{background:var(--orange);} .b-purple{background:var(--purple);} .b-slate{background:#5b6b7b;}
+  .sechd h2{font-size:19px; font-weight:800;}
+  .sechd .phase{margin-left:auto; font-size:12px; color:var(--sub); background:var(--soft2); padding:4px 11px; border-radius:16px; font-weight:600;}
+
+  /* chevrons (drawn, no arrow glyph) */
+  .chev{flex:none; width:22px; height:22px; position:relative; align-self:center;}
+  .chev::before{content:""; position:absolute; left:3px; top:5px; width:9px; height:9px; border-top:3px solid var(--blue); border-right:3px solid var(--blue); transform:rotate(45deg);}
+  .chev-down{width:100%; height:22px; display:flex; justify-content:center; margin:6px 0;}
+  .chev-down::before{content:""; width:10px; height:10px; border-right:3px solid var(--blue); border-bottom:3px solid var(--blue); transform:rotate(45deg);}
+
+  /* two-axis matrix */
+  .matrixwrap{display:flex; gap:14px;}
+  .yax{display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:6px 0; font-size:12.5px; font-weight:700; color:var(--sub);}
+  .yax .up{color:var(--blue);} .yax .dn{color:var(--sub);}
+  .matrixcol{flex:1;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .cell{border:1px solid var(--line); border-radius:12px; padding:16px; min-height:112px; background:var(--soft); position:relative;}
+  .cell .lab{font-size:12px; color:var(--sub); font-weight:600;}
+  .cell .val{font-size:16px; font-weight:800; margin-top:6px;}
+  .cell .note{font-size:12.5px; color:var(--sub); margin-top:6px;}
+  .cell.win{background:var(--blueSoft); border:2px solid var(--blue);}
+  .cell.win .val{color:#1c4f86;}
+  .star{position:absolute; top:12px; right:14px; font-size:20px;}
+  .xax{display:flex; justify-content:space-between; margin-top:10px; padding:0 4px; font-size:12.5px; font-weight:700; color:var(--sub);}
+  .xax .r{color:var(--blue);}
+  .compet{margin-top:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .pill{border-radius:20px; padding:5px 13px; font-size:12.5px; font-weight:700;}
+  .pill.grey{background:var(--soft2); color:var(--sub);}
+  .pill.blue{background:var(--blueSoft); color:#1c4f86;}
+  .pill.green{background:var(--greenSoft); color:#2f6b4a;}
+  .pill.red{background:var(--redSoft); color:#a53c33;}
+  .jump{display:flex; gap:14px; margin-top:14px;}
+  .jumpcard{flex:1; border-radius:12px; padding:14px 16px; border:1px solid var(--line);}
+  .jumpcard.up{background:var(--blueSoft);}
+  .jumpcard.right{background:var(--greenSoft);}
+  .jumpcard .t{font-weight:800; font-size:14px;}
+  .jumpcard .d{font-size:12.5px; color:var(--sub); margin-top:5px;}
+
+  /* input strip */
+  .inputrow{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
+  .icard{background:var(--soft); border:1px solid var(--line); border-radius:12px; padding:15px 16px;}
+  .icard .t{font-weight:800; font-size:14.5px;}
+  .icard .d{font-size:12.5px; color:var(--sub); margin-top:6px;}
+
+  /* hub */
+  .hub{background:linear-gradient(180deg,#eef6fd,#ffffff); border:1.5px solid var(--blue); border-radius:14px; padding:20px 22px;}
+  .hubtitle{text-align:center; font-weight:800; font-size:17px; color:#1c4f86; margin-bottom:14px;}
+  .hubgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px;}
+  .hcard{background:#fff; border:1px solid var(--line); border-radius:11px; padding:13px 14px;}
+  .hcard .t{font-weight:800; font-size:14px;}
+  .hcard .d{font-size:12px; color:var(--sub); margin-top:5px;}
+
+  /* status machine */
+  .states{display:flex; gap:10px; flex-wrap:wrap; align-items:stretch;}
+  .st{flex:1; min-width:150px; border-radius:12px; padding:14px; border:1px solid var(--line);}
+  .st .dot{width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:7px; vertical-align:middle;}
+  .st .name{font-weight:800; font-size:14.5px; vertical-align:middle;}
+  .st .def{font-size:12px; color:var(--sub); margin-top:8px;}
+  .st.s-red{background:var(--redSoft);} .st.s-red .dot{background:var(--red);}
+  .st.s-dgreen{background:var(--greenSoft);} .st.s-dgreen .dot{background:#2f7a52;}
+  .st.s-lgreen{background:#eef4f0;} .st.s-lgreen .dot{background:#9fc7b0;}
+  .st.s-grey{background:var(--soft2);} .st.s-grey .dot{background:#b7b4af;}
+  .flowline{margin-top:14px; font-size:12.5px; color:var(--sub); background:var(--soft); border:1px dashed var(--line); border-radius:10px; padding:12px 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .ftok{background:#fff; border:1px solid var(--line); border-radius:8px; padding:4px 10px; font-weight:700; color:var(--ink); font-size:12px;}
+  .fmini{width:18px; height:14px; position:relative;}
+  .fmini::before{content:""; position:absolute; left:2px; top:2px; width:7px; height:7px; border-top:2.5px solid var(--sub); border-right:2.5px solid var(--sub); transform:rotate(45deg);}
+
+  /* five stages */
+  .stages{display:flex; gap:8px; align-items:stretch;}
+  .stage{flex:1; border-radius:13px; padding:15px 14px; border:1px solid var(--line); background:#fff; display:flex; flex-direction:column;}
+  .stage .num{width:26px; height:26px; border-radius:50%; color:#fff; font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center; margin-bottom:10px;}
+  .stage .st-t{font-weight:800; font-size:14.5px;}
+  .stage .st-sop{font-size:11.5px; color:var(--sub); margin-top:3px;}
+  .stage ul{list-style:none; margin-top:10px; display:flex; flex-direction:column; gap:6px;}
+  .stage li{font-size:12px; color:#4a4844; padding-left:14px; position:relative;}
+  .stage li::before{content:""; position:absolute; left:0; top:6px; width:6px; height:6px; border-radius:2px;}
+  .stage .tagrole{margin-top:auto; padding-top:10px; font-size:11.5px; font-weight:800;}
+  .s-base{border-top:4px solid #8a97a5;} .s-base .num{background:#5b6b7b;} .s-base li::before{background:#8a97a5;} .s-base .tagrole{color:#5b6b7b;}
+  .s-A{border-top:4px solid var(--blue); box-shadow:0 4px 14px rgba(39,131,222,.12);} .s-A .num{background:var(--blue);} .s-A li::before{background:var(--blue);} .s-A .tagrole{color:var(--blue);}
+  .s-F{border-top:4px solid var(--orange); box-shadow:0 4px 14px rgba(213,128,59,.12);} .s-F .num{background:var(--orange);} .s-F li::before{background:var(--orange);} .s-F .tagrole{color:var(--orange);}
+  .s-act{border-top:4px solid var(--purple);} .s-act .num{background:var(--purple);} .s-act li::before{background:var(--purple);} .s-act .tagrole{color:var(--purple);}
+  .harrow{align-self:center; flex:none; width:16px; height:26px; position:relative;}
+  .harrow::before{content:""; position:absolute; left:2px; top:8px; width:9px; height:9px; border-top:3px solid #b8b6b2; border-right:3px solid #b8b6b2; transform:rotate(45deg);}
+  .loopnote{margin-top:14px; background:var(--purpleSoft); border:1px solid #ddc9ef; border-radius:11px; padding:12px 16px; font-size:12.5px; color:#5f3d86; font-weight:600; display:flex; align-items:center; gap:10px;}
+  .looptok{width:20px; height:20px; border:2.5px solid var(--purple); border-right-color:transparent; border-radius:50%; transform:rotate(-45deg); flex:none;}
+
+  /* agent loop */
+  .loop{display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap;}
+  .lpill{background:#fff; border:1.5px solid var(--blue); color:#1c4f86; border-radius:24px; padding:10px 20px; font-weight:800; font-size:14px;}
+  .lchev{width:20px; height:20px; position:relative;}
+  .lchev::before{content:""; position:absolute; left:3px; top:5px; width:8px; height:8px; border-top:3px solid var(--blue); border-right:3px solid var(--blue); transform:rotate(45deg);}
+  .loopcap{text-align:center; font-size:12.5px; color:var(--sub); margin-top:12px;}
+
+  /* tech layers */
+  .layers{display:flex; flex-direction:column; gap:0;}
+  .layer{display:flex; align-items:center; gap:14px; background:var(--soft); border:1px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .layer .ln{width:30px; height:30px; border-radius:8px; background:#1c4f86; color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; flex:none; font-size:14px;}
+  .layer .lt{font-weight:800; font-size:14.5px; width:150px; flex:none;}
+  .layer .ld{font-size:12.5px; color:var(--sub);}
+
+  /* tech chips + models */
+  .cols2{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  .chips{display:flex; flex-wrap:wrap; gap:9px;}
+  .chip{background:var(--soft); border:1px solid var(--line); border-radius:10px; padding:9px 13px; font-size:12.5px;}
+  .chip b{font-size:13px;}
+  .chip span{color:var(--sub); display:block; margin-top:2px; font-size:11.5px;}
+  .models{display:flex; flex-direction:column; gap:9px;}
+  .model{display:flex; gap:12px; align-items:center; background:var(--soft); border:1px solid var(--line); border-radius:10px; padding:10px 13px;}
+  .model .task{font-size:12px; color:var(--sub); width:150px; flex:none;}
+  .model .mn{font-weight:800; font-size:13px; color:#1c4f86;}
+  .subhead{font-size:13.5px; font-weight:800; margin-bottom:10px; color:var(--ink);}
+
+  /* legend */
+  .legend{display:flex; flex-wrap:wrap; gap:20px; align-items:center; font-size:12.5px; color:var(--sub);}
+  .lg{display:flex; align-items:center; gap:7px;}
+  .lgbox{width:14px; height:14px; border-radius:4px; display:inline-block;}
+  .foot{text-align:center; font-size:12px; color:var(--sub); margin-top:26px;}
+</style>
+</head>
+<body>
+<div class="poster">
+
+  <div class="hd">
+    <h1>IPO 审计 PBC 智能管理工作站</h1>
+    <div class="sub">AI 原生 加 双击即用 的 IPO 审计客户资料全流程工作台，一份 PBC 资料的完整生命周期串起五个环节</div>
+    <div class="tags">
+      <span class="tag">依据 AUD-SOP-PBC-01 V1.0</span>
+      <span class="tag">安永中国 AI 创新大赛</span>
+      <span class="tag">全程模拟数据 ABC 公司</span>
+      <span class="tag">本地 exe 双击即用</span>
+    </div>
+  </div>
+
+  <!-- 差异化定位 -->
+  <div class="sec">
+    <div class="sechd"><div class="badge b-blue">O</div><h2>差异化定位 两轴矩阵</h2><span class="phase">乔布斯式双重跳跃</span></div>
+    <div class="matrixwrap">
+      <div class="yax"><span class="up">AI 原生</span><span class="dn">规则 手动</span></div>
+      <div class="matrixcol">
+        <div class="grid2">
+          <div class="cell"><div class="lab">需配置 培训</div><div class="val">通用审计 SaaS 平台</div><div class="note">能力强但要部署和培训</div></div>
+          <div class="cell win"><span class="star">⭐</span><div class="lab">双击即用</div><div class="val">我们的目标象限</div><div class="note">AI 原生加零配置的空白象限</div></div>
+          <div class="cell"><div class="lab">需配置 培训</div><div class="val">纸质流程</div><div class="note">传统手工，效率低</div></div>
+          <div class="cell"><div class="lab">双击即用</div><div class="val">Excel 手工核对</div><div class="note">易上手但全靠人力</div></div>
+        </div>
+        <div class="xax"><span>需配置 培训</span><span class="r">双击即用</span></div>
+      </div>
+    </div>
+    <div class="compet">
+      <span class="pill red">Melody 竞品位于中间偏下</span>
+      <span class="pill grey">规则为主，中等易用</span>
+      <span class="pill grey">停在匹配成功，无 Senior 复核</span>
+      <span class="pill grey">无完整性检查，无风险洞察</span>
+    </div>
+    <div class="jump">
+      <div class="jumpcard up"><div class="t">上推智能化</div><div class="d">LLM 分类、AI 置信度标红、缺口模式识别、替代程序建议</div></div>
+      <div class="jumpcard right"><div class="t">右推易用性</div><div class="d">单一输入、零配置、按流程走、统一界面聚焦</div></div>
+    </div>
+  </div>
+
+  <!-- 输入 数据源 -->
+  <div class="sec">
+    <div class="sechd"><div class="badge b-slate">S</div><h2>单一输入 数据源</h2><span class="phase">零配置入口</span></div>
+    <div class="inputrow">
+      <div class="icard"><div class="t">客户共享文件夹</div><div class="d">唯一入口，客户把资料拖进来，watchdog 实时监听新文件</div></div>
+      <div class="icard"><div class="t">两个 PBC Excel</div><div class="d">长表 01 基础资料收集，宽表 02 穿行测试实体年份矩阵</div></div>
+      <div class="icard"><div class="t">模拟数据 ABC 公司</div><div class="d">3 家子公司加 1 个集团合并，覆盖公司级与集团级两种粒度</div></div>
+    </div>
+  </div>
+
+  <div class="chev-down"></div>
+
+  <!-- 中央枢纽 -->
+  <div class="sec">
+    <div class="hub">
+      <div class="hubtitle">数据与状态枢纽</div>
+      <div class="hubgrid">
+        <div class="hcard"><div class="t">共享文件夹</div><div class="d">输入源，接收客户上传</div></div>
+        <div class="hcard"><div class="t">PBC Excel 清单</div><div class="d">长表加宽表，状态自动回写</div></div>
+        <div class="hcard"><div class="t">归档目录</div><div class="d">编号 描述 期间 版本，多级目录</div></div>
+        <div class="hcard"><div class="t">SQLite 数据库</div><div class="d">轻量存储，Python 自带</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态机 -->
+  <div class="sec tinted">
+    <div class="sechd"><div class="badge b-slate">四</div><h2>状态机 贯穿全工作台</h2><span class="phase">SOP 4.2</span></div>
+    <div class="states">
+      <div class="st s-red"><span class="dot"></span><span class="name">未提供</span><div class="def">截止日到未提供，或严重缺失</div></div>
+      <div class="st s-dgreen"><span class="dot"></span><span class="name">已提供 审核中</span><div class="def">已收到并整理，等 Senior 复核</div></div>
+      <div class="st s-lgreen"><span class="dot"></span><span class="name">已提供</span><div class="def">终态，Senior 复核通过并归档</div></div>
+      <div class="st s-grey"><span class="dot"></span><span class="name">不适用</span><div class="def">不涉及公司情况，需备注理由</div></div>
+    </div>
+    <div class="flowline">
+      <span class="ftok">未提供</span><span class="fmini"></span>
+      <span style="font-size:11.5px;">Staff 初检</span><span class="fmini"></span>
+      <span class="ftok">已提供 审核中</span><span class="fmini"></span>
+      <span style="font-size:11.5px;">Senior 通过</span><span class="fmini"></span>
+      <span class="ftok">已提供</span>
+      <span style="margin-left:14px; font-size:11.5px;">Senior 不通过则退回未提供</span>
+    </div>
+  </div>
+
+  <div class="chev-down"></div>
+
+  <!-- 五环节主流程 -->
+  <div class="sec">
+    <div class="sechd"><div class="badge b-green">五</div><h2>五环节主流程 一份资料的完整生命周期</h2><span class="phase">P0 到 P1 分批落地</span></div>
+    <div class="stages">
+      <div class="stage s-base">
+        <div class="num">1</div>
+        <div class="st-t">客户共享文件夹</div>
+        <div class="st-sop">SOP 5.1 资料接收</div>
+        <ul><li>单一输入入口</li><li>watchdog 监听新文件</li><li>零配置接入</li></ul>
+        <div class="tagrole">地基环节</div>
+      </div>
+      <div class="harrow"></div>
+      <div class="stage s-base">
+        <div class="num">2</div>
+        <div class="st-t">AI 智能处理</div>
+        <div class="st-sop">SOP 5.1 到 5.5</div>
+        <ul><li>识别归类，对照清单</li><li>完整性检查，期间连续性</li><li>状态标记，自动回写</li><li>规范命名并归档</li></ul>
+        <div class="tagrole">地基加藏差异化</div>
+      </div>
+      <div class="harrow"></div>
+      <div class="stage s-A">
+        <div class="num">3</div>
+        <div class="st-t">三角色协作审阅</div>
+        <div class="st-sop">SOP 3 加 5.4</div>
+        <ul><li>统一界面按角色聚焦</li><li>Staff 执行区</li><li>Senior 复核区，四维度</li><li>Manager 监督区</li></ul>
+        <div class="tagrole">差异化支柱 A</div>
+      </div>
+      <div class="harrow"></div>
+      <div class="stage s-F">
+        <div class="num">4</div>
+        <div class="st-t">缺料风险雷达</div>
+        <div class="st-sop">SOP 6 异常处理</div>
+        <ul><li>超期识别，5 工作日阈值</li><li>缺口模式反推风险热点</li><li>项目风险热力图</li></ul>
+        <div class="tagrole">差异化支柱 F</div>
+      </div>
+      <div class="harrow"></div>
+      <div class="stage s-act">
+        <div class="num">5</div>
+        <div class="st-t">风险化解助手</div>
+        <div class="st-sop">SOP 6 替代程序</div>
+        <ul><li>影响分析，缺口牵连科目</li><li>替代程序建议，核心</li><li>升级汇报包，结构化</li></ul>
+        <div class="tagrole">F 的行动层</div>
+      </div>
+    </div>
+    <div class="loopnote"><span class="looptok"></span>闭环：环节 5 化解风险后，客户补料重新进入环节 1，形成自我循环</div>
+  </div>
+
+  <!-- AI Agent 循环 -->
+  <div class="sec tinted">
+    <div class="sechd"><div class="badge b-purple">人</div><h2>AI Agent 循环 人在回路</h2><span class="phase">AI 挑出最该看的，人做判断</span></div>
+    <div class="loop">
+      <span class="lpill">感知</span><span class="lchev"></span>
+      <span class="lpill">思考</span><span class="lchev"></span>
+      <span class="lpill">行动</span><span class="lchev"></span>
+      <span class="lpill">人确认</span>
+    </div>
+    <div class="loopcap">环节 2 Staff 确认纠正，环节 3 Senior 通过退回，环节 5 Senior 采纳替代程序并记录底稿</div>
+  </div>
+
+  <div class="chev-down"></div>
+
+  <!-- 技术架构 5 层 -->
+  <div class="sec">
+    <div class="sechd"><div class="badge b-slate">技</div><h2>技术架构 五层</h2><span class="phase">本地运行 无需装环境</span></div>
+    <div class="layers">
+      <div class="layer"><div class="ln">1</div><div class="lt">用户层</div><div class="ld">双击 PBC工作站.exe，自动打开浏览器，无需装 Python 或依赖</div></div>
+      <div class="chev-down"></div>
+      <div class="layer"><div class="ln">2</div><div class="lt">前端层</div><div class="ld">单页 Web 应用，HTML 加 Alpine.js，三角色统一界面按角色聚焦</div></div>
+      <div class="chev-down"></div>
+      <div class="layer"><div class="ln">3</div><div class="lt">后端层</div><div class="ld">FastAPI 本地服务 127.0.0.1，业务逻辑加文件操作加 Excel 读写加调度 AI</div></div>
+      <div class="chev-down"></div>
+      <div class="layer"><div class="ln">4</div><div class="lt">AI 能力层</div><div class="ld">百度 PA 平台 LLM API 加审计知识库，分类识别加完整性检查加替代程序建议</div></div>
+      <div class="chev-down"></div>
+      <div class="layer"><div class="ln">5</div><div class="lt">数据文件层</div><div class="ld">共享文件夹加 PBC Excel 加归档目录，输入状态输出三处文件</div></div>
+    </div>
+  </div>
+
+  <!-- 技术选型 + AI 模型 -->
+  <div class="sec">
+    <div class="sechd"><div class="badge b-orange">选</div><h2>技术选型 与 AI 模型</h2><span class="phase">百度 PA 平台</span></div>
+    <div class="cols2">
+      <div>
+        <div class="subhead">技术选型</div>
+        <div class="chips">
+          <div class="chip"><b>FastAPI</b><span>异步，适合等 AI 响应</span></div>
+          <div class="chip"><b>Alpine.js</b><span>轻量，无需构建工具</span></div>
+          <div class="chip"><b>openpyxl</b><span>支持条件格式四状态色</span></div>
+          <div class="chip"><b>pdfplumber</b><span>中文 PDF 解析好</span></div>
+          <div class="chip"><b>watchdog</b><span>监听共享文件夹</span></div>
+          <div class="chip"><b>SQLite</b><span>轻量，Python 自带</span></div>
+          <div class="chip"><b>PyInstaller</b><span>打包单 exe，双击即用</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="subhead">AI 模型 百度 PA 平台</div>
+        <div class="models">
+          <div class="model"><div class="task">文件识别加分类</div><div class="mn">GLM-5 或 Qwen3.6-Plus</div></div>
+          <div class="model"><div class="task">期间连续性读图</div><div class="mn">Qwen3-VL-Plus 视觉</div></div>
+          <div class="model"><div class="task">替代程序建议</div><div class="mn">GLM-5 加知识库</div></div>
+          <div class="model"><div class="task">知识库检索</div><div class="mn">Qwen3-Embedding-8B</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图例 -->
+  <div class="sec tinted">
+    <div class="subhead">图例</div>
+    <div class="legend">
+      <span class="lg"><span class="lgbox" style="background:#8a97a5;"></span>地基环节</span>
+      <span class="lg"><span class="lgbox" style="background:var(--blue);"></span>差异化支柱 A 三角色协作</span>
+      <span class="lg"><span class="lgbox" style="background:var(--orange);"></span>差异化支柱 F 风险雷达</span>
+      <span class="lg"><span class="lgbox" style="background:var(--purple);"></span>行动层 风险化解</span>
+      <span class="lg"><span class="lgbox" style="background:var(--red);"></span>未提供</span>
+      <span class="lg"><span class="lgbox" style="background:#2f7a52;"></span>审核中</span>
+      <span class="lg"><span class="lgbox" style="background:#9fc7b0;"></span>已提供</span>
+      <span class="lg"><span class="lgbox" style="background:#b7b4af;"></span>不适用</span>
+    </div>
+  </div>
+
+  <div class="foot">IPO 审计 PBC 智能管理工作站 工作流架构总览　v0.3　2026-07-19</div>
+
+</div>
+</body>
+</html>
