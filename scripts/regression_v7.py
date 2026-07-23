@@ -80,10 +80,6 @@ def _setup_demo_data():
         print(f"  [setup] 灌入 PBC 清单失败（继续测）: {e}")
 
 
-# CI 环境准备：先灌入测试数据再跑测试
-_setup_demo_data()
-
-
 def _get(path):
     r = urllib.request.urlopen(base + path)
     return json.loads(r.read())
@@ -105,6 +101,10 @@ def _post(path, body=None, raw_body=None):
 def _get_raw(path):
     r = urllib.request.urlopen(base + path)
     return r.read()
+
+
+# CI 环境准备：先灌入测试数据再跑测试（必须在 _get 等函数定义之后调用）
+_setup_demo_data()
 
 
 # ===== 1. 基础 =====
