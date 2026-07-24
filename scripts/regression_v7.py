@@ -585,27 +585,39 @@ def t_conflict_signal_detection():
     if not pbc_items:
         return False, "no PBC data"
 
-    # 测 1: 编号矛盾——文件名含历-1 但描述是利润表
-    tmp = Path(tempfile.mktemp(suffix="_test_conflict.pdf"))
-    tmp.write_text("test")
+    # 找一个 PBC item 的 item_id 做测试（item_id 可能是中文如"历-1"）
+    first_item = pbc_items[0]
+    item_id = first_item.get("item_id", "")
+    doc_name = first_item.get("doc_name", "")
+
+    # 用 ASCII 文件名避免 CI cp1252 炸：文件名含 item_id + 错误描述
+    # item_id 可能含中文，但 tempfile 用 ASCII suffix
+    # 直接在临时目录建文件，文件名含 item_id（如果 item_id 含中文，CI 可能炸）
+    # 所以用纯 ASCII 的假编号 "TEST-1" + 描述 "wrong_desc"
+    tmp_dir = Path(tempfile.mkdtemp(prefix="pbc_conflict_"))
     try:
-        # 用文件名模拟"历-1_利润表"——通过 stem
-        # tempfile 生成的 stem 是随机串，手动改不了
-        # 所以直接测 score_file 的逻辑：传一个含编号的 file_path
-        conflict_path = tmp.parent / "历-1_利润表.pdf"
-        conflict_path.write_text("利润表")
+        # 建 PBC item 列表含一个 item_id="ID-A" doc_name="alpha"（跟文件名描述完全不重叠）
+        fake_items = [
+            {"item_id": "ID-A", "doc_name": "alpha", "category": "cat1", "description": "alpha desc", "required_period": "2024"},
+            {"item_id": "ID-B", "doc_name": "beta", "category": "cat2", "description": "beta desc", "required_period": "2024"},
+        ]
+        # 文件名含 ID-A 但描述是 beta（跟 ID-B 匹配）
+        conflict_path = tmp_dir / "ID-A_beta.pdf"
+        conflict_path.write_text("beta desc")
         try:
-            result = score_file(conflict_path, pbc_items, file_text="利润表", client_folder=None)
+            result = score_file(conflict_path, fake_items, file_text="beta desc", client_folder=None)
             sig = result.get("conflict_signal")
             has_signal = sig is not None
             sig_type = sig.get("type") if sig else None
             detected = sig.get("detected_item_id") if sig else None
-            # detail 全 ASCII（avoid cp1252）
-            return has_signal and sig_type == "id_description_conflict", f"has_signal={has_signal}, type={sig_type}, detected={detected}"
+            matched = sig.get("matched_item_id") if sig else None
+            # detail 全 ASCII
+            return has_signal and sig_type == "id_description_conflict", f"has_signal={has_signal}, type={sig_type}, detected={detected}, matched={matched}"
         finally:
             conflict_path.unlink(missing_ok=True)
     finally:
-        tmp.unlink(missing_ok=True)
+        import shutil
+        shutil.rmtree(str(tmp_dir), ignore_errors=True)
 
 
 def t_conflict_signal_no_false_positive():
