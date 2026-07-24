@@ -3,7 +3,7 @@
 > **本文件是项目唯一权威规格**。改任何代码/接口/功能前，先看本文件；
 > 改完同步更新本文件的「当前状态」段。代码必须对齐 SPEC，不是反过来。
 >
-> 最后更新：2026-07-23 v7-fixed
+> 最后更新：2026-07-24 v7.6
 
 ---
 
@@ -88,6 +88,9 @@ AI 原生（上）   |  通用审计 SaaS    |  ★ 我们（空白象限）
 | 9 | `GET/PUT /api/config/ai` + `models` + `test` | §12 | `routes_config.py` |
 | 10 | `GET /api/config/test-data-package` | 赛事要求 | `routes_config.py` |
 | 11 | `GET /api/pbc/{pid}/export` | §5.3 | `routes_pbc.py` |
+| 12 | `POST /api/files/{pid}/reclassify/{item_id}` | §5.4 复核 | `routes_files.py` |
+| 13 | `GET /api/files/{pid}/change-log` | 审计留痕 | `routes_files.py` |
+| 14 | `conflict_signal`（matcher 返回字段） | §5.2 完整性 | `matcher.py` |
 
 ### 3 个对齐口径（重要！）
 
@@ -137,19 +140,22 @@ interaction_test_v2.py      # Playwright 交互测试（70 项）
 
 ## 5. 当前状态
 
-- **后端**：v7.4 完成（10 个新接口 + §5.5 归档重构 + 双锚 + 整目录归档 + manifest 轻量指纹 + 多字段打分匹配）
-- **前端**：Opus 4.8 对接完成（`app/static/index.html` 2624 行）
-- **打包**：`PBC-Agent-v7-fixed.exe`（56.7MB zip，用 v6 spec 复制改名打包）
-- **测试**：回归 16/16 全通过；交互 59/70（11 个 FAIL 是 demo 数据问题不是 bug）
-- **GitHub**：https://github.com/hhaa134323/IpoPBC（私有）
-- **v7.4 新增**：
-  - manifest 轻量指纹去重（size+mtime 快路径，不碰客户文件夹）
-  - 删除检测 + 启动自动扫描（manifest 对比发现缺失文件→标红+备注，不自动回退状态）
-  - 多字段加权打分匹配（`app/core/matcher.py`）
-  - 穿行测试前置检测（文件夹名含关键词→整目录归档）
-  - PBC 清单导出接口 `GET /api/pbc/{pid}/export`
-  - PBC 模板前列重构（16列：一级分类→二级分类→资料名称→报告期间）
-  - 归档路径两级（一级分类/二级分类_资料名称/文件）
+- **后端**：v7.6 完成（14 个接口 + §5.5 归档重构 + 双锚 + 整目录归档 + manifest 三层架构 + matcher 打分 + 改分类 + 变更日志 + 编号矛盾信号）
+- **前端**：Opus 4.8 对接完成 + v7.6 改分类弹窗（`app/static/index.html` 2900+ 行，变更日志面板待做）
+- **打包**：`PBC-Agent-v7-fixed.exe`（56.7MB zip，用 v6 spec 复制改名打包；v7.6 改动未重新打包）
+- **测试**：回归 28/28 全通过；交互 78/78 全通过
+- **GitHub**：https://github.com/hhaa134323/IpoPBC（私有，CI 全绿）
+- **v7.5 新增**：
+  - manifest 三层职责分离（检测层/展示层/处理层，借鉴 VSCode Git）
+  - matcher 4 字段加权打分（F1 文件夹/0.25 + F2 文件名/0.40 + F3 内容/0.20 + F4 期间/0.15）
+  - 三档决策（>0.70 auto / 0.30-0.70 suggest / <0.30 llm）
+  - 穿行测试前置检测 + PBC 导出接口 + 归档两级结构
+  - PBC 模板 16 列重构 + 混合形态测试数据包（19 项 + 16 文件 + 6 子目录）
+- **v7.6 新增**：
+  - 改分类接口 `POST /reclassify/{item_id}`（Senior 直接指定新 item_id，不让 AI 重跑）
+  - 变更日志 `GET /change-log`（file_change_log 表持久化，5 处写入，永久保留）
+  - 编号矛盾信号（F2 检测文件名含编号但描述不匹配 → advisory_notes level=high）
+  - changed_by 只记 watchdog/ai-auto/manual（不记角色不记人名）
 - **未完成**：审计员还没有用 v7.4 测试过；Demo 视频未拍；前端未对接打分 score_breakdown 展示
 
 ---

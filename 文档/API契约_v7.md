@@ -517,3 +517,104 @@ data/test_data_package/
 7. **测试数据**：前端展示测试数据包路径 + 下载入口
 
 **约束**：保持单文件 Alpine.js SPA，用 Edit 工具最小侵入替换（文件 >50KB 不要 Write 重写）。
+
+---
+
+## v7.6 新增接口（2026-07-24）
+
+### 1. 改分类 `POST /api/files/{project_id}/reclassify/{item_id}`
+
+Senior 复核发现 AI 分错时直接指定新 item_id，不让 AI 重跑。
+
+**请求**：
+```json
+{
+  "new_item_id": "财-1",        // Senior 指定的正确 item_id
+  "changed_by": "manual",
+  "reason": "这是利润表不是股权架构图"  // 可选
+}
+```
+
+**响应**：
+```json
+{
+  "ok": true,
+  "project_id": "demo",
+  "old_item_id": "历-1",
+  "new_item_id": "财-1",
+  "reclassified_count": 1,
+  "results": [{"old_archived_path": "...", "new_archived_path": "...", "sha256": "...", "version": "v1"}],
+  "errors": []
+}
+```
+
+**流程**：删旧归档副本 → 删 archive 记录 → 用新 item_id 重新归档（archive_file）→ 改 PBC file_path → 状态推进审核中
+
+**前端**：review tab 行操作列加「改分类」按钮 → 弹窗搜索下拉选新 item_id → 确认
+
+### 2. 变更日志 `GET /api/files/{project_id}/change-log`
+
+持久化操作记录（类似 git log），审计留痕，永久保留。
+
+**参数**：
+- `change_type`（可选）：added/archived/reclassified/approved/deleted/missing
+- `limit`（可选，默认 100，最大 500）
+
+**响应**：
+```json
+{
+  "project_id": "demo",
+  "count": 3,
+  "logs": [
+    {
+      "id": 1,
+      "project_id": "demo",
+      "file_name": "历-1_股权架构图.pdf",
+      "sha256": "abc123...",
+      "change_type": "archived",
+      "item_id": "历-1",
+      "changed_by": "ai-auto",
+      "changed_at": "2026-07-24T23:05:00",
+      "detail": "归档到 历史沿革/历-1 v1"
+    }
+  ]
+}
+```
+
+**changed_by 取值**：`watchdog`（文件监听）/ `ai-auto`（AI 扫描）/ `manual`（人工操作）
+
+**5 处写入**：
+| 操作 | change_type | changed_by |
+|------|-------------|-----------|
+| watchdog mark_pending | added/modified | watchdog |
+| archive_file 成功 | archived | ai-auto |
+| reclassify 接口 | reclassified | manual |
+| update_item_status→已提供 | approved | manual |
+| detect_missing_files | deleted | watchdog |
+
+**前端**：替换或重做消息中心，调此接口显示变更历史（布局待定）
+
+### 3. 编号矛盾信号（matcher.score_file 返回字段，非独立接口）
+
+F2 打分时检测文件名含编号但描述不匹配。
+
+**score_file 返回新增字段**：
+```json
+{
+  "conflict_signal": {
+    "type": "id_description_conflict",
+    "detected_item_id": "历-1",      // 文件名里含的编号
+    "matched_item_id": "财-2",       // 实际匹配到的
+    "f2_score": 0.0,
+    "hint": "文件名含编号'历-1'但描述跟 PBC 清单不符，系统按描述匹配到'财-2'。可能客户命名错误，建议人工确认。"
+  }
+}
+```
+
+`conflict_signal` 为 `null` 表示无矛盾。
+
+**触发条件**：文件名含某 item_id + 该 item_id 的 F2 分 < 0.3 + 实际匹配到别的 item
+
+**routes_files 传递**：conflict_signal → advisory_notes（level=high）+ result.conflict_signal
+
+**前端**：advisory_notes 里 level=high 的项高亮显示，提示"编号矛盾"
