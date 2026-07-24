@@ -63,17 +63,23 @@ def _setup_demo_data():
     except Exception as e:
         print(f"  [setup] 生成测试数据失败（继续测）: {e}")
 
-    # 2. 确保 demo 项目的 PBC 清单文件存在（先建空清单，CI 上不存在）
+    # 2. 确保 demo 项目的 PBC 清单文件存在（CI 上不存在 → 用测试数据包里的混合形态版直接复制）
     try:
         from pathlib import Path
         demo_pbc = Path("projects/project_demo/01_PBC_List.xlsx")
-        if not demo_pbc.exists():
-            demo_pbc.parent.mkdir(parents=True, exist_ok=True)
+        demo_pbc.parent.mkdir(parents=True, exist_ok=True)
+        # 优先用混合形态版 PBC（19 项）覆盖到 demo 项目
+        mixed_pbc = Path("data/test_data_package/01_PBC_List_混合形态.xlsx")
+        if mixed_pbc.exists():
+            import shutil
+            shutil.copy2(str(mixed_pbc), str(demo_pbc))
+            print(f"  [setup] demo PBC 清单已用混合形态版覆盖: {mixed_pbc}")
+        elif not demo_pbc.exists():
             from app.core.db import _create_empty_pbc_xlsx
             _create_empty_pbc_xlsx(demo_pbc)
             print(f"  [setup] demo 空清单已创建: {demo_pbc}")
     except Exception as e:
-        print(f"  [setup] demo 空清单创建失败（继续测）: {e}")
+        print(f"  [setup] demo 清单准备失败（继续测）: {e}")
 
     # 3. 给 demo 项目灌入测试 PBC 清单（如果当前为空）
     try:
