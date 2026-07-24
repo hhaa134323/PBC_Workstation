@@ -1282,6 +1282,20 @@ def _process_one_file_sync(
                     logger.info("打分不足走LLM: %s → 最佳候选=%s (总分=%.2f, 阈值=%.2f)", path.name, score_result.get("item_id"), score_result["confidence"], 0.4)
                     classify = client.classify_file(file_text, pbc_items, file_hint=path.name)
 
+                # v7.6: 编号矛盾信号 → advisory_notes
+                conflict = score_result.get("conflict_signal")
+                if conflict:
+                    advisory_notes.append({
+                        "level": "high",
+                        "trigger": "id_description_conflict",
+                        "message": conflict.get("hint", ""),
+                        "action": "建议人工确认该文件应归到哪个 PBC 项，可用「改分类」功能修正",
+                        "item_id": conflict.get("detected_item_id"),
+                    })
+                    result["conflict_signal"] = conflict
+                    logger.warning("编号矛盾: %s → 文件名含'%s'但匹配到'%s'",
+                                   path.name, conflict.get("detected_item_id"), conflict.get("matched_item_id"))
+
     item_id: Optional[str] = None
     confidence: float = 0.0
     # 记录处理前的逾期天数（用于 watchdog 触发"解除风险"简报事件）

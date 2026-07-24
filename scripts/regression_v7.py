@@ -572,6 +572,70 @@ def t_reclassify_endpoint():
 
 test("改分类接口", t_reclassify_endpoint)
 
+# ===== 15. v7.6 编号矛盾信号 =====
+_safe_print("\n=== 15. v7.6 编号矛盾信号 ===")
+
+
+def t_conflict_signal_detection():
+    """score_file 检测编号矛盾：文件名含编号但描述不匹配"""
+    from pathlib import Path
+    from app.core.matcher import score_file
+    import tempfile
+    pbc_items = _get("/api/pbc/demo/list").get("items", [])
+    if not pbc_items:
+        return False, "no PBC data"
+
+    # 测 1: 编号矛盾——文件名含历-1 但描述是利润表
+    tmp = Path(tempfile.mktemp(suffix="_test_conflict.pdf"))
+    tmp.write_text("test")
+    try:
+        # 用文件名模拟"历-1_利润表"——通过 stem
+        # tempfile 生成的 stem 是随机串，手动改不了
+        # 所以直接测 score_file 的逻辑：传一个含编号的 file_path
+        conflict_path = tmp.parent / "历-1_利润表.pdf"
+        conflict_path.write_text("利润表")
+        try:
+            result = score_file(conflict_path, pbc_items, file_text="利润表", client_folder=None)
+            sig = result.get("conflict_signal")
+            has_signal = sig is not None
+            sig_type = sig.get("type") if sig else None
+            detected = sig.get("detected_item_id") if sig else None
+            # detail 全 ASCII（avoid cp1252）
+            return has_signal and sig_type == "id_description_conflict", f"has_signal={has_signal}, type={sig_type}, detected={detected}"
+        finally:
+            conflict_path.unlink(missing_ok=True)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def t_conflict_signal_no_false_positive():
+    """编号描述一致时不应触发矛盾信号"""
+    from pathlib import Path
+    from app.core.matcher import score_file
+    import tempfile
+    pbc_items = _get("/api/pbc/demo/list").get("items", [])
+    if not pbc_items:
+        return False, "no PBC data"
+
+    # 找一个 item 做测试：文件名含 item_id + doc_name（一致）
+    first_item = pbc_items[0]
+    item_id = first_item.get("item_id", "test")
+    doc_name = first_item.get("doc_name", "test")
+    # 文件名 = item_id + "_" + doc_name（一致，不应矛盾）
+    tmp = Path(tempfile.mktemp(suffix=f"_{item_id}_{doc_name}.pdf"))
+    tmp.write_text("test content")
+    try:
+        result = score_file(tmp, pbc_items, file_text=doc_name, client_folder=None)
+        sig = result.get("conflict_signal")
+        # 无矛盾时 conflict_signal 应为 None
+        return sig is None, f"signal={sig}"
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+test("编号矛盾检测", t_conflict_signal_detection)
+test("无矛盾不误报", t_conflict_signal_no_false_positive)
+
 # ===== 汇总 =====
 _safe_print("\n" + "=" * 50)
 passed = sum(1 for s, _, _ in results if s == "PASS")

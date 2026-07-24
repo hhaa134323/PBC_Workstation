@@ -285,6 +285,12 @@ def score_file(
     best_item: Optional[dict[str, Any]] = None
     best_breakdown: dict[str, float] = {}
 
+    # v7.6: 编号矛盾检测——遍历时记"文件名含哪个 item_id"
+    filename = file_path.stem or ""
+    detected_id_in_filename: Optional[str] = None  # 文件名里含的编号
+    detected_item_obj: Optional[dict] = None        # 对应的 PBC 项
+    detected_f2_score = 0.0                          # 该编号对应 item 的 F2 分
+
     for item in pbc_items:
         f1 = _score_folder_vs_category(file_path, item, client_folder)
         f2 = _score_filename_vs_docname(file_path, item)
@@ -313,10 +319,37 @@ def score_file(
             "breakdown": breakdown,
         })
 
+        # v7.6: 检测文件名是否含该 item 的 item_id（编号）
+        item_id = item.get("item_id") or ""
+        if item_id and item_id in filename:
+            # 文件名含编号，记下来用于矛盾检测
+            detected_id_in_filename = item_id
+            detected_item_obj = item
+            detected_f2_score = f2
+
         if total > best_score:
             best_score = total
             best_item = item
             best_breakdown = breakdown
+
+    # v7.6: 编号矛盾信号
+    # 条件：文件名含某编号（detected_id_in_filename），
+    #       但该编号对应 item 的 F2 分低（<0.3，说明文件名描述跟该 item 的 doc_name 不符），
+    #       且实际匹配到的 best_item 不是这个编号的 item
+    conflict_signal = None
+    if detected_id_in_filename and detected_item_obj:
+        best_id = best_item.get("item_id") if best_item else None
+        if best_id != detected_id_in_filename and detected_f2_score < 0.3:
+            conflict_signal = {
+                "type": "id_description_conflict",
+                "detected_item_id": detected_id_in_filename,
+                "matched_item_id": best_id,
+                "f2_score": round(detected_f2_score, 4),
+                "hint": (
+                    f"文件名含编号'{detected_id_in_filename}'但描述跟 PBC 清单不符，"
+                    f"系统按描述匹配到'{best_id}'。可能客户命名错误，建议人工确认。"
+                ),
+            }
 
     # 三档决策
     if best_score > THRESHOLD_AUTO:
@@ -336,4 +369,5 @@ def score_file(
         "best_item": best_item,
         "score_breakdown": best_breakdown,
         "all_scores": all_scores[:5],  # 只返回 top 5 供调试
+        "conflict_signal": conflict_signal,  # v7.6: 编号矛盾信号（None 表示无矛盾）
     }
