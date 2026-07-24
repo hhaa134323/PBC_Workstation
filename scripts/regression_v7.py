@@ -30,16 +30,30 @@ base = os.environ.get("PBC_TEST_BASE", "http://127.0.0.1:8111")
 results = []
 
 
+def _safe_print(msg):
+    """CI 兼容：用 utf-8 写 stdout，绕过 cp1252 编码炸中文。
+    PYTHONIOENCODING 在某些 Windows Python 上不生效，这里兜底。"""
+    try:
+        sys.stdout.buffer.write((str(msg) + "\n").encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except Exception:
+        # buffer 不可用（重定向到 StringIO 等）→ fallback 到普通 print
+        try:
+            _safe_print(msg)
+        except Exception:
+            pass
+
+
 def test(name, fn):
     try:
         ok, detail = fn()
         status = "PASS" if ok else "FAIL"
         results.append((status, name, detail))
-        print(f"  [{'PASS' if ok else 'FAIL'}] {name}: {detail}")
+        _safe_print(f"  [{'PASS' if ok else 'FAIL'}] {name}: {detail}")
         return ok
     except Exception as e:
         results.append(("FAIL", name, f"{type(e).__name__}: {str(e)[:120]}"))
-        print(f"  [FAIL] {name}: {type(e).__name__}: {str(e)[:120]}")
+        _safe_print(f"  [FAIL] {name}: {type(e).__name__}: {str(e)[:120]}")
         return False
 
 
@@ -59,9 +73,9 @@ def _setup_demo_data():
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 mod.main()
-                print(f"  [setup] 测试数据包已生成到 {pkg}")
+                _safe_print(f"  [setup] 测试数据包已生成到 {pkg}")
     except Exception as e:
-        print(f"  [setup] 生成测试数据失败（继续测）: {e}")
+        _safe_print(f"  [setup] 生成测试数据失败（继续测）: {e}")
 
     # 2. 确保 demo 项目的 PBC 清单文件存在（CI 上不存在 → 用测试数据包里的混合形态版直接复制）
     try:
@@ -73,13 +87,13 @@ def _setup_demo_data():
         if mixed_pbc.exists():
             import shutil
             shutil.copy2(str(mixed_pbc), str(demo_pbc))
-            print(f"  [setup] demo PBC 清单已用混合形态版覆盖: {mixed_pbc}")
+            _safe_print(f"  [setup] demo PBC 清单已用混合形态版覆盖: {mixed_pbc}")
         elif not demo_pbc.exists():
             from app.core.db import _create_empty_pbc_xlsx
             _create_empty_pbc_xlsx(demo_pbc)
-            print(f"  [setup] demo 空清单已创建: {demo_pbc}")
+            _safe_print(f"  [setup] demo 空清单已创建: {demo_pbc}")
     except Exception as e:
-        print(f"  [setup] demo 清单准备失败（继续测）: {e}")
+        _safe_print(f"  [setup] demo 清单准备失败（继续测）: {e}")
 
     # 3. 给 demo 项目灌入测试 PBC 清单（如果当前为空）
     try:
@@ -105,13 +119,13 @@ def _setup_demo_data():
                 )
                 r = urllib.request.urlopen(req, timeout=30)
                 result = json.loads(r.read())
-                print(f"  [setup] 灌入测试 PBC 清单: {result.get('imported_rows', 0)} 项")
+                _safe_print(f"  [setup] 灌入测试 PBC 清单: {result.get('imported_rows', 0)} 项")
             else:
-                print(f"  [setup] 测试 PBC 清单文件不存在: {pkg_xlsx}")
+                _safe_print(f"  [setup] 测试 PBC 清单文件不存在: {pkg_xlsx}")
         else:
-            print(f"  [setup] demo PBC 清单已有 {d.get('count', 0)} 项，跳过灌入")
+            _safe_print(f"  [setup] demo PBC 清单已有 {d.get('count', 0)} 项，跳过灌入")
     except Exception as e:
-        print(f"  [setup] 灌入 PBC 清单失败（继续测）: {type(e).__name__}: {e}")
+        _safe_print(f"  [setup] 灌入 PBC 清单失败（继续测）: {type(e).__name__}: {e}")
 
 
 def _get(path):
@@ -142,7 +156,7 @@ _setup_demo_data()
 
 
 # ===== 1. 基础 =====
-print("\n=== 1. 基础 ===")
+_safe_print("\n=== 1. 基础 ===")
 
 
 def t_health():
@@ -160,7 +174,7 @@ test("health", t_health)
 test("前端 v7 标识", t_frontend_v7)
 
 # ===== 2. PBC 模板（15 列 + 必填） =====
-print("\n=== 2. PBC 模板 ===")
+_safe_print("\n=== 2. PBC 模板 ===")
 
 
 def t_template_download():
@@ -193,7 +207,7 @@ test("模板下载", t_template_download)
 test("模板必填标注", t_template_required_marked)
 
 # ===== 3. PBC 清单 required_period =====
-print("\n=== 3. PBC 清单 required_period ===")
+_safe_print("\n=== 3. PBC 清单 required_period ===")
 
 
 def t_pbc_has_period():
@@ -209,7 +223,7 @@ def t_pbc_has_period():
 test("PBC 清单含 required_period", t_pbc_has_period)
 
 # ===== 4. 路径透明化 =====
-print("\n=== 4. 路径透明化 ===")
+_safe_print("\n=== 4. 路径透明化 ===")
 
 
 def t_paths():
@@ -231,7 +245,7 @@ test("paths API", t_paths)
 test("archive-tree API", t_archive_tree)
 
 # ===== 5. 归档目录配置 =====
-print("\n=== 5. 归档目录配置 ===")
+_safe_print("\n=== 5. 归档目录配置 ===")
 
 
 def t_set_archive_root():
@@ -253,7 +267,7 @@ test("set-archive-root", t_set_archive_root)
 test("restore-archive-root", t_restore_archive_root)
 
 # ===== 6. 文件失联检测 =====
-print("\n=== 6. 文件失联检测 ===")
+_safe_print("\n=== 6. 文件失联检测 ===")
 
 
 def t_check_valid_existing():
@@ -271,7 +285,7 @@ def t_check_valid_existing():
 test("check-valid", t_check_valid_existing)
 
 # ===== 7. AI 配置 =====
-print("\n=== 7. AI 配置 ===")
+_safe_print("\n=== 7. AI 配置 ===")
 
 
 def t_ai_get():
@@ -325,7 +339,7 @@ test("ai models", t_ai_models)
 test("ai test connection", t_ai_test)
 
 # ===== 8. 测试数据包 =====
-print("\n=== 8. 测试数据包 ===")
+_safe_print("\n=== 8. 测试数据包 ===")
 
 
 def t_test_data_package():
@@ -344,7 +358,7 @@ def t_test_data_package():
 test("test-data-package", t_test_data_package)
 
 # ===== 9. 前端关键功能代码存在 =====
-print("\n=== 9. 前端 v7 代码存在性 ===")
+_safe_print("\n=== 9. 前端 v7 代码存在性 ===")
 
 
 def t_frontend_has_v7_funcs():
@@ -366,7 +380,7 @@ def t_frontend_has_v7_funcs():
 test("前端 v7 函数齐全", t_frontend_has_v7_funcs)
 
 # ===== 10. v7.5 新增：manifest 三层架构 =====
-print("\n=== 10. v7.5 manifest 三层架构（检测层）===")
+_safe_print("\n=== 10. v7.5 manifest 三层架构（检测层）===")
 
 
 def t_manifest_load():
@@ -411,7 +425,7 @@ test("pending-count API", t_pending_count)
 test("mark_pending + get_pending_count", t_mark_pending)
 
 # ===== 11. v7.5 新增：matcher 打分模型 =====
-print("\n=== 11. v7.5 matcher 打分模型 ===")
+_safe_print("\n=== 11. v7.5 matcher 打分模型 ===")
 
 
 def t_is_walkthrough_folder():
@@ -463,7 +477,7 @@ test("is_walkthrough_folder", t_is_walkthrough_folder)
 test("score_file 返回结构", t_score_file_high)
 
 # ===== 12. v7.5 新增：PBC 导出接口 =====
-print("\n=== 12. v7.5 PBC 导出接口 ===")
+_safe_print("\n=== 12. v7.5 PBC 导出接口 ===")
 
 
 def t_pbc_export():
@@ -483,7 +497,7 @@ def t_pbc_export():
 test("PBC export 接口", t_pbc_export)
 
 # ===== 13. v7.5 新增：归档两级结构 =====
-print("\n=== 13. v7.5 归档两级结构 ===")
+_safe_print("\n=== 13. v7.5 归档两级结构 ===")
 
 
 def t_archive_two_level():
@@ -501,13 +515,13 @@ def t_archive_two_level():
 test("归档两级结构", t_archive_two_level)
 
 # ===== 汇总 =====
-print("\n" + "=" * 50)
+_safe_print("\n" + "=" * 50)
 passed = sum(1 for s, _, _ in results if s == "PASS")
 failed = sum(1 for s, _, _ in results if s == "FAIL")
-print(f"总计: {len(results)} 项, PASS {passed}, FAIL {failed}")
+_safe_print(f"总计: {len(results)} 项, PASS {passed}, FAIL {failed}")
 if failed:
-    print("\n失败项:")
+    _safe_print("\n失败项:")
     for s, n, d in results:
         if s == "FAIL":
-            print(f"  [FAIL] {n}: {d}")
+            _safe_print(f"  [FAIL] {n}: {d}")
 sys.exit(0 if failed == 0 else 1)
