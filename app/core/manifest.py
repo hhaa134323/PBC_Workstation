@@ -121,6 +121,21 @@ def mark_pending(
     })
     manifest[rn] = existing
     save_manifest(manifest, project_id)
+
+    # v7.6: 写变更日志
+    try:
+        from app.core.db import insert_change_log
+        was_processed = existing.get("status") == "processed" if existing else False
+        insert_change_log(
+            project_id=project_id,
+            file_name=file_path.name,
+            change_type="modified" if was_processed else "added",
+            changed_by=reason,
+            detail=f"watchdog 标记 pending: {rn}",
+        )
+    except Exception:
+        pass  # 日志写入失败不阻断主流程
+
     return manifest
 
 
@@ -353,6 +368,7 @@ def scan_client_folder(
 def detect_missing_files(
     client_folder: Path,
     manifest: dict[str, dict],
+    project_id: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """检测客户文件夹中哪些已处理文件被删除了。"""
     missing: list[dict[str, Any]] = []
@@ -368,6 +384,20 @@ def detect_missing_files(
                 "version": record.get("version", "v1"),
                 "processed_at": record.get("processed_at", ""),
             })
+            # v7.6: 写变更日志
+            try:
+                from app.core.db import insert_change_log
+                insert_change_log(
+                    project_id=project_id,
+                    file_name=rel_name,
+                    change_type="deleted",
+                    item_id=record.get("item_id", ""),
+                    sha256=record.get("sha256", ""),
+                    changed_by="watchdog",
+                    detail=f"客户文件夹文件消失: {rel_name}",
+                )
+            except Exception:
+                pass
     return missing
 
 

@@ -52,6 +52,7 @@ from app.core.db import (
     get_archive_by_sha, get_project, insert_archive, get_task, get_latest_ai_history_id,
     list_recent_archives, list_recent_tasks, update_ai_history_item_id,
     upsert_task, get_archive_by_item, delete_archive_by_item, delete_archive_by_path,
+    insert_change_log, get_change_log,
 )
 from app.core.excel_io import (
     STATUS_NOT_PROVIDED, STATUS_REVIEWING,
@@ -1517,6 +1518,19 @@ def _process_one_file_sync(
                 "version": arc_result.get("version", "v1"),
                 "unclassified": is_unclassified,
             }
+            # v7.6: 写变更日志
+            try:
+                insert_change_log(
+                    project_id=project_id,
+                    file_name=path.name,
+                    change_type="archived",
+                    item_id=item_id or "UNCLASSIFIED",
+                    sha256=h,
+                    changed_by="ai-auto",
+                    detail=f"归档到 {category or '未分类'}/{item_id or 'UNCLASSIFIED'} v{arc_result.get('version', 'v1')}",
+                )
+            except Exception:
+                logger.debug("change_log archived 写入失败（非阻断）", exc_info=True)
         else:
             result["archived"] = {"ok": False, "error": arc_result.get("error")}
     except Exception as e:
@@ -1711,6 +1725,25 @@ def handle_watcher_new_file(path: Path, project_id: Optional[str] = None) -> Non
 
 
 # ----------------------------------------------------------------------
+# v7.6: 文件变更日志（持久化操作记录）
+# ----------------------------------------------------------------------
+
+@router.get("/{project_id}/change-log")
+async def get_project_change_log(
+    project_id: str,
+    change_type: Optional[str] = Query(None, description="按类型筛选: added/archived/reclassified/approved/deleted/missing"),
+    limit: int = Query(100, ge=1, le=500),
+) -> dict:
+    """获取项目的文件变更日志（按时间倒序）。"""
+    logs = get_change_log(project_id=project_id, change_type=change_type, limit=limit)
+    return {
+        "project_id": project_id,
+        "count": len(logs),
+        "logs": logs,
+    }
+
+
+# ----------------------------------------------------------------------
 # v7.6: 改分类（Senior 复核发现 AI 分错时直接指定新 item_id）
 # ----------------------------------------------------------------------
 
@@ -1867,6 +1900,20 @@ async def reclassify_archive(project_id: str, item_id: str, body: ReclassifyBody
     except Exception as e:
         logger.exception("reclassify PBC Excel 更新失败")
         errors.append(f"PBC Excel 更新失败: {e}")
+
+    # v7.6: 写变更日志
+    if results:
+        try:
+            insert_change_log(
+                project_id=project_id,
+                file_name=results[0].get("new_archived_path", "").split("/")[-1].split("\\")[-1] if results else "",
+                change_type="reclassified",
+                item_id=new_item_id,
+                changed_by="manual",
+                detail=f"{item_id} -> {new_item_id}" + (f" ({body.reason})" if body.reason else ""),
+            )
+        except Exception:
+            logger.debug("change_log reclassified 写入失败（非阻断）", exc_info=True)
 
     return {
         "ok": len(errors) == 0,

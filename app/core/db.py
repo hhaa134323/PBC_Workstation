@@ -113,6 +113,22 @@ CREATE TABLE IF NOT EXISTS projects (
     note           TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_projects_active ON projects(is_active);
+
+-- v7.6: 文件变更日志表（持久化操作记录，审计留痕）
+CREATE TABLE IF NOT EXISTS file_change_log (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id    TEXT,
+    file_name     TEXT,
+    sha256        TEXT,
+    change_type   TEXT NOT NULL,   -- added/modified/deleted/archived/reclassified/approved/missing
+    item_id       TEXT,
+    changed_by    TEXT,            -- watchdog / ai-auto / manual
+    changed_at    TEXT NOT NULL,
+    detail        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_change_log_project ON file_change_log(project_id);
+CREATE INDEX IF NOT EXISTS idx_change_log_type ON file_change_log(change_type);
+CREATE INDEX IF NOT EXISTS idx_change_log_at ON file_change_log(changed_at DESC);
 """
 
 
@@ -797,6 +813,70 @@ def delete_archive_by_path(archived_path: str, project_id: Optional[str] = None)
             )
         conn.commit()
         return cur.rowcount
+
+
+# ----------------------------------------------------------------------
+# v7.6: 文件变更日志（持久化操作记录）
+# ----------------------------------------------------------------------
+
+def insert_change_log(
+    project_id: Optional[str],
+    file_name: str,
+    change_type: str,
+    item_id: Optional[str] = None,
+    sha256: Optional[str] = None,
+    changed_by: str = "manual",
+    detail: str = "",
+) -> int:
+    """写入一条变更日志。返回新 id。
+
+    change_type: added/modified/deleted/archived/reclassified/approved/missing
+    changed_by: watchdog / ai-auto / manual
+    """
+    now = datetime.now().isoformat(timespec="seconds")
+    with get_conn() as conn:
+        cur = execute_with_retry(
+            """INSERT INTO file_change_log
+               (project_id, file_name, sha256, change_type, item_id, changed_by, changed_at, detail)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                project_id or "",
+                file_name or "",
+                sha256 or "",
+                change_type,
+                item_id or "",
+                changed_by,
+                now,
+                detail,
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def get_change_log(
+    project_id: Optional[str] = None,
+    change_type: Optional[str] = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """查询变更日志（按时间倒序）。"""
+    limit = max(1, min(int(limit), 500))
+    with get_conn() as conn:
+        sql = "SELECT * FROM file_change_log"
+        params: list = []
+        conditions: list[str] = []
+        if project_id:
+            conditions.append("project_id = ?")
+            params.append(project_id)
+        if change_type:
+            conditions.append("change_type = ?")
+            params.append(change_type)
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+        sql += " ORDER BY changed_at DESC, id DESC LIMIT ?"
+        params.append(limit)
+        cur = conn.execute(sql, params)
+        return [dict(r) for r in cur.fetchall()]
 
 
 # ----------------------------------------------------------------------

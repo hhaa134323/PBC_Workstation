@@ -444,4 +444,20 @@ def update_item_status(
         return False, "更新后重新读取失败", None
 
     msg = f"状态更新成功: {old_norm} → {new_norm}"
+
+    # v7.6: 写变更日志（状态变成"已提供"时记 approved）
+    if new_norm == "已提供":
+        try:
+            from app.core.db import insert_change_log
+            insert_change_log(
+                project_id=project_id,
+                file_name=item_id,
+                change_type="approved",
+                item_id=item_id,
+                changed_by="manual",
+                detail=f"复核通过: {old_norm} -> 已提供" + (f" ({note})" if note else ""),
+            )
+        except Exception:
+            pass  # 日志写入失败不阻断
+
     return True, msg, updated

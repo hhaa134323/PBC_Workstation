@@ -636,6 +636,34 @@ def t_conflict_signal_no_false_positive():
 test("编号矛盾检测", t_conflict_signal_detection)
 test("无矛盾不误报", t_conflict_signal_no_false_positive)
 
+# ===== 16. v7.6 变更日志接口 =====
+_safe_print("\n=== 16. v7.6 变更日志接口 ===")
+
+
+def t_change_log_endpoint():
+    """GET /api/files/{pid}/change-log 接口可用"""
+    d = _get("/api/files/demo/change-log?limit=10")
+    has_count = "count" in d
+    has_logs = "logs" in d and isinstance(d.get("logs"), list)
+    cnt = d.get("count", 0)
+    return has_count and has_logs, f"count={cnt}"
+
+
+def t_change_log_fields():
+    """变更日志记录有必填字段"""
+    d = _get("/api/files/demo/change-log?limit=5")
+    logs = d.get("logs", [])
+    if not logs:
+        return True, "无日志记录（新环境），接口响应正常"
+    first = logs[0]
+    required = ["change_type", "file_name", "changed_by", "changed_at"]
+    has_all = all(k in first for k in required)
+    return has_all, f"fields={list(first.keys())[:8]}"
+
+
+test("change-log 接口", t_change_log_endpoint)
+test("change-log 字段完整", t_change_log_fields)
+
 # ===== 汇总 =====
 _safe_print("\n" + "=" * 50)
 passed = sum(1 for s, _, _ in results if s == "PASS")
