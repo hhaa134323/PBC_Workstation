@@ -162,9 +162,10 @@ def t_template_download():
     wb = openpyxl.load_workbook(io.BytesIO(data))
     ws = wb.active
     headers = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
-    has_15 = ws.max_column == 15
-    has_period = "需求期间" in (headers[-1] or "")
-    return has_15 and has_period, f"列数={ws.max_column}, 第15列={headers[-1]}"
+    # v7.5: 16 列结构（含二级分类/资料名称/报告期间）
+    has_16 = ws.max_column == 16
+    has_period = "报告期间" in (headers[5] or "")  # 第 6 列报告期间
+    return has_16 and has_period, f"列数={ws.max_column}, 第6列={headers[5]}, 第16列={headers[-1]}"
 
 
 def t_template_required_marked():
@@ -176,7 +177,8 @@ def t_template_required_marked():
         v = ws.cell(1, c).value
         if v and str(v).startswith("* "):
             required.append(v[2:])
-    expected = {"资料编号", "一级分类", "问题/需求描述", "期望提供日期", "实体归属", "需求期间"}
+    # v7.5 必填：一级分类/二级分类/资料名称/问题需求描述/报告期间/期望提供日期/实体归属
+    expected = {"一级分类", "二级分类", "资料名称", "问题/需求描述", "报告期间", "期望提供日期", "实体归属"}
     has_all = expected.issubset(set(required))
     return has_all, f"必填={required}"
 

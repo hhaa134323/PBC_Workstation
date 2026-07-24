@@ -161,3 +161,4 @@ interaction_test_v2.py      # Playwright 交互测试（70 项）
 3. 接口变更必须同步 `文档/API契约_v7.md` + 本文件 §3
 4. push 前 CI 自动跑 `regression_v7.py`，失败不许 merge
 5. 打包永远用「复制上一版 spec 改名」流程，不要改 build_exe.py 的 monkey-patch
+6. **改 PBC 模板/接口结构时，必须同步迁移 mock_data + demo PBC 清单 + 测试期望值**（v7.5 教训：代码改契约数据没跟上，状态机全 400）
