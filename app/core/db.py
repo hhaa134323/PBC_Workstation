@@ -309,10 +309,12 @@ def _create_empty_pbc_xlsx(xlsx_path: Path) -> None:
     ws = wb.active
     ws.title = "PBC清单"
     headers = [
-        ("资料编号", True, "必填。PBC 清单项唯一编号，如 历-1 / 存-4"),
-        ("一级分类", True, "必填。归档文件夹按此分类建，如 历史沿革 / 货币资金"),
+        ("一级分类", True, "必填。归档文件夹按此分类建，如 历史沿革 / 货币资金 / 穿行测试"),
+        ("二级分类", True, "必填。该分类下的编号项，如 历-1 / 存-4。编号前缀对应一级分类缩写"),
         ("相关科目", False, "选填。相关会计科目，如 银行存款 / 应收账款"),
-        ("问题/需求描述", True, "必填。该资料的需求描述，归档命名会用"),
+        ("资料名称", True, "必填。资料简短名称，如 股权架构图 / 银行流水 / 存货盘点表"),
+        ("问题/需求描述", True, "必填。该资料的详细需求说明，归档命名会用"),
+        ("报告期间", True, "必填。该资料需覆盖的期间，如 2023年度/2024年度/2025年度/2026年一季度"),
         ("格式", False, "选填。期望格式，如 PDF / Excel / 扫描件"),
         ("优先级", False, "选填。高 / 中 / 低"),
         ("提出时间", False, "选填。日期，如 2026-07-01"),
@@ -323,7 +325,6 @@ def _create_empty_pbc_xlsx(xlsx_path: Path) -> None:
         ("实体归属", True, "必填。公司级 vs 集团级，如 ABC子公司 / 集团合并"),
         ("置信度", False, "选填。AI 自动回填，留空"),
         ("文件路径", False, "选填。AI 归档后自动回填，留空"),
-        ("需求期间", True, "必填。该资料需覆盖的期间，如 2023年度/2024年度/2025年度/2026年一季度"),
     ]
     required_fill = PatternFill(start_color="FCEBEB", end_color="FCEBEB", fill_type="solid")
     optional_fill = PatternFill(start_color="F1EFE8", end_color="F1EFE8", fill_type="solid")
@@ -333,7 +334,7 @@ def _create_empty_pbc_xlsx(xlsx_path: Path) -> None:
         cell.fill = required_fill if required else optional_fill
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
         cell.comment = Comment(comment_text, "PBC工作站")
-    widths = [12, 14, 16, 40, 8, 8, 14, 14, 10, 16, 24, 14, 10, 40, 30]
+    widths = [14, 12, 16, 20, 40, 30, 8, 8, 14, 14, 10, 16, 24, 14, 10, 40]
     from openpyxl.utils import get_column_letter
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
@@ -342,9 +343,9 @@ def _create_empty_pbc_xlsx(xlsx_path: Path) -> None:
         formula1='"未提供,已提供，审核中,已提供,不适用"',
         allow_blank=True,
     )
-    dv.add("J2:J1000")
+    dv.add("L2:L1000")
     ws.add_data_validation(dv)
-    ws.freeze_panes = "B2"
+    ws.freeze_panes = "C2"
     wb.save(str(xlsx_path))
     wb.close()
 

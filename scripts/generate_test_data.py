@@ -184,9 +184,9 @@ def generate_pbc_template(output_path: Path) -> None:
     headers = [
         ("资料编号", True), ("一级分类", True), ("相关科目", False),
         ("问题/需求描述", True), ("格式", False), ("优先级", False),
-        ("提出时间", False), ("期望提供日期", True), ("逾期天数", False),
-        ("资料提供情况", False), ("备注", False), ("实体归属", True),
-        ("置信度", False), ("文件路径", False), ("需求期间", True),
+        ("提出时间", False), ("期望提供日期", True), ("需求期间", True),
+        ("逾期天数", False), ("资料提供情况", False), ("备注", False),
+        ("实体归属", True), ("置信度", False), ("文件路径", False),
     ]
     required_fill = PatternFill(start_color="FCEBEB", end_color="FCEBEB", fill_type="solid")
     optional_fill = PatternFill(start_color="F1EFE8", end_color="F1EFE8", fill_type="solid")
@@ -195,7 +195,7 @@ def generate_pbc_template(output_path: Path) -> None:
         cell.font = Font(bold=True, color="A32D2D" if required else "5F5E5A")
         cell.fill = required_fill if required else optional_fill
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
-    widths = [12, 14, 16, 40, 8, 8, 14, 14, 10, 16, 24, 14, 10, 40, 30]
+    widths = [12, 14, 16, 40, 8, 8, 14, 14, 30, 10, 16, 24, 14, 10, 40]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
     dv = DataValidation(type="list", formula1='"未提供,已提供，审核中,已提供,不适用"', allow_blank=True)
@@ -205,8 +205,8 @@ def generate_pbc_template(output_path: Path) -> None:
 
     # 填 10 行测试数据
     keys = ["item_id", "category", "subject", "description", "file_format", "priority",
-            "raised_at", "expected_by", "overdue_days", "status_raw", "remark", "entity",
-            "confidence", "file_path", "required_period"]
+            "raised_at", "expected_by", "required_period", "overdue_days", "status_raw",
+            "remark", "entity", "confidence", "file_path"]
     for ri, item in enumerate(PBC_ITEMS, 2):
         for ci, k in enumerate(keys, 1):
             ws.cell(ri, ci, item.get(k, ""))

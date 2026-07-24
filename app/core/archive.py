@@ -64,12 +64,12 @@ def _build_archive_name(
     original_name: Optional[str] = None,
     ext: Optional[str] = None,
 ) -> str:
-    """v7: 按 SOP §5.5 构建归档文件名。
+    """v7.4: 按 SOP §5.5 构建归档文件名。
 
-    格式：编号_描述_期间_版本.ext
-    - 编号：item_id（必填）
-    - 描述：从 description 截短（避免文件名过长），最长 30 字
-    - 期间：从文件内容提取或传 period，如 2024
+    格式：编号_资料名称_期间_版本.ext
+    - 编号：item_id（必填），如 历-1
+    - 资料名称：从 doc_name 取（简短名称如"股权架构图"），最长 30 字
+    - 期间：从 required_period 取，多个用-连接（如 2023-2025），取年份
     - 版本：默认 v1，重复归档递增 v2/v3
     - ext：扩展名，从 original_name 取或显式传
 
@@ -86,9 +86,23 @@ def _build_archive_name(
             parts.append(desc)
 
     if period:
-        p = str(period).split("/")[0].strip()
-        if p:
-            parts.append(_sanitize(p))
+        # v7.4: 多个期间用 / 分隔（如 "2023年度/2024年度/2025年度"）
+        # 取年份用-连接：2023-2024-2025
+        period_parts = str(period).split("/")
+        years = []
+        for p in period_parts:
+            p = p.strip()
+            if not p:
+                continue
+            # 提取年份（4位数字）
+            import re
+            m = re.search(r"\d{4}", p)
+            if m:
+                years.append(m.group(0))
+            else:
+                years.append(_sanitize(p))
+        if years:
+            parts.append("-".join(years))
 
     if version:
         parts.append(_sanitize(version))
@@ -169,7 +183,16 @@ def archive_file(
         }
 
     category_dir_name = _sanitize(category or entity or "未分类")
-    entity_dir = get_archive_root(project_id=project_id) / category_dir_name
+    # v7.2: 归档路径分两级——一级分类/二级分类(编号_资料名称)/文件
+    # 如：archives/历史沿革/历-1_股权架构图/历-1_股权架构图_2024_v1.pdf
+    safe_item = _sanitize(item_id) if item_id else "UNCLASSIFIED"
+    # 二级分类文件夹名：编号_资料名称（如果有 description/doc_name）
+    desc_short = _sanitize(str(description or "")[:30]) if description else ""
+    if desc_short:
+        sub_dir_name = f"{safe_item}_{desc_short}"
+    else:
+        sub_dir_name = safe_item
+    entity_dir = get_archive_root(project_id=project_id) / category_dir_name / sub_dir_name
     entity_dir.mkdir(parents=True, exist_ok=True)
 
     ext = src.suffix
@@ -272,23 +295,24 @@ def archive_directory(
         return {"ok": False, "error": "source dir not found", "source_dir": str(src)}
 
     category_dir_name = _sanitize(category or entity or "未分类")
-    base_dir = get_archive_root(project_id=project_id) / category_dir_name
+    # v7.2: 整目录归档也分两级——一级分类/二级分类(编号_文件夹名)/
+    safe_item = _sanitize(item_id) if item_id else ""
+    src_name = _sanitize(src.name)
+    if safe_item and not src_name.startswith(safe_item):
+        sub_dir_name = f"{safe_item}_{src_name}"
+    else:
+        sub_dir_name = src_name
+    base_dir = get_archive_root(project_id=project_id) / category_dir_name / sub_dir_name
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    # 目标文件夹名：{编号}_{原文件夹名}
-    src_name = _sanitize(src.name)
-    safe_item = _sanitize(item_id) if item_id else ""
-    if safe_item and not src_name.startswith(safe_item):
-        target_dir_name = f"{safe_item}_{src_name}"
-    else:
-        target_dir_name = src_name
-    target_dir = base_dir / target_dir_name
+    # 目标文件夹名：直接用 sub_dir_name（已在父级路径里了，这里用原文件夹名）
+    target_dir = base_dir
 
     # 重名时加版本后缀
     if target_dir.exists():
         i = 2
         while True:
-            candidate = base_dir / f"{target_dir_name}_v{i}"
+            candidate = base_dir.parent / f"{sub_dir_name}_v{i}"
             if not candidate.exists():
                 target_dir = candidate
                 break
@@ -370,19 +394,27 @@ def list_archives_by_entity(entity: str, project_id: Optional[str] = None) -> li
 
 
 def list_archive_tree(project_id: Optional[str] = None) -> list[dict[str, Any]]:
-    """v7: 列出归档目录树（按一级分类分组）。
+    """v7.2: 列出归档目录树（按一级分类→二级分类两级嵌套）。
 
     返回：
     [
       {
         "category": "历史沿革",
         "path": ".../archives/历史沿革",
-        "files": [{"name":..., "path":..., "size":..., "mtime":...}, ...],
-        "count": 3
+        "subdirs": [
+          {
+            "name": "历-1_股权架构图",
+            "path": ".../archives/历史沿革/历-1_股权架构图",
+            "files": [{"name":..., "path":..., "size":..., "mtime":...}, ...],
+            "count": 2
+          },
+          ...
+        ],
+        "count": 5
       },
       ...
     ]
-    前端右侧"已归档树"直接渲染这个结构。
+    前端右侧"已归档树"直接渲染这个两级结构。
     """
     root = get_archive_root(project_id=project_id)
     out: list[dict[str, Any]] = []
@@ -391,24 +423,36 @@ def list_archive_tree(project_id: Optional[str] = None) -> list[dict[str, Any]]:
     for p in sorted(root.iterdir()):
         if not p.is_dir():
             continue
-        files: list[dict[str, Any]] = []
-        for f in sorted(p.iterdir()):
-            if f.is_file():
-                try:
-                    st = f.stat()
-                except OSError:
-                    st = None
-                files.append({
-                    "name": f.name,
-                    "path": str(f),
-                    "size": st.st_size if st else None,
-                    "mtime": st.st_mtime if st else None,
-                })
+        subdirs: list[dict[str, Any]] = []
+        category_count = 0
+        for sd in sorted(p.iterdir()):
+            if not sd.is_dir():
+                continue
+            files: list[dict[str, Any]] = []
+            for f in sorted(sd.iterdir()):
+                if f.is_file():
+                    try:
+                        st = f.stat()
+                    except OSError:
+                        st = None
+                    files.append({
+                        "name": f.name,
+                        "path": str(f),
+                        "size": st.st_size if st else None,
+                        "mtime": st.st_mtime if st else None,
+                    })
+            category_count += len(files)
+            subdirs.append({
+                "name": sd.name,
+                "path": str(sd),
+                "files": files,
+                "count": len(files),
+            })
         out.append({
             "category": p.name,
             "path": str(p),
-            "files": files,
-            "count": len(files),
+            "subdirs": subdirs,
+            "count": category_count,
         })
     return out
 

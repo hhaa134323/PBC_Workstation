@@ -338,7 +338,13 @@ async def drag_drop_by_project(project_id: str, files: list[UploadFile] = File(.
 # ----------------------------------------------------------------------
 @router.post("/{project_id}/scan-folder")
 async def scan_folder_by_project(project_id: str, folder: Optional[str] = None) -> dict:
-    """扫描该项目的客户共享文件夹。"""
+    """扫描该项目的客户共享文件夹——只处理 pending 队列。
+
+    借鉴 git status + git commit：
+    - pending 文件（watchdog 标记 / 启动补漏 / 变更）→ 处理
+    - processed 且未变 → 跳过
+    - manifest 有但文件夹没有 → 删除检测（标红 + 推消息）
+    """
     proj = get_project(project_id)
     if proj is None:
         raise FileNotFoundError(f"项目不存在: {project_id}")
@@ -351,7 +357,6 @@ async def scan_folder_by_project(project_id: str, folder: Optional[str] = None) 
             "status": "not_found",
             "files": [],
             "count": 0,
-            # P1-14: 友好提示
             "suggestion": (
                 f"请检查路径：{base}，建议改指向 OneDrive 挂载点"
                 "（如 C:/Users/审计员/OneDrive - 客户公司/PBC资料）。"
@@ -359,59 +364,91 @@ async def scan_folder_by_project(project_id: str, folder: Optional[str] = None) 
             ),
         }
 
-    discovered: list[dict] = []
-    # v7: 扫描时识别子目录（穿行测试文件夹），整目录作为逻辑单元
+    # PBC 清单未导入 → 拦截
+    try:
+        from app.core.excel_io import read_pbc_list
+        pbc_items_check = read_pbc_list(project_id=project_id)
+        if not pbc_items_check:
+            return {
+                "project_id": project_id,
+                "folder": str(base),
+                "status": "no_pbc_list",
+                "message": "PBC 清单为空，请先导入 PBC 清单再扫描",
+                "suggestion": "导入 PBC 清单后，系统才能将客户文件匹配到清单项并归档",
+            }
+    except Exception:
+        pass
+
+    # 获取 pending 文件队列（借鉴 git status：只返回需要 commit 的）
+    from app.core.manifest import get_pending_files
+    pending_result = get_pending_files(project_id, base)
+
+    pending_files = pending_result["pending_files"]
+    new_files = pending_result["new_files"]
+    changed_files = pending_result["changed_files"]
+    skipped = pending_result["skipped_count"]
+    total = pending_result["total_count"]
+    missing_files = pending_result["missing_files"]
+
+    # 合并待处理文件列表
+    to_process_paths = pending_files + new_files + changed_files
+
+    # 识别穿行测试子目录（一级子目录作为整目录归档单元）
+    allowed_ext = {".pdf", ".xlsx", ".xlsm", ".csv", ".txt", ".md", ".json", ".xml"}
     directories: list[dict] = []
-    for p in base.rglob("*"):
-        if p.is_file():
-            try:
-                size = p.stat().st_size
-            except OSError:
-                size = -1
-            discovered.append({
-                "path": str(p.relative_to(base)),
-                "abs_path": str(p),
-                "name": p.name,
-                "size": size,
-                "ext": p.suffix.lower(),
-            })
-        elif p.is_dir() and p != base:
-            # 收集子目录（不递归到子目录内的文件，避免重复）
-            # 只取一级子目录作为整目录归档单元
-            if p.parent == base:
-                sub_files = [f for f in p.iterdir() if f.is_file()]
-                if sub_files:
+    dir_paths: list[Path] = []
+    for p in base.iterdir():
+        if p.is_dir() and p != base:
+            sub_files = [f for f in p.iterdir() if f.is_file() and f.suffix.lower() in allowed_ext]
+            if sub_files:
+                # 检查目录是否 pending（目录内任一文件 pending 则整目录 pending）
+                from app.core.manifest import _rel_name, load_manifest
+                manifest = pending_result["manifest"]
+                dir_pending = False
+                for sf in sub_files:
+                    rn = _rel_name(sf, base)
+                    rec = manifest.get(rn)
+                    if not rec or rec.get("status") == "pending":
+                        dir_pending = True
+                        break
+                if dir_pending:
                     directories.append({
                         "path": str(p.relative_to(base)),
                         "abs_path": str(p),
                         "name": p.name,
                         "file_count": len(sub_files),
-                        "size": sum(f.stat().st_size for f in sub_files if f.exists()),
                     })
+                    dir_paths.append(p)
+                    # 从散文件列表里移除属于子目录的文件
+                    to_process_paths = [
+                        fp for fp in to_process_paths
+                        if not (fp.is_relative_to(p) if hasattr(fp, 'is_relative_to') else False)
+                    ]
 
-    allowed_ext = {".pdf", ".xlsx", ".xlsm", ".csv", ".txt", ".md", ".json", ".xml"}
-    # v7: 一级子目录内的文件不再单独处理（整目录归档），只处理根目录散文件
-    to_process = [d for d in discovered if d["ext"] in allowed_ext]
-    # 过滤掉属于子目录的文件（已收集到 directories）
-    if directories:
-        dir_paths = {Path(d["abs_path"]) for d in directories}
-        to_process = [
-            d for d in to_process
-            if not any(Path(d["abs_path"]).is_relative_to(dp) for dp in dir_paths)
-        ]
+    # 处理删除检测（标红 + 推消息，不自动改状态）
+    missing_count = 0
+    for missing_info in missing_files:
+        try:
+            from app.core.watcher import FolderWatcher
+            fw = FolderWatcher.__new__(FolderWatcher)
+            fw.project_id = project_id
+            fw._handle_missing_file(missing_info)
+            missing_count += 1
+        except Exception as e:
+            logger.warning("删除检测处理失败 %s: %r", missing_info.get("rel_name"), e)
 
-    # P1-15: 扫描 0 文件时返回友好提示
-    if len(to_process) == 0 and len(directories) == 0:
+    # 没有待处理文件
+    if len(to_process_paths) == 0 and len(directories) == 0:
         return {
             "project_id": project_id,
             "folder": str(base),
-            "status": "empty",
-            "files_found": 0,
-            "count": 0,
+            "status": "no_pending",
+            "files_found": total,
+            "count": total,
             "to_process": 0,
-            "directories": 0,
-            "suggestion": "请先在 OneDrive/客户共享文件夹里放文件（支持 PDF/Excel/CSV/TXT/Markdown/JSON/XML）",
-            "tip": "可拖拽文件到首页作为兜底路径。",
+            "skipped": skipped,
+            "missing_detected": missing_count,
+            "message": "没有待处理文件（已全部归档或无新文件）",
         }
 
     task_id = _new_task_id()
@@ -422,19 +459,16 @@ async def scan_folder_by_project(project_id: str, folder: Optional[str] = None) 
         progress=0,
         source="scan-folder",
         folder=str(base),
-        total=len(to_process) + len(directories),
+        total=len(to_process_paths) + len(directories),
         done_count=0,
         results_json=[],
         started_at=_now_iso(),
     )
 
-    # v7: 整目录归档单元 + 散文件一起处理
-    all_paths: list[Path] = [Path(d["abs_path"]) for d in to_process]
-    dir_paths: list[Path] = [Path(d["abs_path"]) for d in directories]
     asyncio.create_task(
         _process_paths(
             task_id, project_id,
-            all_paths,
+            to_process_paths,
             source="scan-folder",
             directories=dir_paths,
         )
@@ -445,11 +479,12 @@ async def scan_folder_by_project(project_id: str, folder: Optional[str] = None) 
         "project_id": project_id,
         "status": "processing",
         "folder": str(base),
-        "files": discovered,
-        "directories": directories,
-        "count": len(discovered),
-        "to_process": len(to_process),
+        "files_found": total,
+        "count": total,
+        "to_process": len(to_process_paths),
         "directories_count": len(directories),
+        "skipped": skipped,
+        "missing_detected": missing_count,
         "next": f"/api/files/{project_id}/task/{task_id}",
     }
 
@@ -461,6 +496,14 @@ async def get_task_route_by_project(project_id: str, task_id: str) -> dict:
     if task is None:
         return {"project_id": project_id, "task_id": task_id, "status": "unknown", "progress": 0}
     return {"project_id": project_id, "task_id": task_id, **task}
+
+
+@router.get("/{project_id}/pending-count")
+async def get_pending_count_route(project_id: str) -> dict:
+    """获取待处理文件数（供前端展示，借鉴 git status 的未提交计数）。"""
+    from app.core.manifest import get_pending_count
+    count = get_pending_count(project_id)
+    return {"project_id": project_id, "pending_count": count}
 
 
 @router.get("/{project_id}/recent-tasks")
@@ -986,11 +1029,57 @@ def _process_one_file_sync(
     project_id: Optional[str] = None,
     source: str = "drag-drop",
 ) -> dict[str, Any]:
-    """单个文件处理（同步实现，M4 整合归档 + 回填 ai_history + 多项目支持）。"""
+    """单个文件处理（同步实现，M4 整合归档 + 回填 ai_history + 多项目支持）。
+
+    v7.5: 三层职责分离——scan-folder 只处理 pending，watchdog 只标记 pending。
+    """
+    from app.utils.path_utils import file_hash_sha256 as _file_hash_fn
+    file_hash_sha256 = _file_hash_fn  # 供后续 sha256 去重使用
     result: dict[str, Any] = {
         "ok": True, "path": str(path), "name": path.name,
         "project_id": project_id or "",
     }
+
+    # 0.5 manifest 轻量指纹快路径（v7.3）
+    # v7.5: pending 但 sha256 相同 → 跳过归档但改状态为 processed
+    try:
+        from app.core.manifest import should_skip as _manifest_should_skip, load_manifest as _load_manifest, update_entry as _manifest_update
+        from app.core.db import get_project as _get_project_proj
+        pid = project_id or ""
+        client_folder = None
+        if pid:
+            _proj = _get_project_proj(pid)
+            if _proj and _proj.get("client_folder"):
+                client_folder = Path(_proj["client_folder"])
+        manifest = _load_manifest(pid)
+        skip, reason, existing_record = _manifest_should_skip(path, manifest, client_folder)
+        if skip:
+            result["dedup"] = True
+            result["manifest_skip"] = True
+            result["reason"] = "unchanged (size+mtime match manifest)"
+            if existing_record:
+                result["prev_archived_path"] = None
+                result["item_id"] = existing_record.get("item_id")
+            logger.info("manifest 跳过（size+mtime 未变）: %s", path.name)
+            return result
+        # pending 但内容没变（sha256 相同）→ 改 processed 跳过
+        if reason == "pending" and existing_record:
+            old_sha = existing_record.get("sha256", "")
+            if old_sha:
+                new_sha = file_hash_sha256(path)
+                if new_sha == old_sha:
+                    # 内容没变只是被标了 pending → 改回 processed
+                    _manifest_update(path, new_sha, existing_record.get("item_id", ""),
+                                     existing_record.get("version", "v1"),
+                                     project_id=pid, client_folder=client_folder, manifest=manifest)
+                    result["dedup"] = True
+                    result["manifest_skip"] = True
+                    result["reason"] = "pending but content unchanged (sha256 match)"
+                    result["item_id"] = existing_record.get("item_id")
+                    logger.info("pending 但 sha256 相同 → 改 processed: %s", path.name)
+                    return result
+    except Exception as e:
+        logger.debug("manifest 快路径异常（降级到 sha256 去重）: %r", e)
 
     # 1. 文件 hash 去重（按 project_id 维度查 file_archive 表）
     try:
@@ -1124,7 +1213,74 @@ def _process_one_file_sync(
                     logger.info("文件名优先匹配: %s → item_id=%s（跳过 AI）", path.name, iid)
                     break
         if not fname_matched:
-            classify = client.classify_file(file_text, pbc_items, file_hint=path.name)
+            # v7.4: 穿行测试前置检测 → 整目录归档
+            from app.core.matcher import is_walkthrough_folder, score_file
+            client_folder_path = None
+            if pid:
+                try:
+                    _proj_info = _get_project_proj(pid)
+                    if _proj_info and _proj_info.get("client_folder"):
+                        client_folder_path = Path(_proj_info["client_folder"])
+                except Exception:
+                    pass
+
+            if is_walkthrough_folder(path, client_folder_path):
+                classify = {
+                    "ok": True,
+                    "item_id": None,
+                    "confidence": 0.0,
+                    "reason": "穿行测试文件夹，走整目录归档",
+                    "model": "walkthrough-predetect",
+                }
+                logger.info("穿行测试前置检测: %s → 整目录归档", path.name)
+            else:
+                # v7.4: 打分模型——L1 miss 后先打分，够分就不调 LLM
+                try:
+                    score_result = score_file(
+                        file_path=path,
+                        pbc_items=pbc_items,
+                        file_text=file_text,
+                        client_folder=client_folder_path,
+                    )
+                    decision = score_result.get("decision", "llm")
+                    logger.info("打分结果: %s → decision=%s, item_id=%s, confidence=%.4f", path.name, decision, score_result.get("item_id"), score_result.get("confidence", 0))
+                except Exception as e:
+                    logger.error("打分异常（降级到LLM）: %s → %r", path.name, e)
+                    score_result = {"decision": "llm", "item_id": None, "confidence": 0.0, "score_breakdown": {}}
+                    decision = "llm"
+
+                if decision == "auto":
+                    classify = {
+                        "ok": True,
+                        "item_id": score_result["item_id"],
+                        "confidence": score_result["confidence"],
+                        "reason": f"打分自动匹配（总分 {score_result['confidence']:.2f}）",
+                        "model": "score-auto",
+                    }
+                    result["score_breakdown"] = score_result.get("score_breakdown", {})
+                    logger.info("打分自动匹配: %s → item_id=%s (总分=%.2f)", path.name, score_result["item_id"], score_result["confidence"])
+                elif decision == "suggest":
+                    classify = {
+                        "ok": True,
+                        "item_id": score_result["item_id"],
+                        "confidence": score_result["confidence"],
+                        "reason": f"打分建议匹配（总分 {score_result['confidence']:.2f}），需审计员确认",
+                        "model": "score-suggest",
+                    }
+                    result["score_breakdown"] = score_result.get("score_breakdown", {})
+                    # 推 toast 让审计员确认
+                    advisory_notes.append({
+                        "level": "medium",
+                        "trigger": "score_suggest",
+                        "message": f"文件 {path.name} 建议匹配到 {score_result['item_id']}（置信度 {score_result['confidence']:.2f}），请确认",
+                        "action": "在 PBC 清单中确认或修正对应编号",
+                        "item_id": score_result["item_id"],
+                    })
+                    logger.info("打分建议匹配: %s → item_id=%s (总分=%.2f)", path.name, score_result["item_id"], score_result["confidence"])
+                else:
+                    # 打分不够 → LLM 兜底
+                    logger.info("打分不足走LLM: %s → 最佳候选=%s (总分=%.2f, 阈值=%.2f)", path.name, score_result.get("item_id"), score_result["confidence"], 0.4)
+                    classify = client.classify_file(file_text, pbc_items, file_hint=path.name)
 
     item_id: Optional[str] = None
     confidence: float = 0.0
@@ -1158,11 +1314,11 @@ def _process_one_file_sync(
             advisory_notes.extend(classify["advisory_notes"])
     else:
         result["classify"] = {"ok": False, "error": classify.get("error")}
-        # 新-4: AI classify 3 次 retry 全失败 → 推 toast 提示用户
+        # 新-4: AI classify retry 全失败 → 推 toast 提示用户
         advisory_notes.append({
             "level": "high",
             "trigger": "ai_classify_failed",
-            "message": f"AI 分类失败（已重试 3 次）：{classify.get('error', '未知错误')}。文件已归档到未分类，请稍后重试或人工指定对应 PBC 编号",
+            "message": f"AI 分类失败：{classify.get('error', '未知错误')}。文件已归档到未分类，请稍后重试或人工指定对应 PBC 编号",
             "action": "稍后重新扫描，或在清单中手动指定该文件对应的 PBC 编号",
             "item_id": None,
         })
@@ -1178,24 +1334,115 @@ def _process_one_file_sync(
             logger.warning("ai_history 回填失败 %s: %r", item_id, e)
 
     # 6. 期间检查（文件名匹配时跳过，避免百炼调用拖慢）
-    if classify.get("model") == "filename-match":
-        # 文件名匹配已确定 item_id，期间检查无意义，跳过
-        result["period_check"] = {"ok": True, "covered": True, "skipped": True, "reason": "文件名匹配，跳过期间检查"}
-        logger.info("跳过期间检查（文件名匹配模式）: %s", path.name)
+    # 先从 PBC 清单匹配项取 required_period（提前到期间检查之前）
+    matched_required_period: Optional[str] = None
+    if item_id:
+        try:
+            for it in pbc_items:
+                if str(it.get("item_id")) == str(item_id):
+                    matched_required_period = it.get("required_period") or None
+                    break
+        except Exception:
+            pass
+
+    if classify.get("model") in ("filename-match", "score-auto", "score-suggest", "walkthrough-predetect"):
+        # 本地匹配（文件名/打分/穿行测试）→ 跳过 LLM 期间检查，不调百炼
+        result["period_check"] = {"ok": True, "covered": True, "skipped": True, "reason": f"本地匹配（{classify.get('model')}），跳过期间检查"}
+        logger.info("跳过期间检查（%s）: %s", classify.get("model"), path.name)
+    elif not item_id:
+        # AI 分类未匹配到 item_id，期间检查无对照基准，跳过
+        result["period_check"] = {"ok": True, "covered": True, "skipped": True, "reason": "AI 未匹配到清单项，跳过期间检查"}
+        logger.info("跳过期间检查（未匹配到 item_id）: %s", path.name)
+    elif not matched_required_period:
+        # 清单项没填 required_period，跳过期间检查（无对照基准）
+        result["period_check"] = {"ok": True, "covered": True, "skipped": True, "reason": "清单项未填需求期间，跳过"}
+        logger.info("跳过期间检查（清单项无 required_period）: %s → %s", path.name, item_id)
     else:
-        period_check = client.check_period_completeness(file_text)
-        if period_check.get("ok"):
+        # v7.5: 两层级期间检查（Layer A 正则 → Layer B LLM 兜底）
+        from app.core.matcher import _extract_years
+        import re as _re
+
+        # Layer A: 正则提取年份
+        file_years = _extract_years(file_text or "")
+        # 也从文件名提取年份
+        file_years |= _extract_years(path.name)
+        # 从 required_period 提取期望年份
+        expected_years = _extract_years(matched_required_period)
+
+        logger.info("期间检查 Layer A: %s → 文件年份=%s, 期望年份=%s", path.name, file_years, expected_years)
+
+        if file_years >= expected_years:
+            # 文件年份 ⊇ 期望年份 → 完全覆盖，确定
             result["period_check"] = {
-                "covered": period_check.get("covered"),
-                "detected_periods": period_check.get("detected_periods"),
-                "missing": period_check.get("missing"),
-                "reason": period_check.get("reason"),
+                "ok": True, "covered": True, "skipped": False,
+                "method": "regex-full",
+                "detected_periods": sorted(file_years),
+                "missing": [],
+                "reason": f"正则提取年份 {sorted(file_years)} ⊇ {sorted(expected_years)}，完全覆盖",
             }
-            # 收集 period_check 的 advisory_notes
-            if period_check.get("advisory_notes"):
-                advisory_notes.extend(period_check["advisory_notes"])
+            logger.info("期间检查确定（正则完全覆盖）: %s", path.name)
+        elif not file_years & expected_years:
+            # 文件年份 ∩ 期望年份 = 空集 → 确定不覆盖
+            result["period_check"] = {
+                "ok": True, "covered": False, "skipped": False,
+                "method": "regex-empty",
+                "detected_periods": sorted(file_years),
+                "missing": sorted(expected_years),
+                "reason": f"正则提取年份 {sorted(file_years)} 与期望 {sorted(expected_years)} 无交集",
+            }
+            logger.info("期间检查确定（正则空集）: %s", path.name)
         else:
-            result["period_check"] = {"ok": False, "error": period_check.get("error")}
+            # 部分重叠 → 检查 S3: 该 item 是否有多份文件
+            from app.core.db import get_archive_by_item
+            try:
+                all_archives = get_archive_by_item(item_id, project_id=project_id)
+                # 合并所有已归档文件的年份
+                merged_years = set(file_years)
+                for arc in all_archives:
+                    arc_path = Path(arc.get("archived_path") or "")
+                    if arc_path.exists():
+                        # 从归档文件名提取年份
+                        merged_years |= _extract_years(arc_path.name)
+                if merged_years >= expected_years:
+                    result["period_check"] = {
+                        "ok": True, "covered": True, "skipped": False,
+                        "method": "regex-merge-s3",
+                        "detected_periods": sorted(merged_years),
+                        "missing": [],
+                        "reason": f"S3 多文件合并年份 {sorted(merged_years)} ⊇ {sorted(expected_years)}，覆盖",
+                    }
+                    logger.info("期间检查确定（S3合并覆盖）: %s → 合并%d份文件", path.name, len(all_archives))
+                else:
+                    # 合并后仍不完整 → Layer B LLM
+                    logger.info("期间检查 Layer B（部分重叠+S3合并不够）: %s → 调LLM", path.name)
+                    period_check = client.check_period_completeness(file_text, expected_period=matched_required_period)
+                    if period_check.get("ok"):
+                        result["period_check"] = {
+                            "covered": period_check.get("covered"),
+                            "detected_periods": period_check.get("detected_periods"),
+                            "missing": period_check.get("missing"),
+                            "reason": period_check.get("reason"),
+                            "method": "llm",
+                        }
+                        if period_check.get("advisory_notes"):
+                            advisory_notes.extend(period_check["advisory_notes"])
+                    else:
+                        result["period_check"] = {"ok": False, "error": period_check.get("error")}
+            except Exception as e:
+                logger.warning("S3 合并检查失败（降级到 LLM）: %s → %r", path.name, e)
+                period_check = client.check_period_completeness(file_text, expected_period=matched_required_period)
+                if period_check.get("ok"):
+                    result["period_check"] = {
+                        "covered": period_check.get("covered"),
+                        "detected_periods": period_check.get("detected_periods"),
+                        "missing": period_check.get("missing"),
+                        "reason": period_check.get("reason"),
+                        "method": "llm-fallback",
+                    }
+                    if period_check.get("advisory_notes"):
+                        advisory_notes.extend(period_check["advisory_notes"])
+                else:
+                    result["period_check"] = {"ok": False, "error": period_check.get("error")}
 
     # 6.5 advisory_notes 在归档阶段统一汇总（P0-1: 未识别归档时也要推送 toast）
 
@@ -1205,6 +1452,7 @@ def _process_one_file_sync(
     entity: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
+    doc_name: Optional[str] = None
     required_period: Optional[str] = None
     # 取 entity / category / description / required_period：从 PBC 清单匹配项读
     if item_id:
@@ -1214,6 +1462,7 @@ def _process_one_file_sync(
                     entity = it.get("entity") or None
                     category = it.get("category") or None
                     description = it.get("description") or None
+                    doc_name = it.get("doc_name") or None
                     required_period = it.get("required_period") or None
                     break
         except Exception:
@@ -1241,7 +1490,7 @@ def _process_one_file_sync(
             archived_by=source,
             project_id=project_id,
             category=category,
-            description=description,
+            description=doc_name or description,
             period=required_period,
         )
         if arc_result.get("ok"):
@@ -1310,6 +1559,60 @@ def _process_one_file_sync(
             )
         except Exception as e:
             logger.warning("insert_archive 失败（已忽略，可能重复）: %r", e)
+
+    # 11. 写 manifest（v7.3: 记录轻量指纹，下次启动跳过）
+    try:
+        from app.core.manifest import update_entry as _manifest_update
+        final_version = arc_result.get("version", "v1") if arc_result.get("ok") else "v1"
+        _manifest_update(
+            file_path=path,
+            sha256=h,
+            item_id=item_id or "",
+            version=final_version,
+            project_id=project_id,
+            client_folder=client_folder,
+            manifest=manifest if 'manifest' in dir() else None,
+        )
+    except Exception as e:
+        logger.debug("manifest 更新失败（不阻断）: %r", e)
+
+    # v7.6: 结构化事件（替代 advisory_notes 杂乱数据，供消息中心使用）
+    events: list[dict[str, Any]] = []
+    classify_model = classify.get("model", "")
+    if item_id and classify_model in ("filename-match", "score-auto"):
+        events.append({
+            "type": "file_classified",
+            "file_name": path.name,
+            "item_id": item_id,
+            "confidence": round(confidence, 2),
+            "action": None,
+        })
+    elif item_id and classify_model == "score-suggest":
+        events.append({
+            "type": "needs_confirm",
+            "file_name": path.name,
+            "item_id": item_id,
+            "confidence": round(confidence, 2),
+            "action": "goto_triage",
+        })
+    elif not item_id and is_unclassified:
+        events.append({
+            "type": "unclassified",
+            "file_name": path.name,
+            "item_id": None,
+            "confidence": 0.0,
+            "action": "goto_files",
+        })
+    elif classify.get("model") == "walkthrough-predetect":
+        events.append({
+            "type": "file_classified",
+            "file_name": path.name,
+            "item_id": item_id or "",
+            "confidence": 0.0,
+            "action": None,
+        })
+    # file_missing 事件由 watcher._handle_missing_file 推 briefing-events
+    result["events"] = events
 
     return result
 

@@ -51,8 +51,8 @@ class AppConfig:
 
     # AI 客户端
     file_size_threshold_mb: int = 50
-    ai_timeout_seconds: int = 30
-    ai_retry_count: int = 3
+    ai_timeout_seconds: int = 60
+    ai_retry_count: int = 2
 
     # 百炼配置
     bailian: BailianConfig = field(default_factory=BailianConfig)

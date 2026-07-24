@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Optional
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
@@ -84,8 +85,8 @@ class StatusUpdateBody(BaseModel):
 async def import_pbc_list(project_id: str, file: UploadFile = File(...)):
     """导入 PBC 清单 Excel 文件，替换该项目的 01_PBC_List.xlsx。
 
-    v7: 加必填字段校验。必填：资料编号 / 一级分类 / 问题/需求描述 /
-    期望提供日期 / 实体归属 / 需求期间。缺字段返回友好错误（不覆盖现有清单）。
+    v7.2: 加必填字段校验。必填：一级分类 / 二级分类 / 资料名称 /
+    问题/需求描述 / 报告期间 / 期望提供日期 / 实体归属。缺字段返回友好错误（不覆盖现有清单）。
     """
     project = get_project(project_id)
     if not project:
@@ -114,7 +115,7 @@ async def import_pbc_list(project_id: str, file: UploadFile = File(...)):
             h = str(v).strip().lstrip("* ").strip()
             header_map[h] = c
 
-    required_fields = ["资料编号", "一级分类", "问题/需求描述", "期望提供日期", "实体归属", "需求期间"]
+    required_fields = ["一级分类", "二级分类", "资料名称", "问题/需求描述", "报告期间", "期望提供日期", "实体归属"]
     missing_cols = [f for f in required_fields if f not in header_map]
     if missing_cols:
         raise HTTPException(
@@ -132,7 +133,7 @@ async def import_pbc_list(project_id: str, file: UploadFile = File(...)):
             col = header_map[field]
             v = ws.cell(r, col).value
             if v is None or str(v).strip() == "":
-                item_id = ws.cell(r, header_map["资料编号"]).value or f"第{r}行"
+                item_id = ws.cell(r, header_map["二级分类"]).value or f"第{r}行"
                 errors.append(f"{item_id} 缺必填字段「{field}」")
     if errors:
         raise HTTPException(
@@ -146,7 +147,10 @@ async def import_pbc_list(project_id: str, file: UploadFile = File(...)):
     pbc_path = Path(project["pbc_list_path"])
     pbc_path.parent.mkdir(parents=True, exist_ok=True)
 
-    wb.save(str(pbc_path))
+    # 安全写入：用非 data_only 模式重新打开，直接写
+    # （shutil.move 在 Windows 沙箱环境下有 safe-delete 限制，不用临时文件）
+    wb_save = openpyxl.load_workbook(io.BytesIO(content))
+    wb_save.save(str(pbc_path))
 
     return {
         "ok": True,
@@ -203,8 +207,39 @@ async def download_pbc_template(project_id: str):
     )
 
 
-# ----------------------------------------------------------------------
-# 兼容旧路由（不带 project_id，走 demo 项目）
+@router.get("/{project_id}/export")
+async def export_pbc_list(project_id: str):
+    """导出当前项目的 PBC 清单（含已回写的状态/文件路径/置信度）。
+
+    直接读取项目的 01_PBC_List.xlsx 返回文件流，
+    审计员可下载查看最新状态。
+    """
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+
+    project = get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_id}")
+
+    pbc_path = project.get("pbc_list_path") or ""
+    if not pbc_path:
+        raise HTTPException(status_code=404, detail="该项目未配置 PBC 清单路径")
+
+    p = Path(pbc_path)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"PBC 清单文件不存在: {pbc_path}")
+
+    # 用项目名+日期做文件名
+    proj_name = project.get("name") or project_id
+    from datetime import datetime
+    date_str = datetime.now().strftime("%Y%m%d")
+    download_name = f"PBC_List_{proj_name}_{date_str}.xlsx"
+
+    return FileResponse(
+        path=str(p),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=download_name,
+    )
 # 路由顺序：字面值路由优先于通配路由
 # ----------------------------------------------------------------------
 @router.get("/list")

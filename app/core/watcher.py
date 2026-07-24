@@ -99,16 +99,13 @@ class FolderWatcher:
             logger.warning("watcher 启动失败：未设置 on_new_file 回调")
             return False
 
-        # 改进：启动时不自动扫描已有文件（避免 20 个文件并发 AI 调用拖垮）
-        # 用户需要扫描时点"扫描新文件"按钮手动触发
+        # v7.3: 启动时用 manifest 扫描——只处理新文件和变更文件，跳过未变文件
+        # v7.4: 默认启动就扫描（manifest 快路径保证不重复处理），不再要环境变量
         import os
-        if os.environ.get("PBC_AUTO_SCAN_EXISTING") == "1":
-            try:
-                self._scan_existing()
-            except Exception as e:
-                logger.warning("watcher 启动扫描失败 %r", e)
-        else:
-            logger.info("watcher 启动时跳过已有文件扫描（设 PBC_AUTO_SCAN_EXISTING=1 可启用）")
+        try:
+            self._scan_existing_with_manifest()
+        except Exception as e:
+            logger.warning("watcher 启动扫描失败 %r", e)
 
         # 启动 watchdog Observer
         try:
@@ -168,7 +165,7 @@ class FolderWatcher:
     # 内部
     # ------------------------------------------------------------------
     def _scan_existing(self) -> None:
-        """启动时扫描已有文件，触发 on_new_file 回调。"""
+        """启动时扫描已有文件，触发 on_new_file 回调（旧版，全量扫描）。"""
         if not self.on_new_file:
             return
         count = 0
@@ -185,6 +182,91 @@ class FolderWatcher:
             count, self.project_id,
         )
 
+    def _scan_existing_with_manifest(self) -> None:
+        """v7.5: 启动时用 manifest 补漏标记 pending（停机期间新文件）。
+
+        借鉴 git 启动时的 index 恢复——只标记待处理，不处理。
+        scan_client_folder 已经把新文件和变更文件标 pending 了。
+        同时检测被删除的文件，标红 + 清单备注。
+        """
+        try:
+            from app.core.manifest import scan_client_folder
+            scan_result = scan_client_folder(self.folder, project_id=self.project_id)
+        except Exception as e:
+            logger.warning("manifest 扫描失败: %r", e)
+            return
+
+        pending_count = scan_result.get("pending_count", 0)
+        skipped = scan_result.get("skipped_count", 0)
+        total = scan_result.get("total_count", 0)
+        missing_files = scan_result.get("missing_files", [])
+
+        # 处理被删除的文件：标红 + 清单备注
+        missing_count = 0
+        for missing_info in missing_files:
+            try:
+                self._handle_missing_file(missing_info)
+                missing_count += 1
+            except Exception as e:
+                logger.warning("处理缺失文件失败 %s: %r", missing_info.get("rel_name"), e)
+
+        logger.info(
+            "watcher 启动扫描: total=%d, marked_pending=%d, skipped=%d, missing=%d (project_id=%s)",
+            total, pending_count, skipped, missing_count, self.project_id,
+        )
+
+    def _handle_missing_file(self, missing_info: dict) -> None:
+        """客户删除了已归档文件的处理。
+
+        1. 写一条 file_archive 标红记录（archived_by='file_missing'）
+        2. PBC 清单状态回退：已提供/审核中 → 未提供
+        3. 推送 briefing 事件
+        """
+        from app.core.db import execute_with_retry, get_conn
+        item_id = missing_info.get("item_id", "")
+        rel_name = missing_info.get("rel_name", "")
+
+        if not item_id:
+            # 未识别的文件被删了，只记日志
+            logger.info("缺失文件无 item_id（未分类文件被删）: %s", rel_name)
+            return
+
+        # 1. SQLite 记标红（archived_by='file_missing'，但不改状态——等审计员确认）
+        try:
+            execute_with_retry(
+                """UPDATE file_archive SET archived_by='file_missing'
+                   WHERE item_id=? AND project_id=?""",
+                (item_id, self.project_id or ""),
+            )
+            logger.info("file_archive 标红: item_id=%s file=%s", item_id, rel_name)
+        except Exception as e:
+            logger.warning("file_archive 标红失败: %r", e)
+
+        # 2. PBC 清单只写备注提醒（不回退状态——需审计员确认后再改）
+        try:
+            from app.core.excel_io import write_pbc_list
+            write_pbc_list([{
+                "item_id": item_id,
+                "remark": f"⚠ 客户文件夹中该文件已不存在（{rel_name}），请核实后确认是否标记为未提供",
+            }], project_id=self.project_id)
+            logger.info("PBC 清单备注已标注: item_id=%s（状态未变，等审计员确认）", item_id)
+        except Exception as e:
+            logger.warning("PBC 清单备注写入失败: %r", e)
+
+        # 3. 推送 briefing 事件（前端 toast 弹出，需审计员确认）
+        try:
+            from app.api.routes_files import _push_briefing_event
+            import time
+            _push_briefing_event({
+                "timestamp": time.time(),
+                "event_type": "file_missing",
+                "item_id": item_id,
+                "summary": f"⚠ 文件缺失: {item_id} ({rel_name})。归档目录文件仍在，但客户文件夹中已不存在。请核实后决定是否标记为未提供",
+                "needs_confirm": True,
+            })
+        except Exception as e:
+            logger.debug("briefing 事件推送失败（不阻断）: %r", e)
+
     def _dispatch_event(self, event) -> None:
         if getattr(event, "is_directory", False):
             return
@@ -198,34 +280,29 @@ class FolderWatcher:
         t.start()
 
     def _safe_trigger(self, p: Path) -> None:
-        """对单个文件：等稳定 → SHA 去重 → 调 on_new_file。"""
+        """对单个文件：等稳定 → 标记 pending（不处理不归档）。
+
+        借鉴 git status：文件系统变化只标记，不提交。
+        处理留给 scan-folder（审计员手动触发）。
+        """
         if not file_stable_size(p, stable_seconds=2, timeout=30):
             logger.warning("watcher 文件未稳定，跳过: %s", p)
             return
 
-        # SHA-256 去重（按 project_id+sha）
+        # 只标记 pending（不处理不归档不调 AI）
         try:
-            sha = file_hash_sha256(p)
+            from app.core.manifest import mark_pending
+            from app.core.db import get_project as _get_proj
+            pid = self.project_id or ""
+            client_folder = None
+            if pid:
+                _proj = _get_proj(pid)
+                if _proj and _proj.get("client_folder"):
+                    client_folder = Path(_proj["client_folder"])
+            mark_pending(p, project_id=pid, client_folder=client_folder, reason="watchdog")
+            logger.info("watchdog 标记 pending: %s (project_id=%s)", p.name, pid)
         except Exception as e:
-            logger.warning("watcher SHA 计算失败 %s: %r", p, e)
-            return
-        key = (self.project_id or "", sha)
-        with self._seen_lock:
-            if key in self._seen_sha:
-                return
-            self._seen_sha.add(key)
-
-        if not self.on_new_file:
-            return
-        try:
-            # 优先带 project_id 调用
-            try:
-                self.on_new_file(p, project_id=self.project_id)
-            except TypeError:
-                # 回调只接受 1 个参数（旧签名兼容）
-                self.on_new_file(p)
-        except Exception as e:
-            logger.warning("watcher on_new_file 调用失败 %s: %r", p, e)
+            logger.warning("watchdog 标记 pending 失败 %s: %r", p, e)
 
 
 # ----------------------------------------------------------------------

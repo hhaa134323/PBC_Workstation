@@ -24,33 +24,37 @@ from app.core.db import get_conn, get_project
 logger = logging.getLogger("pbc.excel_io")
 
 # 列顺序（中文表头 → 英文键），1-based 索引
-# v7: 第 15 列新增「需求期间」（SOP §5.2 期间连续性检查的对照基准，审计员指定每项需求的期间）
+# v7.2: 前列重构——一级分类→二级分类→相关科目→资料名称→问题/需求描述→报告期间
+# 资料编号改名二级分类（编号前缀=一级分类缩写，如历-1=历史沿革下的第1项）
+# 新增「资料名称」列（简短名称），原「问题/需求描述」改为更详细的需求说明
+# 需求期间改名报告期间，挪到第6列
 _COLUMN_MAP: list[tuple[int, str, str]] = [
-    (1,  "资料编号",          "item_id"),
-    (2,  "一级分类",          "category"),
+    (1,  "一级分类",          "category"),
+    (2,  "二级分类",          "item_id"),
     (3,  "相关科目",          "subject"),
-    (4,  "问题/需求描述",     "description"),
-    (5,  "格式",              "file_format"),
-    (6,  "优先级",            "priority"),
-    (7,  "提出时间",          "raised_at"),
-    (8,  "期望提供日期",       "expected_by"),
-    (9,  "逾期天数",          "overdue_days"),
-    (10, "资料提供情况",       "status_raw"),
-    (11, "备注",              "remark"),
-    (12, "实体归属",          "entity"),
-    (13, "置信度",            "confidence"),
-    (14, "文件路径",          "file_path"),
-    (15, "需求期间",          "required_period"),
+    (4,  "资料名称",          "doc_name"),
+    (5,  "问题/需求描述",     "description"),
+    (6,  "报告期间",          "required_period"),
+    (7,  "格式",              "file_format"),
+    (8,  "优先级",            "priority"),
+    (9,  "提出时间",          "raised_at"),
+    (10, "期望提供日期",       "expected_by"),
+    (11, "逾期天数",          "overdue_days"),
+    (12, "资料提供情况",       "status_raw"),
+    (13, "备注",              "remark"),
+    (14, "实体归属",          "entity"),
+    (15, "置信度",            "confidence"),
+    (16, "文件路径",          "file_path"),
 ]
 
 # 可更新字段（write_pbc_list 增量改只动这些列）
-# v7: required_period 也允许 AI 回写（归档时若文件能提取期间，回填覆盖度信息）
+# v7.2: 列索引跟着新顺序调整
 _UPDATABLE_FIELDS: dict[str, int] = {
-    "status_raw": 10,
-    "confidence": 13,
-    "file_path":  14,
-    "remark":     11,
-    "required_period": 15,
+    "status_raw": 12,
+    "confidence": 15,
+    "file_path":  16,
+    "remark":     13,
+    "required_period": 6,
 }
 
 # 标准状态枚举
@@ -218,10 +222,10 @@ def _row_to_item(row_idx: int, ws) -> dict[str, Any]:
 
 
 def _find_item_row(ws, item_id: str) -> Optional[int]:
-    """在 A 列里找 item_id 所在的行号（1-based）；找不到返回 None。"""
+    """在第2列（二级分类/item_id）里找所在行号（1-based）；找不到返回 None。"""
     target = str(item_id).strip()
     for r in range(2, ws.max_row + 1):
-        v = ws.cell(r, 1).value
+        v = ws.cell(r, 2).value
         if v is not None and str(v).strip() == target:
             return r
     return None
@@ -256,18 +260,26 @@ def read_pbc_list(
     传 project_id：从 projects 表取该项目 PBC 清单路径。
     传 xlsx_path：直接用指定路径（兼容旧调用，最高优先级）。
     都不传：用全局 config.pbc_list_path。
+
+    v7.5: 对损坏的 Excel 文件做容错——返回空列表 + 日志，不抛 500。
     """
     path_str = _resolve_xlsx_path(project_id=project_id, xlsx_path=xlsx_path)
     p = Path(path_str)
     if not p.exists():
         raise FileNotFoundError(f"PBC 清单不存在: {path_str}")
 
-    wb = load_workbook(str(p), data_only=True)
+    try:
+        wb = load_workbook(str(p), data_only=True)
+    except Exception as e:
+        logger.error("PBC 清单读取失败（文件可能损坏）: %s → %r", path_str, e)
+        # 返回空列表而不是抛异常，避免 500
+        return []
+
     ws = wb.active
     items: list[dict[str, Any]] = []
     for r in range(2, ws.max_row + 1):
-        # 跳过完全空行（item_id 为空）
-        if ws.cell(r, 1).value in (None, ""):
+        # 跳过完全空行（item_id/二级分类 为空）
+        if ws.cell(r, 2).value in (None, ""):
             continue
         items.append(_row_to_item(r, ws))
     wb.close()
@@ -279,12 +291,19 @@ def get_item_by_id(
     xlsx_path: Optional[str] = None,
     project_id: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
-    """单条查询；不存在返回 None。"""
+    """单条查询；不存在返回 None。
+
+    v7.5: 对损坏文件做容错。
+    """
     path_str = _resolve_xlsx_path(project_id=project_id, xlsx_path=xlsx_path)
     p = Path(path_str)
     if not p.exists():
         raise FileNotFoundError(f"PBC 清单不存在: {path_str}")
-    wb = load_workbook(str(p), data_only=True)
+    try:
+        wb = load_workbook(str(p), data_only=True)
+    except Exception as e:
+        logger.error("PBC 清单读取失败（文件可能损坏）: %s → %r", path_str, e)
+        return None
     ws = wb.active
     row = _find_item_row(ws, item_id)
     if row is None:

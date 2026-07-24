@@ -293,6 +293,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 .toast-wrap{position:fixed;top:64px;right:16px;z-index:80;display:flex;flex-direction:column;gap:8px;width:360px;max-width:calc(100vw - 32px)}
 .toast{background:hsl(var(--popover));border:1px solid hsl(var(--border));border-left-width:4px;border-radius:var(--r-lg);box-shadow:var(--shadow-lg);padding:12px 16px;animation:slideIn .25s ease}
 @keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+@keyframes flashHighlight{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 3px hsl(54 100% 50%)}}
+.flash-highlight{animation:flashHighlight 1s ease 3}
 .toast.p-high{border-left-color:hsl(var(--destructive))}
 .toast.p-mid{border-left-color:hsl(38 92% 50%)}
 .toast.p-low{border-left-color:hsl(240 5.9% 20%)}
@@ -467,6 +469,93 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 </head>
 <body>
 <div x-data="pbcApp()" x-init="init()" x-cloak>
+
+  <!-- 消息中心面板 -->
+  <div x-show="messageCenter.show" x-transition.origin.top.right style="position:fixed;top:64px;right:16px;z-index:70;width:400px;max-width:calc(100vw - 32px);max-height:520px;overflow:hidden;display:flex;flex-direction:column;background:hsl(var(--popover));border:1px solid hsl(var(--border));border-radius:var(--r-lg);box-shadow:var(--shadow-lg)">
+    <!-- 头部 -->
+    <div style="padding:16px 20px;border-bottom:1px solid hsl(var(--border));display:flex;align-items:center;gap:10px;background:hsl(var(--soft))">
+      <span class="ico ico-sm" style="color:hsl(var(--primary))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+      <b style="font-size:15px;color:hsl(var(--popover-foreground))">消息中心</b>
+      <span style="font-size:12px;color:hsl(var(--muted-foreground))" x-text="messageCenter.items.length+' 条'"></span>
+      <div style="margin-left:auto;display:flex;gap:4px">
+        <button class="btn btn-ghost btn-xs" @click="markAllRead()" style="font-size:11px">全部已读</button>
+        <button class="btn btn-ghost btn-xs" @click="messageCenter.items=[]; messageCenter.unread=0; localStorage.removeItem('pbc_messages')" style="font-size:11px">清空</button>
+        <button style="background:none;border:none;font-size:18px;cursor:pointer;color:hsl(var(--muted-foreground));line-height:1;padding:0 2px" @click="messageCenter.show=false">×</button>
+      </div>
+    </div>
+    <!-- Tab 分类 -->
+    <div style="display:flex;border-bottom:1px solid hsl(var(--border));padding:0 12px;background:hsl(var(--popover))">
+      <button style="padding:8px 14px;font-size:12px;font-weight:500;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent" :style="messageCenter.tab==='all'?'border-bottom-color:hsl(var(--primary));color:hsl(var(--primary))':'color:hsl(var(--muted-foreground))'" @click="messageCenter.tab='all'">全部 <span x-text="'('+(messageCenter.items.length)+')'" style="font-weight:400;opacity:.7"></span></button>
+      <button style="padding:8px 14px;font-size:12px;font-weight:500;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent" :style="messageCenter.tab==='todo'?'border-bottom-color:hsl(var(--primary));color:hsl(var(--primary))':'color:hsl(var(--muted-foreground))'" @click="messageCenter.tab='todo'">需处理 <span x-text="'('+(messageCenter.items.filter(m=>m.priority==='high'||m.priority==='mid').length)+')'" style="font-weight:400;opacity:.7"></span></button>
+      <button style="padding:8px 14px;font-size:12px;font-weight:500;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent" :style="messageCenter.tab==='done'?'border-bottom-color:hsl(var(--primary));color:hsl(var(--primary))':'color:hsl(var(--muted-foreground))'" @click="messageCenter.tab='done'">已完成 <span x-text="'('+(messageCenter.items.filter(m=>m.priority==='low').length)+')'" style="font-weight:400;opacity:.7"></span></button>
+    </div>
+    <!-- 消息列表 -->
+    <div style="overflow-y:auto;flex:1;padding:4px 0">
+      <template x-if="messageCenterFiltered.length===0">
+        <div style="padding:40px 20px;text-align:center">
+          <div style="width:40px;height:40px;margin:0 auto 12px;border-radius:99px;background:hsl(var(--soft));display:flex;align-items:center;justify-content:center">
+            <span class="ico ico-sm" style="color:hsl(var(--muted-foreground));opacity:.5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+          </div>
+          <div style="font-size:13px;color:hsl(var(--muted-foreground))">暂无消息</div>
+        </div>
+      </template>
+      <template x-for="m in messageCenterFiltered" :key="m.id">
+        <div :style="m.unread?'background:hsl(54 100% 50% / 0.06)':''" style="border-bottom:1px solid hsl(var(--border))">
+          <!-- 合并摘要卡片 -->
+          <div x-show="m.collapsed" style="padding:12px 20px;cursor:pointer;transition:background .12s;display:flex;align-items:flex-start;gap:10px"
+            @click="m.collapsed=false"
+            @mouseenter="$el.style.background='hsl(var(--accent))'" @mouseleave="$el.style.background=m.unread?'hsl(54 100% 50% / 0.06)':''">
+            <span style="width:8px;height:8px;border-radius:99px;margin-top:5px;flex-shrink:0" :style="'background:'+(m.priority==='high'?'hsl(var(--destructive))':m.priority==='mid'?'hsl(38 92% 50%)':'hsl(142 35% 65%)')"></span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                <span style="font-weight:600;font-size:13px;color:hsl(var(--popover-foreground))" x-text="m.title"></span>
+                <span style="font-size:11px;color:hsl(var(--muted-foreground));margin-left:auto;flex-shrink:0" x-text="m.time"></span>
+              </div>
+              <div style="font-size:12px;color:hsl(var(--muted-foreground));line-height:1.55" x-text="m.text"></div>
+              <div x-show="m.action" style="margin-top:6px">
+                <button class="btn btn-ghost btn-xs" style="font-size:11px;padding:2px 10px" @click.stop="messageCenter.show=false; if(m.action==='goto_triage') currentTab='triage'; if(m.action==='goto_files') currentTab='files'" x-text="m.action==='goto_triage'?'全部去确认':'全部去处理'"></button>
+              </div>
+            </div>
+            <span style="font-size:11px;color:hsl(var(--muted-foreground));padding:2px 6px;background:hsl(var(--soft));border-radius:4px" x-text="(m.items||[]).length+'条'"></span>
+          </div>
+          <!-- 展开后的逐条列表 -->
+          <template x-if="!m.collapsed && m.items">
+            <div>
+              <div style="padding:8px 20px;cursor:pointer;font-size:12px;color:hsl(var(--primary))" @click="m.collapsed=true">收起 ▲</div>
+              <template x-for="sub in m.items" :key="sub.id">
+                <div style="padding:10px 28px;border-bottom:1px solid hsl(var(--border) / 0.5);cursor:pointer;display:flex;align-items:flex-start;gap:8px"
+                  :style="sub.unread?'background:hsl(54 100% 50% / 0.04)':''"
+                  @click="sub.unread=false; messageCenter.unread=Math.max(0,messageCenter.unread-1); saveMessages(); if(sub.action){ messageCenter.show=false; if(sub.action==='goto_triage') currentTab='triage'; if(sub.action==='goto_files') currentTab='files'; }">
+                  <span style="width:6px;height:6px;border-radius:99px;margin-top:5px;flex-shrink:0" :style="'background:'+(sub.priority==='high'?'hsl(var(--destructive))':sub.priority==='mid'?'hsl(38 92% 50%)':'hsl(142 35% 65%)')"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;color:hsl(var(--popover-foreground))" x-text="(sub.file_name||'') + (sub.item_id?' → '+sub.item_id:'')"></div>
+                  </div>
+                  <span style="font-size:11px;color:hsl(var(--muted-foreground));flex-shrink:0" x-text="sub.time"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+          <!-- 单条卡片（非合并） -->
+          <div x-show="!m.collapsed && !m.items" style="padding:12px 20px;cursor:pointer;transition:background .12s;display:flex;align-items:flex-start;gap:10px"
+            @click="m.unread=false; messageCenter.unread=Math.max(0,messageCenter.unread-1); saveMessages(); if(m.action){ messageCenter.show=false; if(m.action==='goto_triage') currentTab='triage'; if(m.action==='goto_files') currentTab='files'; }"
+            @mouseenter="$el.style.background='hsl(var(--accent))'" @mouseleave="$el.style.background=m.unread?'hsl(54 100% 50% / 0.06)':''">
+            <span style="width:8px;height:8px;border-radius:99px;margin-top:5px;flex-shrink:0" :style="'background:'+(m.priority==='high'?'hsl(var(--destructive))':m.priority==='mid'?'hsl(38 92% 50%)':'hsl(142 35% 65%)')"></span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                <span style="font-weight:600;font-size:13px;color:hsl(var(--popover-foreground))" x-text="m.title"></span>
+                <span x-show="m.item_id" style="font-size:11px;font-weight:500;padding:1px 6px;border-radius:4px;background:hsl(var(--soft));color:hsl(var(--foreground))" x-text="m.item_id"></span>
+                <span style="font-size:11px;color:hsl(var(--muted-foreground));margin-left:auto;flex-shrink:0" x-text="m.time"></span>
+              </div>
+              <div style="font-size:12px;color:hsl(var(--muted-foreground));line-height:1.55" x-text="m.text"></div>
+              <div x-show="m.action" style="margin-top:6px">
+                <button class="btn btn-ghost btn-xs" style="font-size:11px;padding:2px 10px" @click.stop="messageCenter.show=false; if(m.action==='goto_triage') currentTab='triage'; if(m.action==='goto_files') currentTab='files'" x-text="m.action==='goto_triage'?'去确认':'去处理'"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
 
   <!-- Toast 区 -->
   <div class="toast-wrap">
@@ -819,6 +908,10 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
             <div style="font-size:12px;font-weight:500;margin-bottom:6px">客户共享文件夹路径</div>
             <input type="text" style="width:100%;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:8px;font-family:monospace;font-size:12px" x-model="wizardFolderPath" placeholder="留空则稍后配置，例如：D:/客户资料/PBC">
           </div>
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:500;margin-bottom:6px">归档根目录路径</div>
+            <input type="text" style="width:100%;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:8px;font-family:monospace;font-size:12px" x-model="wizardArchivePath" placeholder="留空则默认在项目目录下，例如：D:/PBC归档">
+          </div>
           <div style="display:flex;gap:10px;justify-content:flex-end">
             <button class="btn btn-ghost" @click="createWizardStep=2">上一步</button>
             <button class="btn btn-ghost" @click="showCreateProject=false; createWizardStep=1">取消</button>
@@ -1037,13 +1130,18 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
         <span x-text="'('+progressProvided+'/'+progressTotal+')'"></span>
       </div>
       <button class="btn btn-ghost btn-xs" @click="reloadAll()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span>刷新</button>
+      <button class="btn btn-ghost btn-xs" style="position:relative" @click="messageCenter.show=!messageCenter.show">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+        <span x-show="messageCenter.unread>0" style="position:absolute;top:-2px;right:-2px;background:hsl(var(--destructive));color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;display:flex;align-items:center;justify-content:center;padding:0 4px" x-text="messageCenter.unread"></span>
+      </button>
+      <button class="btn btn-ghost btn-xs" @click="exportPbcList()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>导出清单</button>
       <button class="btn btn-pri btn-xs" @click="openEscalation()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>生成汇报</button>
       <button class="btn btn-ghost btn-xs" @click="openFolderConfig()"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>设置</button>
       <button class="btn btn-ghost btn-xs" @click="openAiConfig()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg></span>AI 配置</button>
     </div>
     <nav class="tabs">
       <template x-for="t in tabs" :key="t.id">
-        <button class="tab" :class="[currentTab===t.id && 'active', t.alert && tabCounts[t.id]>0 && 't-alert']" @click="switchTab(t.id)">
+        <button class="tab" :class="[currentTab===t.id && 'active', t.alert && tabCounts[t.id]>0 && 't-alert', _flashHighlight && t.id==='triage' && 'flash-highlight']" @click="switchTab(t.id)">
           <span class="txt" x-text="t.label"></span>
           <span class="count" x-show="!t.noCount" x-text="tabCounts[t.id]||0"></span>
         </button>
@@ -1109,9 +1207,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
           </div>
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px">
             <button class="btn btn-ghost btn-sm" @click="downloadTemplate()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>下载导入模板</button>
-            <button class="btn btn-ghost btn-sm" @click="openTestData()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>测试数据包</button>
           </div>
-          <div style="font-size:12px;color:var(--text3);margin-top:8px">导入支持 .xlsx 格式；模板含 15 列，带 * 为必填（含「需求期间」）。</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:8px">导入支持 .xlsx 格式；模板含 16 列，带 * 为必填（含「报告期间」）。</div>
         </div>
       </div>
 
@@ -1136,8 +1233,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
             <div style="font-weight:600;font-size:16px;margin-bottom:2px">环节 1：从客户共享文件夹取件</div>
             <div style="font-size:12px;color:var(--text2);margin-bottom:12px">后端直接读本地路径，零上传。主路径为扫描，拖拽为兜底。</div>
             <div style="display:flex;gap:10px;align-items:center">
-              <button class="btn btn-pri btn-lg" @click="startScan()" :disabled="scan.active">扫描新文件</button>
-              <button class="btn btn-soft btn-sm" @click="openExplorer(currentFolderInfo.path)" x-show="currentFolderInfo.path">查看测试资料</button>
+              <button class="btn btn-pri btn-lg" @click="startScan()" :disabled="scan.active">
+                <span x-show="pendingCount>0 && !scan.active" style="background:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black));font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-right:6px" x-text="pendingCount"></span>
+                <span x-text="scan.active?'扫描中...':'扫描新文件'"></span>
+              </button>
+              <span x-show="pendingCount>0 && !scan.active" style="font-size:12px;color:hsl(var(--muted-foreground))" x-text="pendingCount+' 份待处理'"></span>
+              <span x-show="pendingCount===0 && !scan.active" style="font-size:12px;color:hsl(var(--muted-foreground))">无待处理文件</span>
             </div>
           </div>
           <div style="flex:1;min-width:240px">
@@ -1261,11 +1362,20 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
             <template x-for="cat in (fileZone.tree||[])" :key="cat.category">
               <div>
                 <div class="fz-cat"><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span x-text="cat.category"></span><span class="cnt" x-text="'（'+cat.count+'）'"></span></div>
-                <template x-for="f in (cat.files||[])" :key="f.path">
-                  <div class="fz-file" @click="openArchivePath(f.path)">
-                    <span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
-                    <span class="nm" x-text="f.name"></span>
-                    <span style="font-size:11px;color:var(--text3)" x-text="(((f.size||0)/1024)).toFixed(1)+' KB'"></span>
+                <template x-for="sd in (cat.subdirs||[])" :key="sd.path">
+                  <div style="margin-left:16px">
+                    <div class="fz-sub" style="font-size:12px;font-weight:600;color:hsl(var(--muted-foreground));padding:4px 0 2px;display:flex;align-items:center;gap:6px">
+                      <span class="ico ico-sm" style="opacity:.6"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+                      <span x-text="sd.name"></span>
+                      <span class="cnt" x-text="sd.count" style="font-weight:400"></span>
+                    </div>
+                    <template x-for="f in (sd.files||[])" :key="f.path">
+                      <div class="fz-file" @click="openArchivePath(f.path)" style="margin-left:24px">
+                        <span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+                        <span class="nm" x-text="f.name"></span>
+                        <span style="font-size:11px;color:var(--text3)" x-text="(((f.size||0)/1024)).toFixed(1)+' KB'"></span>
+                      </div>
+                    </template>
                   </div>
                 </template>
               </div>
@@ -1315,6 +1425,7 @@ const API = {
   escalation(pid){ return this.get('/api/risk/'+pid+'/escalation'); },
   scanFolder(pid){ return this.post('/api/files/'+pid+'/scan-folder', {}); },
   taskStatus(pid, taskId){ return this.get('/api/files/'+pid+'/task/'+taskId); },
+  pendingCount(pid){ return this.get('/api/files/'+pid+'/pending-count'); },
   getFolderConfig(pid){ return this.get('/api/files/'+pid+'/config/folder'); },
   setFolderConfig(pid, path){ return this.post('/api/files/'+pid+'/config/folder', {client_folder: path}); },
   briefing(pid){ return pid ? this.get('/api/briefing/'+pid) : this.get('/api/briefing'); },
@@ -1384,6 +1495,12 @@ function pbcApp(){
     /* toast */
     toasts: [],
     toastSeq: 0,
+    /* 待处理文件数（借鉴 git status 未提交计数） */
+    pendingCount: 0,
+    /* 消息中心 */
+    messageCenter: {show:false, items:[], unread:0, tab:'todo'},
+    /* 扫描完成高亮 */
+    _flashHighlight: false,
 
     /* 抽屉 / 模态 */
     showProjectDrawer: false,
@@ -1408,6 +1525,7 @@ function pbcApp(){
     wizardPbcFile: '',
     wizardPbcFileObj: null,
     wizardFolderPath: '',
+    wizardArchivePath: '',
     /* P1-20: 项目抽屉错误边界 */
     projectsLoadError: '',
 
@@ -1434,6 +1552,21 @@ function pbcApp(){
        ========================================================= */
     async init(){
       this.initColCfg();
+      // 加载持久化消息（v7.6 格式，清空旧格式）
+      try{
+        const saved = localStorage.getItem('pbc_messages');
+        if(saved){
+          const items = JSON.parse(saved);
+          if(Array.isArray(items) && items.length > 0 && items[0].type){
+            // v7.6 格式（有 type 字段）
+            this.messageCenter.items = items;
+            this.messageCenter.unread = items.filter(m=>m.unread).length;
+          } else {
+            // 旧格式，清空
+            localStorage.removeItem('pbc_messages');
+          }
+        }
+      }catch(e){}
       // 首启检测
       if(!localStorage.getItem('pbc_onboarded')){
         this.showOnboarding = true;
@@ -1467,12 +1600,17 @@ function pbcApp(){
           if(r && r.events && r.events.length){
             for(const e of r.events){
               if(e.event_type==='file_resolved_risk'){ this.pushToast('low', '解除风险', e.title+'，'+e.detail); }
+              else if(e.event_type==='file_missing'){ this.pushToast('high', '文件缺失', e.summary || (e.title+'，'+e.detail)); }
               else { this.pushToast(e.priority==='high'?'high':'mid', e.title, e.detail); }
             }
             await this.reloadBriefing();
             if(r.latest_ts) this._briefingLastTs = r.latest_ts;
           }
         }catch(e){}
+        // 同时拉 pendingCount（借鉴 git status 实时更新未提交数）
+        if(!this.scan.active){
+          try{ const pc = await API.pendingCount(this.currentProjectId); if(pc) this.pendingCount = pc.pending_count||0; }catch(e){}
+        }
         this._briefingPollTimer = setTimeout(tick, 5000);
       };
       setTimeout(tick, 3000);
@@ -1540,6 +1678,7 @@ function pbcApp(){
       this.wizardPbcFile = '';
       this.wizardPbcFileObj = null;
       this.wizardFolderPath = '';
+      this.wizardArchivePath = '';
       this.newProj = {name:'', client_name:'', note:''};
       this.showCreateProject = true;
     },
@@ -1574,11 +1713,21 @@ function pbcApp(){
           }catch(e){ this.pushToast('mid','文件夹配置失败', e.message); }
         }
 
+        // 如果向导中填写了归档路径，配置
+        if(this.wizardArchivePath && this.wizardArchivePath.trim()){
+          try{
+            const arcR = await API.setArchiveRoot(pid, this.wizardArchivePath.trim());
+            if(arcR?.ok) this.pushToast('low','归档路径已配置', this.wizardArchivePath);
+          }catch(e){ this.pushToast('mid','归档路径配置失败', e.message); }
+        }
+
         // 清理
         this.newProj = {name:'', client_name:'', note:''};
         this.wizardPbcFile = '';
         this.wizardPbcFileObj = null;
         this.wizardFolderPath = '';
+      this.wizardArchivePath = '';
+        this.wizardArchivePath = '';
         await this.loadProjects();
         const target = this.projects.find(x=>x.project_id===pid) || p.project || p;
         await this.switchProject(target);
@@ -1605,6 +1754,7 @@ function pbcApp(){
       this.wizardPbcFile = '';
       this.wizardPbcFileObj = null;
       this.wizardFolderPath = '';
+      this.wizardArchivePath = '';
       this.newProj = {name:'', client_name:'', note:''};
       // 优先切换到 demo 项目，让用户能先看示例
       const demo = this.projects.find(p=>p.project_id==='demo') || this.projects[0];
@@ -1656,6 +1806,7 @@ function pbcApp(){
         this.wizardPbcFile = '';
         this.wizardPbcFileObj = null;
         this.wizardFolderPath = '';
+      this.wizardArchivePath = '';
         await this.loadProjects();
         const t2 = this.projects.find(x=>x.project_id===target.project_id) || target;
         await this.switchProject(t2, true);
@@ -1803,7 +1954,14 @@ function pbcApp(){
       a.href = '/api/pbc/'+pid+'/download-template';
       a.download = 'PBC导入模板.xlsx';
       document.body.appendChild(a); a.click(); a.remove();
-      this.pushToast('low','正在下载模板','模板含 15 列，带 * 为必填（含「需求期间」）');
+      this.pushToast('low','正在下载模板','模板含 16 列，带 * 为必填（含「报告期间」）');
+    },
+    exportPbcList(){
+      const pid = this.currentProjectId || 'demo';
+      const a = document.createElement('a');
+      a.href = '/api/pbc/'+pid+'/export';
+      document.body.appendChild(a); a.click(); a.remove();
+      this.pushToast('low','正在导出清单','导出当前 PBC 清单（含已回写状态和文件路径）');
     },
     openTestData(){ this.testDataModal.show = true; },
     downloadTestPackage(){
@@ -1935,19 +2093,21 @@ function pbcApp(){
       if(!this.currentProjectId) return;
       this.loading = true;
       try{
-        // 全部并行（6 个 API 同时发，不等彼此）
-        const [list, dash, heat, brief, rt, fc] = await Promise.all([
+        // 全部并行（7 个 API 同时发，不等彼此）
+        const [list, dash, heat, brief, rt, fc, pc] = await Promise.all([
           API.pbcList(this.currentProjectId),
           API.dashboard(this.currentProjectId).catch(()=>null),
           API.heatmap(this.currentProjectId).catch(()=>null),
           API.briefing(this.currentProjectId).catch(()=>null),
           API.recentTasks(this.currentProjectId).catch(()=>null),
           API.getFolderConfig(this.currentProjectId).catch(()=>null),
+          API.pendingCount(this.currentProjectId).catch(()=>null),
         ]);
         this.pbcList = list.items || [];
         this.dashboard = dash;
         this.heatmapData = heat;
         this.briefing = brief;
+        this.pendingCount = pc?.pending_count || 0;
         // 效率锚点
         const done = (rt?.tasks||[]).filter(t=>t.status==='done'||t.status==='done_with_errors');
         this.efficiencyCount = done.reduce((s,t)=>s+(t.done_count||0),0);
@@ -2017,6 +2177,56 @@ function pbcApp(){
       return Math.round(this.progressProvided/t*100);
     },
 
+    get messageCenterFiltered(){
+      const tab = this.messageCenter.tab;
+      let items;
+      if(tab === 'todo') items = this.messageCenter.items.filter(m=>m.priority === 'high' || m.priority === 'mid');
+      else if(tab === 'done') items = this.messageCenter.items.filter(m=>m.priority === 'low');
+      else items = this.messageCenter.items;
+      // v7.6: 同类合并——同 type 且超过 3 条时合并为一条摘要
+      const groups = {};
+      const singles = [];
+      for(const m of items){
+        const key = m.type || 'other';
+        if(!groups[key]) groups[key] = [];
+        groups[key].push(m);
+      }
+      const result = [];
+      for(const key of Object.keys(groups)){
+        const group = groups[key];
+        if(group.length > 3){
+          // 合并为摘要
+          const first = group[0];
+          const fileNames = group.map(m=>m.file_name||'').filter(Boolean).slice(0,3).join('、');
+          result.push({
+            id: 'group_'+key,
+            type: key,
+            priority: first.priority,
+            title: first.title,
+            text: group.length+' 份文件' + (fileNames ? '：'+fileNames+'...' : ''),
+            time: first.time,
+            unread: group.some(m=>m.unread),
+            action: first.action,
+            collapsed: true,
+            items: group,
+          });
+        } else {
+          result.push(...group);
+        }
+      }
+      return result;
+    },
+
+    markAllRead(){
+      this.messageCenter.items.forEach(m=>m.unread=false);
+      this.messageCenter.unread = 0;
+      this.saveMessages();
+    },
+
+    saveMessages(){
+      try{ localStorage.setItem('pbc_messages', JSON.stringify(this.messageCenter.items)); }catch(e){}
+    },
+
     filteredItems(){
       let list = this.pbcList.filter(it=>this.stageOf(it)===this.currentTab);
       const f = this.filters;
@@ -2038,10 +2248,11 @@ function pbcApp(){
 
     allColumns(){
       return [
-        {k:'code',label:'编号',lock:true},
+        {k:'code',label:'二级分类',lock:true},
         {k:'category',label:'一级分类'},
         {k:'subject',label:'相关科目'},
-        {k:'desc',label:'资料描述'},
+        {k:'docname',label:'资料名称'},
+        {k:'desc',label:'需求描述'},
         {k:'entity',label:'实体归属'},
         {k:'status',label:'状态'},
         {k:'statusEdit',label:'修改状态'},
@@ -2049,13 +2260,13 @@ function pbcApp(){
         {k:'overdue',label:'逾期'},
         {k:'filename',label:'文件名称'},
         {k:'format',label:'格式'},
-        {k:'period',label:'需求期间'},
+        {k:'period',label:'报告期间'},
         {k:'path',label:'文件路径'},
         {k:'actions',label:'操作',lock:true},
       ];
     },
     defaultColsFor(tab){
-      const base = ['code','category','desc','entity','status'];
+      const base = ['code','category','docname','entity','status'];
       const map = {
         triage:  base.concat(['statusEdit','conf','actions']),
         review:  base.concat(['statusEdit','conf','actions']),
@@ -2126,6 +2337,7 @@ function pbcApp(){
         case 'code': return '<td class="code">'+this.esc(it.item_id)+'</td>';
         case 'category': return '<td>'+this.esc(it.category||'')+'</td>';
         case 'subject': return '<td>'+this.esc(it.subject||'')+'</td>';
+        case 'docname': return '<td>'+this.esc(it.doc_name||'')+'</td>';
         case 'desc': return '<td title="'+this.esc(it.description||'')+'">'+this.esc(this.displayName(it))+(low?' <span class="pill" style="background:var(--red-soft);color:var(--red-deep)">待复核</span>':'')+'</td>';
         case 'entity': return '<td>'+this.esc(it.entity||'')+'</td>';
         case 'status': return '<td>'+this.badgeHtml(it)+'</td>';
@@ -2351,6 +2563,7 @@ function pbcApp(){
     async startScan(){
       if(this.scan.active) return;
       this._stuckSince = null;  // 改进：重置 stuck 计时器
+      this._lastDoneCount = 0;  // v7.5: 重置增量刷新计数器
       this.scan = {active:true, step:0, liveText:'正在提交扫描请求…', finished:false, summary:''};
       try{
         const r = await API.scanFolder(this.currentProjectId);
@@ -2367,6 +2580,19 @@ function pbcApp(){
         if(r.status === 'not_found'){
           this.scan.active = false;
           this.pushToast('mid','文件夹不存在', r.suggestion || ('路径：'+r.folder));
+          return;
+        }
+        // 无待处理文件
+        if(r.status === 'no_pending'){
+          this.scan.active = false;
+          this.pendingCount = 0;
+          this.pushToast('low','无需扫描', r.message || '没有待处理文件');
+          return;
+        }
+        // PBC 清单未导入
+        if(r.status === 'no_pbc_list'){
+          this.scan.active = false;
+          this.pushToast('mid','请先导入清单', r.message || 'PBC 清单为空，请先导入');
           return;
         }
         if(!taskId){
@@ -2402,6 +2628,19 @@ function pbcApp(){
           const doneCount = (t.done_count || 0);
           const totalCount = (t.total || results.length || 0);
           const pctText = totalCount > 0 ? `${doneCount}/${totalCount} (${prog}%)` : `${prog}%`;
+
+          // v7.5: 增量刷新——每处理完一个文件就刷新清单（不等全部完成）
+          if(!this._lastDoneCount) this._lastDoneCount = 0;
+          if(doneCount > this._lastDoneCount){
+            this._lastDoneCount = doneCount;
+            // 后台静默刷新 PBC 清单（不显示 loading）
+            API.pbcList(this.currentProjectId).then(r=>{
+              if(r && r.items){
+                this.pbcList = r.items;
+                // 如果在待复核 tab，表格会自动更新
+              }
+            }).catch(()=>{});
+          }
           // 改进：progress 长时间为 0% 且未完成时，提示用户"AI 正在重试中"
           let waitHint = '';
           if(prog === 0 && t.status === 'processing'){
@@ -2415,28 +2654,49 @@ function pbcApp(){
           }
           this.scan.liveText = `正在${stepMap[step]} ${pctText}：<b style="color:var(--text)">${this.esc(cur||'…')}</b>${waitHint}`;
 
-          // 提取 advisory_notes → toast
-          if(!this._advSeen) this._advSeen = new Set();
+          // v7.6: 结构化事件 → 消息中心（替代 advisory_notes）
+          if(!this._evtSeen) this._evtSeen = new Set();
           for(const r of results){
-            // P1-21: skipped 文件 → toast（P0-2 已在 results 里包含 advisory_notes）
             if(r.skipped && r.reason === 'file_unstable'){
-              const key = 'skip_'+(r.name||'')+'_'+(r.path||'');
-              if(!this._advSeen.has(key)){
-                this._advSeen.add(key);
-                this.pushToast('mid','文件被跳过',
-                  '文件 '+(r.name||'')+' 正在被写入，已跳过，稍后请重新扫描');
+              const key = 'skip_'+(r.name||'');
+              if(!this._evtSeen.has(key)){
+                this._evtSeen.add(key);
+                this.pushToast('mid','文件被跳过', '文件 '+(r.name||'')+' 正在被写入，已跳过');
               }
+              continue;
             }
-            if(r.advisory_notes && Array.isArray(r.advisory_notes)){
-              for(const n of r.advisory_notes){
-                const key = 'adv_'+(r.name||'')+'_'+(typeof n==='string'?n:JSON.stringify(n));
-                if(!this._advSeen.has(key)){
-                  this._advSeen.add(key);
-                  const txt = typeof n === 'string' ? n : (n.message || JSON.stringify(n));
-                  this.pushToast(n && n.level === 'high' ? 'high' : 'mid',
-                    n && n.trigger === 'unclassified_archive' ? 'AI 无法识别' : 'AI 提示',
-                    this.esc(txt));
+            // 处理结构化事件
+            if(r.events && Array.isArray(r.events)){
+              for(const evt of r.events){
+                const key = 'evt_'+evt.type+'_'+(evt.file_name||'');
+                if(this._evtSeen.has(key)) continue;
+                this._evtSeen.add(key);
+                const now = new Date();
+                const timeStr = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+                const id = 'm'+(++this.toastSeq);
+                let title, text, priority, toastIt = false;
+                if(evt.type === 'file_classified'){
+                  title = '已归类';
+                  text = (evt.file_name||'') + ' → ' + (evt.item_id||'');
+                  priority = 'low';
+                } else if(evt.type === 'needs_confirm'){
+                  title = '建议确认';
+                  text = (evt.file_name||'') + ' 建议匹配到 ' + (evt.item_id||'') + '（置信度 '+(evt.confidence||0)+'）';
+                  priority = 'mid';
+                  toastIt = true;
+                } else if(evt.type === 'unclassified'){
+                  title = '需人工确认';
+                  text = (evt.file_name||'') + ' 无法自动识别，已归档到未分类';
+                  priority = 'high';
+                  toastIt = true;
+                } else {
+                  continue;
                 }
+                this.messageCenter.items.unshift({id, type:evt.type, priority, title, text, time:timeStr, unread: priority!=='low', action: evt.action||null, file_name: evt.file_name, item_id: evt.item_id});
+                if(priority !== 'low') this.messageCenter.unread++;
+                if(this.messageCenter.items.length > 200) this.messageCenter.items = this.messageCenter.items.slice(0,200);
+                this.saveMessages();
+                if(toastIt) this.pushToast(priority, title, text);
               }
             }
           }
@@ -2447,9 +2707,26 @@ function pbcApp(){
             this.scan.active = false;
             this.scan.step = 4;
             this.scan.finished = true;
-            this.scan.summary = '扫描完成，处理 '+results.length+' 份文件，已自动分类归档';
-            this.pushToast('low','扫描完成','处理 '+results.length+' 份文件，已自动分类归档');
+            // 审计员友好的汇总
+            const total = results.length;
+            const matched = results.filter(r=>r.classify && r.classify.item_id).length;
+            const unclassified = results.filter(r=>!r.classify || !r.classify.item_id).length;
+            const deduped = results.filter(r=>r.dedup).length;
+            const newFiles = total - deduped;
+            let summary = '';
+            if(newFiles > 0){
+              summary = `扫描完成：${newFiles} 份新文件，已自动归类 ${matched} 份`;
+              if(unclassified > 0) summary += `，${unclassified} 份需人工确认`;
+            } else {
+              summary = `扫描完成：${total} 份文件均已处理，无新增`;
+            }
+            this.scan.summary = summary;
+            this.pushToast('low','扫描完成', summary + '。清单已更新，请查看待复核');
             await this.reloadAll();
+            // 自动切到待复核 tab + 高亮提示
+            this.currentTab = 'triage';
+            this._flashHighlight = true;
+            setTimeout(()=>{ this._flashHighlight = false; }, 3000);
             return;
           }
           if(failed){
@@ -2546,8 +2823,18 @@ function pbcApp(){
     pushToast(priority, title, text){
       const id = 't'+(++this.toastSeq);
       this.toasts.push({id, priority, title, text});
-      if(priority==='low') setTimeout(()=>this.dismissToast(id), 3000);
-      if(priority==='mid') setTimeout(()=>this.dismissToast(id), 5000);
+      // 自动消失（high 不自动消失，需手动关）
+      if(priority==='low') setTimeout(()=>this.dismissToast(id), 4000);
+      if(priority==='mid') setTimeout(()=>this.dismissToast(id), 6000);
+      // 存到消息中心
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+':'+now.getSeconds().toString().padStart(2,'0');
+      this.messageCenter.items.unshift({id, priority, title, text, time:timeStr, unread:true});
+      this.messageCenter.unread++;
+      // 限制最多 200 条
+      if(this.messageCenter.items.length>200) this.messageCenter.items = this.messageCenter.items.slice(0,200);
+      // 持久化
+      this.saveMessages()
     },
     dismissToast(id){ this.toasts = this.toasts.filter(t=>t.id!==id); },
 

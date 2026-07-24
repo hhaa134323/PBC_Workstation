@@ -15,34 +15,46 @@
 
 ## 一、v7 新增/改动接口
 
-### 1. PBC 清单模板（含「需求期间」列）
+### 1. PBC 清单模板（v7.2: 16 列表头）
 
 **`GET /api/pbc/{project_id}/download-template`**
 
-下载 PBC 导入模板 Excel。**15 列表头**（v6 是 14 列，v7 新增第 15 列「需求期间」）。
+下载 PBC 导入模板 Excel。**16 列表头**（v7.2 重构前列顺序）。
 
 返回：`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` 二进制流
 
-模板列结构（前端展示用）：
+模板列结构（v7.2）：
 ```
-1  * 资料编号         item_id            必填，唯一编号（如 历-1）
-2  * 一级分类         category           必填，归档按此建文件夹
+1  * 一级分类         category           必填，归档按此建一级文件夹
+2  * 二级分类         item_id            必填，唯一编号（如 历-1），前缀对应一级分类
 3    相关科目         subject            选填
-4  * 问题/需求描述     description        必填，归档命名会用
-5    格式             file_format        选填（PDF/Excel/扫描件）
-6    优先级           priority           选填
-7    提出时间         raised_at          选填
-8  * 期望提供日期      expected_by        必填，超 5 工作日触发风险雷达
-9    逾期天数         overdue_days       选填，自动算
-10   资料提供情况      status_raw         选填，状态机自动管
-11   备注             remark             选填
-12 * 实体归属          entity             必填（公司级 vs 集团级）
-13   置信度           confidence         选填，AI 自动回填
-14   文件路径         file_path           选填，AI 归档后自动回填
-15 * 需求期间          required_period    必填，如 2023年度/2024年度/2025年度/2026年一季度
+4  * 资料名称         doc_name           必填，简短名称（如 股权架构图）
+5  * 问题/需求描述     description        必填，详细需求说明
+6  * 报告期间          required_period    必填，如 2023年度/2024年度/2025年度
+7    格式             file_format        选填（PDF/Excel/扫描件）
+8    优先级           priority           选填
+9    提出时间         raised_at          选填
+10 * 期望提供日期      expected_by        必填，超 5 工作日触发风险雷达
+11   逾期天数         overdue_days       选填，自动算
+12   资料提供情况      status_raw         选填，状态机自动管
+13   备注             remark             选填
+14 * 实体归属          entity             必填（公司级 vs 集团级）
+15   置信度           confidence         选填，AI 自动回填
+16   文件路径         file_path           选填，AI 归档后自动回填
 ```
 
-**关键**：第 15 列「需求期间」是 v7 新增，AI 期间连续性检查读这列作为对照基准。
+**关键**：第 6 列「报告期间」是 AI 期间连续性检查的对照基准。归档路径两级：一级分类/二级分类_资料名称/文件。
+
+---
+
+### 1b. PBC 清单导出
+
+**`GET /api/pbc/{project_id}/export`**
+
+导出当前项目的 PBC 清单（含已回写的状态/文件路径/置信度）。直接返回项目的 01_PBC_List.xlsx 文件流。
+
+返回：`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` 二进制流
+文件名：`PBC_List_{项目名}_{日期}.xlsx`
 
 ### 2. PBC 导入（加必填校验）
 
@@ -424,6 +436,71 @@ data/test_data_package/
 - `GET /api/files/{pid}/archive-detail/{item_id}` — 归档详情
 - `GET /api/risk/dashboard` — 风险仪表盘
 - `POST /api/open-folder/{pid}` — 打开客户共享文件夹（保留）
+- `GET /api/pbc/{pid}/export` — 导出 PBC 清单（含已回写状态，v7.2 新增）
+
+---
+
+## 五b. 文件匹配打分模型（v7.4 新增）
+
+### 设计原理
+
+借鉴银行对账三档匹配 + Fellegi-Sunter 概率匹配模型（多字段加权）。
+
+### 4 个字段加权打分
+
+| 字段 | 比较 | 权重 | 说明 |
+|------|------|------|------|
+| F1 | 文件夹名 vs category（一级分类） | 0.25 | 形态2/4 的强信号 |
+| F2 | 文件名 vs doc_name（资料名称） | 0.40 | 最可靠信号，N-gram Jaccard |
+| F3 | 文件名+内容头200字 vs description | 0.20 | N-gram Jaccard，不依赖 jieba |
+| F4 | 文件夹名/文件名 vs required_period | 0.15 | 年份交集比例 |
+
+总分 = F1×0.25 + F2×0.40 + F3×0.20 + F4×0.15 (0.0-1.0)
+
+### 三档决策
+
+| 总分 | 决策 | 行为 |
+|------|------|------|
+| > 0.75 | auto | 自动匹配，直接归档，不调 LLM |
+| 0.4-0.75 | suggest | 建议匹配，toast 推审计员确认 |
+| < 0.4 | llm | LLM 兜底，调百炼 GLM-5 |
+
+### 穿行测试前置检测
+
+打分前先检测：文件夹名含"穿行/截图/签字/回单/控制" → 走整目录归档，不逐文件打分。
+
+### 处理流程
+
+```
+文件到达
+  → L1: filename-match（文件名含编号前缀？）→ 命中：直接归类
+  → 穿行测试前置检测 → 命中：整目录归档
+  → 打分（F1+F2+F3+F4 加权）
+    → > 0.75：自动匹配
+    → 0.4-0.75：建议匹配（toast 确认）
+    → < 0.4：LLM 兜底
+```
+
+### 可解释性
+
+每个文件处理结果包含 `score_breakdown`：
+```json
+{
+  "score_breakdown": {
+    "F1_folder_vs_category": 0.25,
+    "F2_filename_vs_doc_name": 0.32,
+    "F3_content_vs_description": 0.14,
+    "F4_folder_vs_period": 0,
+    "total": 0.71
+  }
+}
+```
+
+### 相关文件
+
+- `app/core/matcher.py` — 打分模块主逻辑
+- `app/api/routes_files.py` — `_process_one_file_sync()` 调用链
+- `app/core/manifest.py` — 轻量指纹去重（size+mtime 快路径）
 
 ---
 
