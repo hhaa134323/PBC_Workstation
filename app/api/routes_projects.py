@@ -94,9 +94,13 @@ async def create_new_project(body: ProjectCreateBody) -> dict:
 async def create_with_demo_data(body: ProjectCreateBody) -> dict:
     """P1-11: 一键创建新项目并复制示例数据。
 
+    v7.5: 改用混合形态测试数据包（19 项 PBC + 16 文件 + 6 子目录），
+    覆盖 5 种交付形态 + 3 种特殊情况（穿行测试整目录归档/S3 多份/清单外未分类）。
+    数据来源：data/test_data_package/
+
     1. 调 create_project 创建空项目骨架
-    2. 复制 mock_data/01_PBC_List.xlsx 到项目 PBC 清单
-    3. 复制 mock_data/客户共享文件夹/* 到项目客户共享文件夹
+    2. 复制 混合形态 PBC 清单到项目 PBC 清单
+    3. 复制 混合形态客户文件夹到项目客户文件夹
     """
     if not body.name or not body.name.strip():
         raise HTTPException(status_code=400, detail="项目名 name 不能为空")
@@ -120,24 +124,41 @@ async def create_with_demo_data(body: ProjectCreateBody) -> dict:
     copied: list[str] = []
     errors: list[str] = []
 
-    # 1. PBC 清单 — 优先复制 demo 项目的精简版（6 项），fallback 到 mock_data 的原版（103 项）
-    demo_pbc_src = PROJECTS_DIR / "project_demo" / "01_PBC_List.xlsx"
+    # v7.5: 数据源优先级
+    #   1. data/test_data_package/混合形态版（首选）
+    #   2. mock_data/01_PBC_List.xlsx + 客户共享文件夹/（fallback）
+    test_data_pkg = PROJECTS_DIR.parent / "data" / "test_data_package"
+    mixed_pbc = test_data_pkg / "01_PBC_List_混合形态.xlsx"
+    mixed_client = test_data_pkg / "客户共享文件夹_混合形态"
+
+    # fallback
     mock_pbc = MOCK_DATA_DIR / "01_PBC_List.xlsx"
-    demo_pbc_dest = Path(record["pbc_list_path"])
-    pbc_src = demo_pbc_src if demo_pbc_src.exists() else mock_pbc
-    if pbc_src.exists():
+    mock_client = MOCK_DATA_DIR / "客户共享文件夹"
+
+    # 1. PBC 清单
+    pbc_dest = Path(record["pbc_list_path"])
+    if mixed_pbc.exists():
+        pbc_src = mixed_pbc
+    elif mock_pbc.exists():
+        pbc_src = mock_pbc
+    else:
+        pbc_src = None
+    if pbc_src and pbc_src.exists():
         try:
-            shutil.copy2(str(pbc_src), str(demo_pbc_dest))
+            shutil.copy2(str(pbc_src), str(pbc_dest))
             copied.append(f"01_PBC_List.xlsx (from {pbc_src.parent.name})")
         except Exception as e:
             errors.append(f"PBC 清单复制失败: {e}")
 
-    # 2. 客户共享文件夹 — 优先复制 demo 项目的（3 个文件），fallback 到 mock_data 的（20 个文件）
-    demo_client_src = PROJECTS_DIR / "project_demo" / "客户共享文件夹"
-    mock_client = MOCK_DATA_DIR / "客户共享文件夹"
-    client_src = demo_client_src if demo_client_src.exists() else mock_client
+    # 2. 客户共享文件夹
+    if mixed_client.exists():
+        client_src = mixed_client
+    elif mock_client.exists():
+        client_src = mock_client
+    else:
+        client_src = None
     proj_client = Path(record["client_folder"])
-    if client_src.exists():
+    if client_src and client_src.exists():
         try:
             for p in client_src.rglob("*"):
                 rel = p.relative_to(client_src)
