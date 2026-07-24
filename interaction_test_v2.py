@@ -674,6 +674,35 @@ def main():
         check("归档树接口可调", archive_tree and not archive_tree.get('error'))
         check("归档树有二级结构（subdirs）", archive_tree and archive_tree.get('hasSubdirs'), str(archive_tree))
 
+        # ========== 2.23 v7.6 改分类弹窗 ==========
+        print("\n=== 2.23 v7.6 改分类弹窗 ===", flush=True)
+        reclassify_check = page.evaluate('''() => {
+            const el = document.querySelector('[x-data="pbcApp()"]');
+            if (!el || !el._x_dataStack) return null;
+            const app = el._x_dataStack[0];
+            return {
+                hasReclassifyModal: 'reclassifyModal' in app,
+                hasOpenReclassify: typeof app.openReclassify === 'function',
+                hasDoReclassify: typeof app.doReclassify === 'function',
+                hasGlobalFunc: typeof window.__openReclassify === 'function',
+            };
+        }''')
+        check("reclassifyModal 数据结构存在", reclassify_check is not None)
+        check("openReclassify 方法存在", reclassify_check and reclassify_check.get('hasOpenReclassify'))
+        check("doReclassify 方法存在", reclassify_check and reclassify_check.get('hasDoReclassify'))
+        check("__openReclassify 全局函数存在", reclassify_check and reclassify_check.get('hasGlobalFunc'))
+
+        # 检查 review tab 有「改分类」按钮（切到 review tab 看）
+        page.evaluate('''() => {
+            const el = document.querySelector('[x-data="pbcApp()"]');
+            if (el && el._x_dataStack) el._x_dataStack[0].switchTab('review');
+        }''')
+        time.sleep(1)
+        has_reclassify_btn = page.evaluate('''() => {
+            return document.querySelector('[onclick*="__openReclassify"]') !== null;
+        }''')
+        check("review tab 有改分类按钮", has_reclassify_btn)
+
         browser.close()
 
         # 汇总

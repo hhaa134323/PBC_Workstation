@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, File, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import (
     get_config,
@@ -51,7 +51,7 @@ from app.core import archive as archive_mod
 from app.core.db import (
     get_archive_by_sha, get_project, insert_archive, get_task, get_latest_ai_history_id,
     list_recent_archives, list_recent_tasks, update_ai_history_item_id,
-    upsert_task,
+    upsert_task, get_archive_by_item, delete_archive_by_item, delete_archive_by_path,
 )
 from app.core.excel_io import (
     STATUS_NOT_PROVIDED, STATUS_REVIEWING,
@@ -1694,3 +1694,172 @@ def handle_watcher_new_file(path: Path, project_id: Optional[str] = None) -> Non
             logger.debug("evaluate_file_impact failed (non-fatal)", exc_info=True)
     except Exception:
         logger.exception("handle_watcher_new_file 全局失败")
+
+
+# ----------------------------------------------------------------------
+# v7.6: 改分类（Senior 复核发现 AI 分错时直接指定新 item_id）
+# ----------------------------------------------------------------------
+
+class ReclassifyBody(BaseModel):
+    new_item_id: str = Field(..., description="Senior 指定的正确 item_id")
+    changed_by: str = Field("senior", description="操作人")
+    reason: str = Field("", description="改分类原因")
+
+
+@router.post("/{project_id}/reclassify/{item_id}")
+async def reclassify_archive(project_id: str, item_id: str, body: ReclassifyBody) -> dict:
+    """改分类：把指定 item_id 的所有归档文件重新归到 new_item_id。
+
+    流程：
+    1. 查旧 archive 记录（item_id + project_id）
+    2. 取出每个归档文件的原文件路径（original_path）
+    3. 删旧归档目录里的文件
+    4. 删旧 archive 记录
+    5. 用新 item_id 调 archive_file 重新归档（原文件还在客户文件夹）
+    6. PBC Excel：旧 item_id file_path 清空，新 item_id file_path 填新路径
+    7. 旧 item_id 状态改"未提供"（如果它没有其他归档了）
+    8. 新 item_id 状态推进"审核中"
+
+    覆盖场景：
+    - 归错 item_id → 改到正确 item_id
+    - 清单外误归 → 改到"未分类"
+    - 多份其中 1 份错 → 单独按 archived_path 处理（本接口按 item_id 批量，单条用下方单文件版）
+    """
+    proj = get_project(project_id)
+    if proj is None:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_id}")
+
+    new_item_id = body.new_item_id.strip()
+    if not new_item_id:
+        raise HTTPException(status_code=400, detail="new_item_id 不能为空")
+
+    # 查旧归档记录
+    old_archives = get_archive_by_item(item_id, project_id=project_id)
+    if not old_archives:
+        raise HTTPException(
+            status_code=404,
+            detail=f"item_id '{item_id}' 无归档记录，无法改分类"
+        )
+
+    # 取新 item_id 的 PBC 信息（用于归档命名）
+    from app.core.excel_io import get_item_by_id
+    new_item = get_item_by_id(new_item_id, project_id=project_id)
+    if new_item is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"new_item_id '{new_item_id}' 在 PBC 清单中不存在"
+        )
+
+    results: list[dict] = []
+    errors: list[str] = []
+
+    for old in old_archives:
+        old_archived_path = old.get("archived_path", "")
+        original_path = old.get("original_path", "")
+        old_sha = old.get("sha256", "")
+
+        try:
+            # 1. 删旧归档目录里的文件副本
+            from pathlib import Path
+            old_path = Path(old_archived_path)
+            if old_path.exists():
+                old_path.unlink(missing_ok=True)
+                # 清理空目录（二级分类文件夹）
+                if old_path.parent.exists() and not any(old_path.parent.iterdir()):
+                    old_path.parent.rmdir()
+
+            # 2. 删旧 archive 记录
+            delete_archive_by_path(old_archived_path, project_id=project_id)
+
+            # 3. 用新 item_id 重新归档（原文件还在客户文件夹）
+            src = Path(original_path)
+            if not src.exists():
+                errors.append(f"原文件不存在: {original_path}，跳过")
+                continue
+
+            new_result = archive_mod.archive_file(
+                source_path=src,
+                item_id=new_item_id,
+                entity=new_item.get("entity"),
+                sha256=old_sha or None,
+                archived_by=f"reclassify:{body.changed_by}",
+                project_id=project_id,
+                category=new_item.get("category"),
+                description=new_item.get("doc_name"),
+                period=new_item.get("required_period"),
+            )
+
+            if new_result.get("ok"):
+                results.append({
+                    "old_archived_path": old_archived_path,
+                    "new_archived_path": new_result.get("archived_path"),
+                    "sha256": old_sha,
+                    "dedup": new_result.get("dedup", False),
+                    "version": new_result.get("version"),
+                })
+            else:
+                errors.append(f"重新归档失败: {new_result.get('error')}")
+
+        except Exception as e:
+            logger.exception("reclassify 单文件失败")
+            errors.append(f"{type(e).__name__}: {e}")
+
+    # 4. PBC Excel 更新
+    try:
+        from app.core.excel_io import write_pbc_list
+        pbc_items = read_pbc_list(project_id=project_id)
+
+        # 旧 item_id：清空 file_path（如果没其他归档了）
+        remaining_old = get_archive_by_item(item_id, project_id=project_id)
+        if not remaining_old:
+            for it in pbc_items:
+                if it.get("item_id") == item_id:
+                    it["file_path"] = ""
+                    # 状态改回未提供（状态机允许）
+                    try:
+                        update_item_status(
+                            item_id=item_id,
+                            new_status=STATUS_NOT_PROVIDED,
+                            changed_by=body.changed_by,
+                            note=f"改分类退回：{body.reason}" if body.reason else "改分类退回",
+                            project_id=project_id,
+                        )
+                    except Exception:
+                        pass  # 状态机不允许也无所谓
+                    break
+
+        # 新 item_id：填 file_path + 推进状态
+        new_archived = get_archive_by_item(new_item_id, project_id=project_id)
+        if new_archived:
+            new_path = new_archived[0].get("archived_path", "")
+            for it in pbc_items:
+                if it.get("item_id") == new_item_id:
+                    it["file_path"] = new_path
+                    break
+        write_pbc_list(pbc_items, project_id=project_id)
+
+        # 新 item_id 状态推进到审核中
+        try:
+            update_item_status(
+                item_id=new_item_id,
+                new_status=STATUS_REVIEWING,
+                changed_by=body.changed_by,
+                note=f"改分类归入：{body.reason}" if body.reason else "改分类归入",
+                project_id=project_id,
+            )
+        except Exception:
+            pass  # 状态机不允许（如已经是审核中）也无所谓
+
+    except Exception as e:
+        logger.exception("reclassify PBC Excel 更新失败")
+        errors.append(f"PBC Excel 更新失败: {e}")
+
+    return {
+        "ok": len(errors) == 0,
+        "project_id": project_id,
+        "old_item_id": item_id,
+        "new_item_id": new_item_id,
+        "reclassified_count": len(results),
+        "results": results,
+        "errors": errors,
+    }

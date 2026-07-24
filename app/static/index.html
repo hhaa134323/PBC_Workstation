@@ -813,6 +813,41 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
     </div>
   </div>
 
+  <!-- v7.6 改分类 modal -->
+  <div x-show="reclassifyModal.show" class="overlay" style="display:none" :style="reclassifyModal.show && 'display:flex'" @click.self="reclassifyModal.show=false">
+    <div class="modal" style="max-width:520px" @click.stop>
+      <div class="modal-h"><div class="tt">改分类</div><button class="x" @click="reclassifyModal.show=false">×</button></div>
+      <div class="modal-b">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">
+          AI 分类可能有误。选择正确的 PBC 项，文件会重新归档到新分类，命名自动重算。
+        </div>
+        <div x-show="reclassifyModal.item" style="font-size:12px;color:var(--text3);margin-bottom:8px" x-text="reclassifyModal.item ? ('当前归到：'+reclassifyModal.item.item_id+'　'+(reclassifyModal.item.category||'')+'　'+(reclassifyModal.item.doc_name||'')) : ''"></div>
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px">改为：</label>
+        <input type="text" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:4px" x-model="reclassifyModal.search" placeholder="输入编号或名称搜索..." @input="reclassifyModal.filtered = reclassifyModal.allItems.filter(i => (i.item_id+i.category+i.doc_name).toLowerCase().includes((reclassifyModal.search||'').toLowerCase()))">
+        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+          <template x-for="opt in (reclassifyModal.filtered || reclassifyModal.allItems).slice(0,50)">
+            <div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px" @click="reclassifyModal.selected = opt.item_id; reclassifyModal.search = opt.item_id+' '+opt.doc_name" :style="reclassifyModal.selected === opt.item_id ? 'background:var(--bg2)' : ''">
+              <span style="font-weight:600" x-text="opt.item_id"></span>
+              <span style="color:var(--text2);margin-left:8px" x-text="opt.category"></span>
+              <span style="color:var(--text3);margin-left:8px" x-text="opt.doc_name"></span>
+            </div>
+          </template>
+          <div style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text3)" @click="reclassifyModal.selected = '未分类'; reclassifyModal.search = '未分类（清单外）'">
+            <span style="font-weight:600">未分类</span>
+            <span style="margin-left:8px">清单外文件</span>
+          </div>
+        </div>
+        <label style="font-size:12px;color:var(--text2);display:block;margin:10px 0 6px">改分类原因（可选）：</label>
+        <input type="text" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px" x-model="reclassifyModal.reason" placeholder="如：这是利润表不是股权架构图">
+        <div x-show="reclassifyModal.error" style="font-size:12px;color:var(--red);margin-top:8px" x-text="reclassifyModal.error"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" @click="reclassifyModal.show=false">取消</button>
+          <button class="btn btn-pri" @click="doReclassify()" :disabled="reclassifyModal.saving || !reclassifyModal.selected"><span x-show="!reclassifyModal.saving">确认改分类</span><span x-show="reclassifyModal.saving">处理中…</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- v7 测试数据包 modal -->
   <div x-show="testDataModal.show" class="overlay" style="display:none" :style="testDataModal.show && 'display:flex'" @click.self="testDataModal.show=false">
     <div class="modal" style="max-width:520px" @click.stop>
@@ -1513,6 +1548,8 @@ function pbcApp(){
     /* v7 路径失效缓存 & 重新定位 */
     pathValid: {},
     relocateModal: {show:false, item:null, input:'', error:'', saving:false},
+    /* v7.6 改分类 */
+    reclassifyModal: {show:false, item:null, allItems:[], filtered:[], selected:'', search:'', reason:'', error:'', saving:false},
     /* v7 AI 配置 */
     aiConfig: {show:false, loading:false, saving:false, testing:false, testResult:null, models:[], masked:'', keySet:false, form:{api_key:'', base_url:'', model_classification:'', model_vision:'', model_reasoning:'', confidence_threshold:0.7, filename_match_enabled:true}},
     /* v7 测试数据包说明 */
@@ -1937,6 +1974,35 @@ function pbcApp(){
         }
       }catch(e){ this.relocateModal.error = '重新定位失败：'+e.message; }
       finally{ this.relocateModal.saving = false; }
+    },
+    /* v7.6 改分类 */
+    openReclassify(itemId){
+      const it = this.pbcList.find(x=>x.item_id===itemId);
+      if(!it) return;
+      // 备选列表：当前 PBC 清单所有项（排除自己）
+      const allItems = this.pbcList.filter(x=>x.item_id!==itemId).map(x=>({item_id:x.item_id, category:x.category||'', doc_name:x.doc_name||x.description||''}));
+      this.reclassifyModal = {show:true, item:it, allItems, filtered:allItems, selected:'', search:'', reason:'', error:'', saving:false};
+    },
+    async doReclassify(){
+      const it = this.reclassifyModal.item;
+      const newId = this.reclassifyModal.selected;
+      if(!it || !newId){ this.reclassifyModal.error = '请选择要改到的分类'; return; }
+      this.reclassifyModal.saving = true; this.reclassifyModal.error='';
+      try{
+        const r = await fetch('/api/files/'+this.currentProjectId+'/reclassify/'+encodeURIComponent(it.item_id), {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({new_item_id:newId, changed_by:'senior', reason:this.reclassifyModal.reason||''})
+        });
+        const d = await r.json();
+        if(d.ok || d.reclassified_count > 0){
+          this.reclassifyModal.show = false;
+          this.pushToast('low','改分类成功', `${it.item_id} → ${newId}（${d.reclassified_count||0} 个文件重新归档）`);
+          await this.reloadAll();
+        } else {
+          this.reclassifyModal.error = (d.errors||[]).join('; ') || '改分类失败';
+        }
+      }catch(e){ this.reclassifyModal.error = '改分类失败：'+e.message; }
+      finally{ this.reclassifyModal.saving = false; }
     },
     async saveArchiveRoot(){
       this.folderConfig.archiveError = '';
@@ -2436,6 +2502,9 @@ function pbcApp(){
       if(this.currentTab==='overdue'){
         acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__openResolve(\''+this.esc(it.item_id)+'\')">看影响分析</button>');
       }
+      if(this.currentTab==='review'){
+        acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__openReclassify(\''+this.esc(it.item_id)+'\')">改分类</button>');
+      }
       acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__viewDetail(\''+this.esc(it.item_id)+'\')">文件详情</button>');
       return '<div class="row-acts">'+acts.join('')+'</div>';
     },
@@ -2874,6 +2943,10 @@ window.__openResolve = function(itemId){
 window.__viewDetail = function(itemId){
   const app = Alpine.$data(document.querySelector('[x-data]'));
   app.viewDetail(itemId);
+};
+window.__openReclassify = function(itemId){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.openReclassify(itemId);
 };
 window.__heatDrill = function(cat, ent){
   const app = Alpine.$data(document.querySelector('[x-data]'));

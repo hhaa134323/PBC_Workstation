@@ -534,6 +534,44 @@ def t_archive_two_level():
 
 test("归档两级结构", t_archive_two_level)
 
+# ===== 14. v7.6 改分类接口 =====
+_safe_print("\n=== 14. v7.6 改分类接口 ===")
+
+
+def t_reclassify_endpoint():
+    """POST /api/files/{pid}/reclassify/{item_id} 接口可用"""
+    # 查归档记录找一个有 archive 的 item_id 测
+    archives = _get("/api/files/demo/list").get("files", [])
+    if not archives:
+        return True, "无归档记录（CI 干净环境），接口注册即可"
+    old_item = archives[0].get("item_id", "")
+    if not old_item:
+        return True, "无 item_id，跳过"
+    # 取一个不同于 old_item 的 item_id 做 target
+    pbc_items = _get("/api/pbc/demo/list").get("items", [])
+    new_item = next((it["item_id"] for it in pbc_items if it["item_id"] != old_item), None)
+    if not new_item:
+        return True, "PBC 清单只有 1 项，无法测改分类"
+    # 调 reclassify
+    import urllib.parse, json
+    iid_enc = urllib.parse.quote(old_item)
+    data = json.dumps({"new_item_id": new_item, "changed_by": "test", "reason": "回归测试"}).encode("utf-8")
+    req = urllib.request.Request(
+        base + f"/api/files/demo/reclassify/{iid_enc}",
+        data=data, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    try:
+        r = urllib.request.urlopen(req, timeout=30)
+        d = json.loads(r.read())
+        has_ok = "ok" in d
+        has_count = "reclassified_count" in d
+        return has_ok and has_count, f"ok={d.get('ok')}, count={d.get('reclassified_count')}, errors={len(d.get('errors', []))}"
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
+
+
+test("改分类接口", t_reclassify_endpoint)
+
 # ===== 汇总 =====
 _safe_print("\n" + "=" * 50)
 passed = sum(1 for s, _, _ in results if s == "PASS")

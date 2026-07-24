@@ -762,6 +762,43 @@ def list_recent_archives(limit: int = 100, project_id: Optional[str] = None) -> 
         return [dict(r) for r in cur.fetchall()]
 
 
+def delete_archive_by_item(item_id: str, project_id: Optional[str] = None) -> int:
+    """删除指定 item_id 的归档记录（改分类时用）。
+
+    返回删除的行数。注意：只删 DB 记录，不删归档目录里的文件（文件由调用方处理）。
+    """
+    with get_conn() as conn:
+        if project_id:
+            cur = conn.execute(
+                "DELETE FROM file_archive WHERE item_id=? AND project_id=?",
+                (item_id, project_id),
+            )
+        else:
+            cur = conn.execute(
+                "DELETE FROM file_archive WHERE item_id=?",
+                (item_id,),
+            )
+        conn.commit()
+        return cur.rowcount
+
+
+def delete_archive_by_path(archived_path: str, project_id: Optional[str] = None) -> int:
+    """按归档路径删除单条归档记录（改分类单文件时用）。"""
+    with get_conn() as conn:
+        if project_id:
+            cur = conn.execute(
+                "DELETE FROM file_archive WHERE archived_path=? AND project_id=?",
+                (archived_path, project_id),
+            )
+        else:
+            cur = conn.execute(
+                "DELETE FROM file_archive WHERE archived_path=?",
+                (archived_path,),
+            )
+        conn.commit()
+        return cur.rowcount
+
+
 # ----------------------------------------------------------------------
 # M4: ai_history 回填 item_id
 # ----------------------------------------------------------------------
