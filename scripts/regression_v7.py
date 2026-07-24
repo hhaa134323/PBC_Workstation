@@ -13,14 +13,6 @@
 import urllib.request, urllib.parse, json, time, os, sys, io, zipfile, tempfile
 import openpyxl
 
-# Windows CI 兼容：强制 stdout/stderr 用 UTF-8（cp1252 写中文会炸）
-if sys.platform == "win32":
-    try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
-
 # 让脚本能 import app 模块（scripts/ 在项目根的子目录）
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
@@ -31,17 +23,45 @@ results = []
 
 
 def _safe_print(msg):
-    """CI 兼容：用 utf-8 写 stdout，绕过 cp1252 编码炸中文。
-    PYTHONIOENCODING 在某些 Windows Python 上不生效，这里兜底。"""
+    """CI 兼容：多路兜底写输出，绕过 cp1252 编码炸中文。
+    PYTHONIOENCODING 在某些 Windows Python 上不生效，这里多层兜底。"""
+    msg = str(msg) + "\n"
+    # 路 1：直接写 buffer + utf-8
     try:
-        sys.stdout.buffer.write((str(msg) + "\n").encode("utf-8"))
+        sys.stdout.buffer.write(msg.encode("utf-8"))
         sys.stdout.buffer.flush()
+        return
     except Exception:
-        # buffer 不可用（重定向到 StringIO 等）→ fallback 到普通 print
-        try:
-            _safe_print(msg)
-        except Exception:
-            pass
+        pass
+    # 路 2：reconfigure stdout 走 utf-8 + errors='replace'
+    try:
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdout.write(msg)
+        return
+    except Exception:
+        pass
+    # 路 3：stderr + utf-8 buffer
+    try:
+        sys.stderr.buffer.write(msg.encode("utf-8"))
+        sys.stderr.buffer.flush()
+        return
+    except Exception:
+        pass
+    # 路 4：完全 ASCII 化（替换非 ASCII 字符为 ?）
+    try:
+        sys.stdout.write(msg.encode('ascii', 'replace').decode('ascii'))
+    except Exception:
+        pass
+
+
+# 在脚本开头就强制 stdout/stderr 走 utf-8 + errors='replace'（Python 3.7+）
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 
 def test(name, fn):
@@ -456,19 +476,19 @@ def t_score_file_high():
     from app.core.matcher import score_file
     pbc_items = _get("/api/pbc/demo/list").get("items", [])
     if not pbc_items:
-        return False, "无 PBC 数据"
-    # 建一个测试文件
+        return False, "no PBC data"
+    # 建一个测试文件（用 ASCII 文件名避免 Windows cp1252 文件名炸）
     import tempfile
-    tmp = Path(tempfile.mktemp(suffix="_历-1_股权架构图.pdf"))
-    tmp.write_text("股权架构图 公司章程")
+    tmp = Path(tempfile.mktemp(suffix="_test_file.pdf"))
+    tmp.write_text("test content for matching")
     try:
-        result = score_file(tmp, pbc_items, file_text="股权架构图", client_folder=None)
+        result = score_file(tmp, pbc_items, file_text="test", client_folder=None)
         has_required = all(k in result for k in ["confidence", "decision", "best_item", "score_breakdown"])
         confidence = result.get("confidence", 0)
         decision = result.get("decision", "")
-        best = result.get("best_item", {})
-        best_id = best.get("item_id") if best else None
-        return has_required, f"confidence={confidence:.2f}, decision={decision}, best={best_id}"
+        has_best = bool(result.get("best_item"))
+        # detail 全 ASCII（避免 CI 上 cp1252 编码炸中文）
+        return has_required, f"confidence={confidence:.2f}, decision={decision}, has_best={has_best}"
     finally:
         tmp.unlink()
 
