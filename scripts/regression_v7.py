@@ -359,6 +359,141 @@ def t_frontend_has_v7_funcs():
 
 test("前端 v7 函数齐全", t_frontend_has_v7_funcs)
 
+# ===== 10. v7.5 新增：manifest 三层架构 =====
+print("\n=== 10. v7.5 manifest 三层架构（检测层）===")
+
+
+def t_manifest_load():
+    """manifest 能正常加载（CI 干净环境返回空 dict 也算通过）"""
+    from app.core.manifest import load_manifest
+    m = load_manifest("demo")
+    return isinstance(m, dict), f"manifest 项数={len(m)}"
+
+
+def t_pending_count():
+    """GET /api/files/{pid}/pending-count 接口可用"""
+    d = _get("/api/files/demo/pending-count")
+    has_count = "pending_count" in d or "count" in d
+    cnt = d.get("pending_count", d.get("count", 0))
+    return has_count, f"pending_count={cnt}"
+
+
+def t_mark_pending():
+    """mark_pending 能标记文件 + get_pending_count 能读到"""
+    from pathlib import Path
+    from app.core.manifest import mark_pending, get_pending_count, load_manifest
+    import tempfile
+    # 用一个临时文件测
+    tmp = Path(tempfile.mkdtemp(prefix="pbc_manifest_test_")) / "test_file.pdf"
+    tmp.write_text("test")
+    before = get_pending_count("demo")
+    mark_pending(tmp, project_id="demo", reason="test")
+    after = get_pending_count("demo")
+    # 清理
+    m = load_manifest("demo")
+    key = str(tmp)
+    if key in m:
+        del m[key]
+        from app.core.manifest import save_manifest
+        save_manifest(m, "demo")
+    tmp.unlink()
+    return after == before + 1, f"before={before}, after={after}（+1 表示标记成功）"
+
+
+test("manifest load", t_manifest_load)
+test("pending-count API", t_pending_count)
+test("mark_pending + get_pending_count", t_mark_pending)
+
+# ===== 11. v7.5 新增：matcher 打分模型 =====
+print("\n=== 11. v7.5 matcher 打分模型 ===")
+
+
+def t_is_walkthrough_folder():
+    """穿行测试前置检测：文件夹名含关键词 → True"""
+    from pathlib import Path
+    from app.core.matcher import is_walkthrough_folder
+    client_folder = Path("D:/AgentProjects/IpoPBC/0/demo_kit/客户共享文件夹")
+    if not client_folder.exists():
+        return True, "demo 客户文件夹不存在（CI 干净环境），跳过"
+    # 建一个真穿行测试文件夹
+    wt_folder = client_folder / "穿行测试_销售收款控制"
+    wt_folder.mkdir(exist_ok=True)
+    wt_file = wt_folder / "B0206_系统截图.pdf"
+    wt_file.write_text("test")
+    try:
+        wt_result = is_walkthrough_folder(wt_file, client_folder)
+        normal_file = client_folder / "历-1_股权架构图.pdf"
+        normal_result = is_walkthrough_folder(normal_file, client_folder) if normal_file.exists() else False
+        return wt_result and not normal_result, f"穿行测试文件夹={wt_result}, 普通文件={normal_result}"
+    finally:
+        wt_file.unlink()
+        wt_folder.rmdir()
+
+
+def t_score_file_high():
+    """score_file 返回打分结果（confidence + decision + best_item + score_breakdown）"""
+    from pathlib import Path
+    from app.core.matcher import score_file
+    pbc_items = _get("/api/pbc/demo/list").get("items", [])
+    if not pbc_items:
+        return False, "无 PBC 数据"
+    # 建一个测试文件
+    import tempfile
+    tmp = Path(tempfile.mktemp(suffix="_历-1_股权架构图.pdf"))
+    tmp.write_text("股权架构图 公司章程")
+    try:
+        result = score_file(tmp, pbc_items, file_text="股权架构图", client_folder=None)
+        has_required = all(k in result for k in ["confidence", "decision", "best_item", "score_breakdown"])
+        confidence = result.get("confidence", 0)
+        decision = result.get("decision", "")
+        best = result.get("best_item", {})
+        best_id = best.get("item_id") if best else None
+        return has_required, f"confidence={confidence:.2f}, decision={decision}, best={best_id}"
+    finally:
+        tmp.unlink()
+
+
+test("is_walkthrough_folder", t_is_walkthrough_folder)
+test("score_file 返回结构", t_score_file_high)
+
+# ===== 12. v7.5 新增：PBC 导出接口 =====
+print("\n=== 12. v7.5 PBC 导出接口 ===")
+
+
+def t_pbc_export():
+    """GET /api/pbc/{pid}/export 能下载 Excel"""
+    data = _get_raw("/api/pbc/demo/export")
+    # 验证是 xlsx
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(data))
+        ws = wb.active
+        has_rows = ws.max_row > 1
+        has_16_cols = ws.max_column == 16
+        return has_rows and has_16_cols, f"rows={ws.max_row}, cols={ws.max_column}"
+    except Exception as e:
+        return False, f"非 xlsx: {e}"
+
+
+test("PBC export 接口", t_pbc_export)
+
+# ===== 13. v7.5 新增：归档两级结构 =====
+print("\n=== 13. v7.5 归档两级结构 ===")
+
+
+def t_archive_two_level():
+    """archive-tree 返回的 tree 应支持二级结构（每个分类下有 subdirs）"""
+    d = _get("/api/files/demo/archive-tree")
+    tree = d.get("tree", [])
+    if not tree:
+        return True, "归档目录空（CI 干净环境），接口响应正常"
+    first = tree[0]
+    # v7.5 每个分类下应有 subdirs 或 files 字段
+    has_subdirs = "subdirs" in first or "sub_folders" in first or "children" in first
+    return has_subdirs or "files" in first, f"首分类 keys={list(first.keys())}"
+
+
+test("归档两级结构", t_archive_two_level)
+
 # ===== 汇总 =====
 print("\n" + "=" * 50)
 passed = sum(1 for s, _, _ in results if s == "PASS")

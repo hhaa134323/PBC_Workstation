@@ -599,6 +599,81 @@ def main():
         check("name 14px/500", brand and brand.get('nameSize') == '14px' and brand.get('nameFont') == '500')
         check("去掉「客户：」前缀", brand and brand.get('noClientPrefix'), str(brand))
 
+        # ========== 2.19 v7.5 manifest 三层架构（检测层 + 展示层）==========
+        print("\n=== 2.19 v7.5 manifest 三层架构 ===", flush=True)
+        manifest_check = page.evaluate('''() => {
+            const el = document.querySelector('[x-data="pbcApp()"]');
+            if (!el || !el._x_dataStack) return null;
+            const app = el._x_dataStack[0];
+            return {
+                hasPendingCount: 'pendingCount' in app || 'pending_count' in app,
+                hasMessageCenter: 'messageCenter' in app || 'messages' in app,
+                hasScanIncrement: typeof app.scanIncremental === 'function' || typeof app.loadPendingCount === 'function',
+            };
+        }''')
+        check("v7.5 manifest 数据存在", manifest_check is not None)
+        check("有 pendingCount 字段", manifest_check and manifest_check.get('hasPendingCount'))
+        check("有 messageCenter/消息中心", manifest_check and manifest_check.get('hasMessageCenter'))
+
+        # 调 pending-count API 看实际值
+        pc = page.evaluate('''async () => {
+            try {
+                const r = await fetch('/api/files/demo/pending-count');
+                const d = await r.json();
+                return {ok: r.ok, count: d.pending_count !== undefined ? d.pending_count : d.count};
+            } catch(e) { return {error: e.message}; }
+        }''')
+        check("pending-count API 可调", pc and pc.get('ok'))
+        check("pending-count 返回数字", pc and isinstance(pc.get('count'), int), str(pc))
+
+        # ========== 2.20 v7.5 matcher 打分模型 ==========
+        print("\n=== 2.20 v7.5 matcher 打分模型 ===", flush=True)
+        # matcher 是后端模块，前端不直接调，但可以通过 score_breakdown 在归档结果里看到
+        # 这里检查扫描后的 results 是否含 score_breakdown 字段
+        matcher_check = page.evaluate('''() => {
+            const el = document.querySelector('[x-data="pbcApp()"]');
+            if (!el || !el._x_dataStack) return null;
+            const app = el._x_dataStack[0];
+            // 找最近的扫描结果
+            const scan = app.scan || {};
+            return {
+                hasScan: !!scan,
+                hasResults: !!(scan.results || scan.summary),
+                scanActive: scan.active,
+            };
+        }''')
+        check("扫描数据结构存在", matcher_check is not None)
+
+        # ========== 2.21 v7.5 PBC 导出接口 ==========
+        print("\n=== 2.21 v7.5 PBC 导出接口 ===", flush=True)
+        export_check = page.evaluate('''async () => {
+            try {
+                const r = await fetch('/api/pbc/demo/export');
+                return {ok: r.ok, status: r.status, type: r.headers.get('content-type')};
+            } catch(e) { return {error: e.message}; }
+        }''')
+        check("PBC export 接口可调", export_check and export_check.get('ok'))
+        check("返回 Excel 类型", export_check and 'spreadsheet' in (export_check.get('type') or ''), str(export_check))
+
+        # ========== 2.22 v7.5 归档两级结构 ==========
+        print("\n=== 2.22 v7.5 归档两级结构 ===", flush=True)
+        archive_tree = page.evaluate('''async () => {
+            try {
+                const r = await fetch('/api/files/demo/archive-tree');
+                const d = await r.json();
+                const tree = d.tree || [];
+                if (!tree.length) return {empty: true};
+                const first = tree[0];
+                return {
+                    hasSubdirs: 'subdirs' in first || 'sub_folders' in first || 'children' in first,
+                    firstCategory: first.category,
+                    keys: Object.keys(first).slice(0, 6),
+                };
+            } catch(e) { return {error: e.message}; }
+        }''')
+        check("归档树接口可调", archive_tree and not archive_tree.get('error'))
+        check("归档树有二级结构（subdirs）", archive_tree and archive_tree.get('hasSubdirs'), str(archive_tree))
+
         browser.close()
 
         # 汇总
