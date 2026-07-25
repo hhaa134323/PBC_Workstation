@@ -38,7 +38,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Body, File, Query, UploadFile
+from fastapi import APIRouter, Body, File, Query, UploadFile, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import (
@@ -994,6 +994,25 @@ def _process_one_directory(
                         required_period = it.get("required_period")
                         break
 
+    # v7.7: HITL 预分析模式——整目录也进待确认
+    import os as _os_dir
+    if _os_dir.environ.get("PBC_HITL_MODE") == "1":
+        try:
+            insert_pending_confirm(
+                project_id=project_id,
+                file_path=str(dir_path),
+                file_name=dir_path.name,
+                sha256="",
+                suggested_item_id=item_id or "",
+                confidence=0.0,
+                decision="walkthrough",
+            )
+            result["pending_confirm"] = True
+            result["hitl_mode"] = True
+            return result
+        except Exception as e:
+            logger.warning("pending_confirm (directory) 写入失败（降级到直接归档）: %r", e)
+
     # 整目录归档
     try:
         arc_result = archive_mod.archive_directory(
@@ -1533,8 +1552,9 @@ def _process_one_file_sync(
 
     # v7.7: HITL 预分析模式——只写 pending_confirm，不归档
     # 开启方式：环境变量 PBC_HITL_MODE=1
+    # 注意：不限制 item_id——未分类文件（item_id为空）也进待确认，Staff 手动指定
     import os as _os
-    if _os.environ.get("PBC_HITL_MODE") == "1" and item_id:
+    if _os.environ.get("PBC_HITL_MODE") == "1":
         # v7.7: auto 批量确认开关——auto 档 + 开关开了 → 直接归档，跳过待确认
         _decision = score_result.get("decision", "") if 'score_result' in dir() else ""
         _auto_confirm = False
@@ -1919,10 +1939,21 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
     # PBC 状态推进
     try:
         from app.core.excel_io import update_item_status, STATUS_REVIEWING, STATUS_PROVIDED
-        remaining = get_pending_confirm_count_by_item(item_id, project_id=project_id)
         # 更新 pending_confirm 状态（先更新再查剩余，否则剩余数不对）
         update_pending_confirm_status(confirm_id, 1)
         remaining = get_pending_confirm_count_by_item(item_id, project_id=project_id)
+        # v7.7: 更新 manifest → processed（下次扫描不重复处理）
+        try:
+            from app.core.manifest import update_entry as _manifest_update, load_manifest as _load_manifest
+            from app.core.db import get_project as _get_proj
+            _proj = _get_proj(project_id)
+            _client_folder = Path(_proj["client_folder"]) if _proj and _proj.get("client_folder") else None
+            _manifest = _load_manifest(project_id)
+            _manifest_update(file_path, record.get("sha256") or "", item_id,
+                             arc_result.get("version", "v1"),
+                             project_id=project_id, client_folder=_client_folder, manifest=_manifest)
+        except Exception as e:
+            logger.warning("manifest update 失败（非阻断）: %r", e)
         if remaining == 0:
             # 全部确认完 → 已提供
             update_item_status(item_id, STATUS_PROVIDED, changed_by="manual",
@@ -1960,12 +1991,131 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
 
 
 @router.post("/{project_id}/skip-confirm/{confirm_id}")
+class BatchConfirmBody(BaseModel):
+    confirm_ids: list[int] = Field(..., description="要批量确认的 pending_confirm id 列表")
+
+
+@router.post("/{project_id}/batch-confirm")
+async def batch_confirm(project_id: str, body: BatchConfirmBody) -> dict:
+    """批量确认归档：循环调单条逻辑，一次返回结果。
+
+    用于前端"一键确认全部"按钮。
+    """
+    results: list[dict] = []
+    errors: list[str] = []
+    for cid in body.confirm_ids:
+        try:
+            record = get_pending_confirm_by_id(cid)
+            if record is None:
+                errors.append(f"id={cid} 不存在")
+                continue
+            if record.get("confirmed") != 0:
+                errors.append(f"id={cid} 已处理（confirmed={record.get('confirmed')}）")
+                continue
+
+            item_id = record.get("suggested_item_id", "")
+            if not item_id:
+                errors.append(f"id={cid} 无 suggested_item_id，跳过")
+                continue
+
+            from app.core.excel_io import get_item_by_id, write_pbc_list, read_pbc_list, update_item_status, STATUS_REVIEWING, STATUS_PROVIDED
+            pbc_item = get_item_by_id(item_id, project_id=project_id)
+            if pbc_item is None:
+                errors.append(f"id={cid} item_id={item_id} 不在PBC清单")
+                continue
+
+            file_path = Path(record.get("file_path", ""))
+            if not file_path.exists():
+                errors.append(f"id={cid} 原文件不存在: {file_path}")
+                continue
+
+            arc_result = archive_mod.archive_file(
+                source_path=file_path,
+                item_id=item_id,
+                entity=pbc_item.get("entity"),
+                sha256=record.get("sha256") or None,
+                archived_by="batch-confirm",
+                project_id=project_id,
+                category=pbc_item.get("category"),
+                description=pbc_item.get("doc_name"),
+                period=pbc_item.get("required_period"),
+            )
+            if not arc_result.get("ok"):
+                errors.append(f"id={cid} 归档失败: {arc_result.get('error')}")
+                continue
+
+            archived_path = arc_result.get("archived_path", "")
+            # PBC Excel
+            try:
+                pbc_items = read_pbc_list(project_id=project_id)
+                for it in pbc_items:
+                    if it.get("item_id") == item_id:
+                        it["file_path"] = archived_path
+                        break
+                write_pbc_list(pbc_items, project_id=project_id)
+            except Exception:
+                pass
+
+            # manifest 标 processed
+            update_pending_confirm_status(cid, 1)
+            try:
+                from app.core.manifest import update_entry as _mu, load_manifest as _lm
+                _proj = get_project(project_id)
+                _cf = Path(_proj["client_folder"]) if _proj and _proj.get("client_folder") else None
+                _m = _lm(project_id)
+                _mu(file_path, record.get("sha256") or "", item_id,
+                    arc_result.get("version", "v1"), project_id=project_id, client_folder=_cf, manifest=_m)
+            except Exception:
+                pass
+
+            # 状态推进
+            remaining = get_pending_confirm_count_by_item(item_id, project_id=project_id)
+            try:
+                if remaining == 0:
+                    update_item_status(item_id, STATUS_PROVIDED, changed_by="batch-confirm",
+                                      note="批量确认全部完成", project_id=project_id)
+                else:
+                    update_item_status(item_id, STATUS_REVIEWING, changed_by="batch-confirm",
+                                      note=f"批量确认，剩余 {remaining}", project_id=project_id)
+            except Exception:
+                pass
+
+            # 变更日志
+            try:
+                insert_change_log(project_id, file_path.name, "archived", item_id,
+                                record.get("sha256", ""), "manual",
+                                f"批量确认归档到 {pbc_item.get('category', '未分类')}/{item_id}")
+            except Exception:
+                pass
+
+            results.append({"confirm_id": cid, "item_id": item_id, "archived_path": archived_path,
+                           "version": arc_result.get("version", "v1")})
+
+        except Exception as e:
+            logger.exception("batch_confirm 单条失败 id=%s", cid)
+            errors.append(f"id={cid} {type(e).__name__}: {e}")
+
+    return {"ok": len(errors) == 0, "confirmed_count": len(results), "results": results, "errors": errors}
+
+
 async def skip_confirm(project_id: str, confirm_id: int) -> dict:
-    """跳过确认：不归档，标记为已跳过。"""
+    """跳过确认：不归档，标记为已跳过 + manifest 标 processed（下次扫描不重复）。"""
     record = get_pending_confirm_by_id(confirm_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"待确认记录不存在: {confirm_id}")
     update_pending_confirm_status(confirm_id, 2)
+    # v7.7: manifest 标 processed，下次扫描不重复
+    try:
+        from app.core.manifest import update_entry as _manifest_update, load_manifest as _load_manifest
+        from app.core.db import get_project as _get_proj
+        _proj = _get_proj(project_id)
+        _client_folder = Path(_proj["client_folder"]) if _proj and _proj.get("client_folder") else None
+        _manifest = _load_manifest(project_id)
+        _file_path = Path(record.get("file_path", ""))
+        _manifest_update(_file_path, record.get("sha256") or "", record.get("suggested_item_id", ""),
+                         "skipped", project_id=project_id, client_folder=_client_folder, manifest=_manifest)
+    except Exception as e:
+        logger.warning("skip manifest update 失败（非阻断）: %r", e)
     return {"ok": True, "confirm_id": confirm_id, "skipped": True}
 
 

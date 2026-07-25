@@ -67,7 +67,7 @@ STATUS_PENDING      = "待定"
 # 合法状态流转（from -> set(to)）
 # P0-5: 已提供 → 已提供，审核中（撤销归档，Manager 权限）
 _TRANSITIONS: dict[str, set[str]] = {
-    STATUS_NOT_PROVIDED: {STATUS_REVIEWING, STATUS_NA},
+    STATUS_NOT_PROVIDED: {STATUS_REVIEWING, STATUS_PROVIDED, STATUS_NA},  # v7.7: 加直接到已提供（auto批量确认）
     STATUS_REVIEWING:    {STATUS_PROVIDED, STATUS_NOT_PROVIDED, STATUS_NA},
     STATUS_PROVIDED:     {STATUS_REVIEWING, STATUS_NA},
     STATUS_NA:           {STATUS_NA},
