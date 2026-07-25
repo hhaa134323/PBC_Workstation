@@ -143,3 +143,194 @@
   background:hsl(var(--ey-yellow) / .3);
   border-color:hsl(var(--ey-yellow));
 }
+
+/* ============================================================
+   模块三：文件变更面板重做
+   右侧不遮挡侧栏，主区域自动让位，按日期分段，紧凑一行
+   点一条高亮并滚到表格里对应那一行
+   ============================================================ */
+
+/* 打开时整页往左让出宽度，表格照样看得见 */
+body.pbcg-vh-open{padding-right:400px;transition:padding-right .18s ease}
+
+.pbcg-vh{
+  position:fixed;
+  top:0;right:0;bottom:0;
+  width:400px;
+  z-index:60;
+  display:none;
+  flex-direction:column;
+  background:hsl(var(--card));
+  border-left:1px solid hsl(var(--border));
+  box-shadow:-10px 0 34px -18px rgba(26,26,36,.4);
+}
+body.pbcg-vh-open .pbcg-vh{display:flex}
+
+/* 头部 */
+.pbcg-vh-hd{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 16px;
+  border-bottom:1px solid hsl(var(--border));
+  background:hsl(var(--soft));
+  flex-shrink:0;
+}
+.pbcg-vh-hd .ic{width:16px;height:16px;flex-shrink:0;color:hsl(var(--foreground))}
+.pbcg-vh-hd .ic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pbcg-vh-hd b{font-size:14px;display:block;line-height:1.3}
+.pbcg-vh-hd span.sub{font-size:11.5px;color:hsl(var(--muted-foreground))}
+.pbcg-vh-hd .sp{margin-left:auto;display:flex;gap:4px;flex-shrink:0}
+.pbcg-vh-ico{
+  width:28px;height:28px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid transparent;border-radius:6px;
+  background:none;cursor:pointer;
+  color:hsl(var(--muted-foreground));
+}
+.pbcg-vh-ico:hover{color:hsl(var(--foreground));border-color:hsl(var(--border));background:hsl(var(--card))}
+.pbcg-vh-ico svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* 搜索加筛选 */
+.pbcg-vh-tools{
+  display:flex;gap:8px;
+  padding:10px 16px;
+  border-bottom:1px solid hsl(var(--border));
+  flex-shrink:0;
+}
+.pbcg-vh-tools input,
+.pbcg-vh-tools select{
+  font-family:inherit;font-size:12.5px;
+  height:30px;padding:0 9px;
+  border:1px solid hsl(var(--border));border-radius:7px;
+  background:hsl(var(--card));color:hsl(var(--foreground));
+  outline:none;
+}
+.pbcg-vh-tools input{flex:1;min-width:0}
+.pbcg-vh-tools input:focus,
+.pbcg-vh-tools select:focus{border-color:hsl(var(--ey-yellow))}
+.pbcg-vh-tools select{flex-shrink:0;cursor:pointer}
+
+/* 列表 */
+.pbcg-vh-list{flex:1;overflow-y:auto;padding:4px 0 20px}
+
+.pbcg-vh-day{
+  display:flex;align-items:center;gap:8px;
+  padding:12px 16px 6px;
+  font-size:11.5px;font-weight:700;
+  color:hsl(var(--muted-foreground));
+  letter-spacing:.3px;
+}
+.pbcg-vh-day i{font-style:normal;font-weight:500;opacity:.8}
+.pbcg-vh-day::after{content:"";flex:1;height:1px;background:hsl(var(--border))}
+
+.pbcg-vh-row{
+  position:relative;
+  display:flex;gap:10px;
+  padding:7px 16px 7px 16px;
+  cursor:pointer;
+  transition:background .12s;
+}
+.pbcg-vh-row:hover{background:hsl(var(--soft))}
+.pbcg-vh-row.on{background:hsl(var(--soft))}
+
+/* 时间线竖线 */
+.pbcg-vh-row::before{
+  content:"";
+  position:absolute;
+  left:20px;top:0;bottom:0;
+  width:1px;
+  background:hsl(var(--border));
+}
+.pbcg-vh-row:first-of-type::before{top:12px}
+.pbcg-vh-row.last::before{bottom:auto;height:12px}
+
+.pbcg-vh-dot{
+  position:relative;z-index:1;
+  width:9px;height:9px;border-radius:99px;
+  margin-top:5px;flex-shrink:0;
+  box-shadow:0 0 0 3px hsl(var(--card));
+}
+.pbcg-vh-row:hover .pbcg-vh-dot,
+.pbcg-vh-row.on .pbcg-vh-dot{box-shadow:0 0 0 3px hsl(var(--soft))}
+
+.pbcg-vh-main{flex:1;min-width:0}
+.pbcg-vh-l1{display:flex;align-items:center;gap:7px}
+
+.pbcg-vh-tag{
+  flex-shrink:0;
+  font-size:11px;font-weight:600;
+  padding:1px 7px;border-radius:5px;
+  border:1px solid;
+}
+.pbcg-vh-name{
+  font-size:12.5px;
+  color:hsl(var(--foreground));
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pbcg-vh-time{
+  margin-left:auto;flex-shrink:0;
+  font-size:11px;
+  color:hsl(var(--muted-foreground));
+  font-variant-numeric:tabular-nums;
+}
+
+/* 展开后的细节 */
+.pbcg-vh-det{display:none;padding:7px 0 3px}
+.pbcg-vh-row.on .pbcg-vh-det{display:block}
+.pbcg-vh-det dl{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0 0 7px}
+.pbcg-vh-det dl div{display:flex;gap:5px;font-size:11.5px}
+.pbcg-vh-det dt{color:hsl(var(--muted-foreground));margin:0}
+.pbcg-vh-det dd{margin:0;color:hsl(var(--foreground));font-weight:500}
+.pbcg-vh-det .why{
+  font-size:11.5px;color:hsl(var(--muted-foreground));
+  background:hsl(var(--soft));
+  border-left:2px solid hsl(var(--border));
+  padding:5px 8px;border-radius:0 5px 5px 0;
+  margin-bottom:7px;
+}
+.pbcg-vh-go{
+  display:inline-flex;align-items:center;gap:5px;
+  font-family:inherit;font-size:11.5px;font-weight:600;
+  padding:4px 9px;
+  color:hsl(var(--foreground));
+  background:hsl(var(--card));
+  border:1px solid hsl(var(--border));border-radius:6px;
+  cursor:pointer;
+}
+.pbcg-vh-go:hover{border-color:hsl(var(--ey-yellow));background:hsl(var(--ey-yellow) / .16)}
+.pbcg-vh-go svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pbcg-vh-miss{font-size:11.5px;color:hsl(var(--muted-foreground));margin-top:5px}
+
+/* 六种变更类型的浅底描边 */
+.pbcg-t-added{background:hsl(142 60% 40% / .12);border-color:hsl(142 60% 40% / .55);color:hsl(142 60% 28%)}
+.pbcg-t-approved{background:hsl(142 60% 40% / .12);border-color:hsl(142 60% 40% / .55);color:hsl(142 60% 28%)}
+.pbcg-t-archived{background:hsl(var(--ey-yellow) / .18);border-color:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black))}
+.pbcg-t-reclassified{background:hsl(38 92% 50% / .14);border-color:hsl(38 92% 45% / .6);color:hsl(30 90% 32%)}
+.pbcg-t-deleted{background:hsl(0 72% 51% / .1);border-color:hsl(0 72% 51% / .5);color:hsl(0 72% 40%)}
+.pbcg-t-missing{background:hsl(0 72% 51% / .1);border-color:hsl(0 72% 51% / .5);color:hsl(0 72% 40%)}
+.pbcg-t-other{background:hsl(var(--soft));border-color:hsl(var(--border));color:hsl(var(--muted-foreground))}
+
+.pbcg-d-added,.pbcg-d-approved{background:hsl(142 60% 40%)}
+.pbcg-d-archived{background:hsl(var(--ey-yellow))}
+.pbcg-d-reclassified{background:hsl(38 92% 48%)}
+.pbcg-d-deleted,.pbcg-d-missing{background:hsl(0 72% 51%)}
+.pbcg-d-other{background:hsl(var(--muted-foreground))}
+
+/* 空态和加载态 */
+.pbcg-vh-msg{
+  padding:40px 24px;text-align:center;
+  font-size:12.5px;color:hsl(var(--muted-foreground));line-height:1.7;
+}
+
+/* 表格里被定位到的那一行 */
+.pbcg-vh-hit{
+  animation:pbcgHit 2.2s ease;
+}
+@keyframes pbcgHit{
+  0%,55%{background:hsl(var(--ey-yellow) / .38)}
+  100%{background:transparent}
+}
+
+@media (max-width:900px){
+  body.pbcg-vh-open{padding-right:0}
+  .pbcg-vh{width:min(400px,100vw)}
+}
