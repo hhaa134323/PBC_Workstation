@@ -1595,6 +1595,8 @@ function pbcApp(){
     folderConfig: {show:false, input:'', info:'', error:'', archiveInput:'', archiveInfo:'', archiveError:''},
     /* v7 文件区 */
     fileZone: {loading:false, paths:null, tree:[], error:''},
+    /* v7.7: 待归档（HITL 收件箱） */
+    pendingArchive: {items:[], loading:false, error:''},
     /* v7 路径失效缓存 & 重新定位 */
     pathValid: {},
     relocateModal: {show:false, item:null, input:'', error:'', saving:false},
@@ -2210,8 +2212,8 @@ function pbcApp(){
       if(!this.currentProjectId) return;
       this.loading = true;
       try{
-        // 全部并行（7 个 API 同时发，不等彼此）
-        const [list, dash, heat, brief, rt, fc, pc, cl] = await Promise.all([
+        // 全部并行（9 个 API 同时发，不等彼此）
+        const [list, dash, heat, brief, rt, fc, pc, cl, pa, at] = await Promise.all([
           API.pbcList(this.currentProjectId),
           API.dashboard(this.currentProjectId).catch(()=>null),
           API.heatmap(this.currentProjectId).catch(()=>null),
@@ -2220,12 +2222,24 @@ function pbcApp(){
           API.getFolderConfig(this.currentProjectId).catch(()=>null),
           API.pendingCount(this.currentProjectId).catch(()=>null),
           API.changeLog(this.currentProjectId, '', 100).catch(()=>null),
+          API.get('/api/files/'+this.currentProjectId+'/pending-confirm').catch(()=>null),
+          API.archiveTree(this.currentProjectId).catch(()=>null),
         ]);
         this.pbcList = list.items || [];
         this.dashboard = dash;
         this.heatmapData = heat;
         this.briefing = brief;
         this.pendingCount = pc?.pending_count || 0;
+        // v7.7: 待归档列表
+        if(this.pendingArchive){
+          this.pendingArchive.items = (pa && pa.items) || [];
+        }
+        // v7.7: 归档树
+        if(this.fileZone){
+          this.fileZone.tree = (at && at.tree) || [];
+        }
+        // 待归档 tab 计数
+        this.tabCounts = { ...this.tabCounts, review: (pa && pa.count) || 0 };
         this.changePanel.items = (cl && cl.logs) || [];
         this.computeChangeUnread();
         // 效率锚点
