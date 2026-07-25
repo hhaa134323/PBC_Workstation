@@ -29,13 +29,35 @@ from app.utils.retry import retry
 
 logger = logging.getLogger("pbc.ai_client")
 
-# 模型名常量
-MODEL_CLASSIFICATION = "glm-5"
-MODEL_VISION          = "qwen3-vl-plus"
-MODEL_REASONING       = "glm-5"
+# 模型默认值（v7.7: 可被 api_config.json 覆盖）
+MODEL_CLASSIFICATION = "qwen-plus"
+MODEL_VISION          = "qwen-plus"  # v7.7: 不区分 vision，用同一个模型
 
 # 默认期望期间（思路 16.x：客户财务报表以 2025-12-31 为基准日）
 DEFAULT_EXPECTED_PERIOD = "2025年12月31日"
+
+
+def _load_model_from_config() -> str:
+    """从 api_config.json 读 model 字段，读不到用默认 qwen-plus。
+
+    v7.7: 用户可在 AI 配置面板「高级选项」里改模型名。
+    """
+    try:
+        from app.api.routes_config import _load_raw_config
+        raw = _load_raw_config()
+        bl = raw.get("bailian") or {}
+        m = bl.get("model")
+        if m and isinstance(m, str) and m.strip():
+            return m.strip()
+    except Exception as e:
+        logger.debug("读取 model 配置失败用默认: %r", e)
+    return MODEL_CLASSIFICATION
+
+
+def _get_model() -> str:
+    """获取当前模型名（每次调用都读配置，支持热切换）。"""
+    return _load_model_from_config()
+
 
 
 def _sha256(text: str) -> str:
@@ -158,6 +180,7 @@ class AIClient:
         temperature: float = 0.3,
         item_id: str = "",
         action: str = "chat",
+        json_mode: bool = False,
     ) -> dict[str, Any]:
         """OpenAI 兼容 chat 调用。
 
@@ -167,14 +190,15 @@ class AIClient:
             temperature: 0-1
             item_id: 用于 ai_history 记录（可空/占位）
             action: 用于 ai_history 记录
+            json_mode: True=强制 JSON 输出（response_format）
 
         Returns:
             {"ok": True, "content": "...", "model": "...", "raw": {...}}
             {"ok": False, "error": "...", "model": "..."}
         """
-        # 缓存键：模型 + 消息哈希
+        # 缓存键：模型 + 消息哈希 + json_mode
         cache_key = _sha256(
-            json.dumps({"model": model, "messages": messages, "temperature": temperature},
+            json.dumps({"model": model, "messages": messages, "temperature": temperature, "json_mode": json_mode},
                        ensure_ascii=False, sort_keys=True)
         )
         cached = _cache.get(cache_key)
@@ -193,17 +217,21 @@ class AIClient:
         def _do_request() -> dict[str, Any]:
             # httpx 同步客户端（@retry 是同步装饰器，故不用 async）
             with httpx.Client(timeout=self.timeout) as client:
+                body = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                }
+                # v7.7: JSON mode（OpenAI 标准，强制模型输出 JSON）
+                if json_mode:
+                    body["response_format"] = {"type": "json_object"}
                 resp = client.post(
                     f"{self.base_url}/chat/completions",
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
                         "Content-Type": "application/json",
                     },
-                    json={
-                        "model": model,
-                        "messages": messages,
-                        "temperature": temperature,
-                    },
+                    json=body,
                 )
                 # P0-7: 401/403 直接判定 Key 失效，触发回调后不再 retry
                 if resp.status_code in (401, 403):
@@ -314,10 +342,11 @@ class AIClient:
                 {"role": "system", "content": "你是 IPO 审计 PBC 资料分类助手，输出严格 JSON。"},
                 {"role": "user", "content": prompt},
             ],
-            model=MODEL_CLASSIFICATION,
+            model=_get_model(),
             temperature=0.1,
             item_id=placeholder_id,
             action="classify_file",
+            json_mode=True,
         )
 
         if not result.get("ok"):
@@ -393,7 +422,7 @@ class AIClient:
                 {"role": "system", "content": "你是审计期间完整性检查助手，输出严格 JSON。"},
                 {"role": "user", "content": prompt},
             ],
-            model=MODEL_CLASSIFICATION,
+            model=_get_model(),
             temperature=0.1,
             item_id=f"period-{_sha256(text)[:8]}",
             action="check_period_completeness",

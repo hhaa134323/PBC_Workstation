@@ -26,6 +26,15 @@ from app.utils.path_utils import file_stable_size, safe_path
 
 logger = logging.getLogger("pbc.file_parser")
 
+
+def _get_ocr_model() -> str:
+    """OCR 用模型名（v7.7: 从配置读，跟分类用同一个）。"""
+    try:
+        from app.core.ai_client import _get_model
+        return _get_model()
+    except Exception:
+        return "qwen-plus"
+
 # 文件大小上限（字节）
 MAX_FILE_BYTES = 50 * 1024 * 1024  # 50MB
 
@@ -328,7 +337,7 @@ def extract_text_with_vision(file_path: str | Path, ai_client: Any) -> dict[str,
         }
         result = ai_client.chat(
             messages=[msg],
-            model="qwen3-vl-plus",
+            model=_get_ocr_model(),
             temperature=0.1,
             item_id=f"ocr-{p.stem[:20]}-{idx}",
             action="vision_ocr",
@@ -374,7 +383,7 @@ def _vision_image(p: Path, ai_client: Any) -> dict[str, Any]:
     }
     result = ai_client.chat(
         messages=[msg],
-        model="qwen3-vl-plus",
+        model=_get_ocr_model(),
         temperature=0.1,
         item_id=f"ocr-{p.stem[:20]}",
         action="vision_ocr",

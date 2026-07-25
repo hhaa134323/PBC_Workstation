@@ -311,8 +311,8 @@ _safe_print("\n=== 7. AI 配置 ===")
 def t_ai_get():
     d = _get("/api/config/ai")
     cfg = d.get("config", {})
-    has_all = all(cfg.get(k) is not None for k in ["api_key_masked", "base_url", "model_classification", "confidence_threshold", "filename_match_enabled"])
-    return has_all, f"key_set={cfg.get('api_key_set')}, model={cfg.get('model_classification')}, threshold={cfg.get('confidence_threshold')}, fname_match={cfg.get('filename_match_enabled')}"
+    has_all = all(cfg.get(k) is not None for k in ["api_key_masked", "base_url", "model", "confidence_threshold", "filename_match_enabled"])
+    return has_all, f"key_set={cfg.get('api_key_set')}, model={cfg.get('model')}, threshold={cfg.get('confidence_threshold')}, fname_match={cfg.get('filename_match_enabled')}"
 
 
 def t_ai_put_threshold():

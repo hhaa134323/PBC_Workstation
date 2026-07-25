@@ -64,9 +64,7 @@ class AIConfigUpdate(BaseModel):
     """前端保存 AI 配置的请求体。"""
     api_key: Optional[str] = Field(None, description="百炼 API Key（脱敏后展示，保存时原样回传）")
     base_url: Optional[str] = Field(None, description="百炼 base_url，默认 https://dashscope.aliyuncs.com/compatible-mode/v1")
-    model_classification: Optional[str] = Field(None, description="分类用模型 id，如 glm-5")
-    model_vision: Optional[str] = Field(None, description="视觉/OCR 模型 id，如 qwen3-vl-plus")
-    model_reasoning: Optional[str] = Field(None, description="推理模型 id，如 glm-5 或 deepseek-v4-pro")
+    model: Optional[str] = Field(None, description="模型名（v7.7: 统一一个字段，分类+OCR 共用），如 qwen-plus / gpt-4o")
     # v7: Opus 4.8 收敛清单 #6 要求的两个开关
     confidence_threshold: Optional[float] = Field(None, description="置信度阈值（0-1），低于此值标红需人工复核，默认 0.7")
     filename_match_enabled: Optional[bool] = Field(None, description="文件名直配开关，True=启用文件名优先匹配跳过 AI，默认 True")
@@ -112,9 +110,7 @@ async def get_ai_config() -> dict:
             "api_key_masked": _mask_key(bl.get("api_key") or ""),
             "api_key_set": bool(bl.get("api_key")),
             "base_url": bl.get("base_url") or "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "model_classification": ai_models.get("model_classification") or "glm-5",
-            "model_vision": ai_models.get("model_vision") or "qwen3-vl-plus",
-            "model_reasoning": ai_models.get("model_reasoning") or "glm-5",
+            "model": bl.get("model") or "qwen-plus",
             # v7: 两个开关
             "confidence_threshold": float(ai_flags.get("confidence_threshold", 0.7)),
             "filename_match_enabled": bool(ai_flags.get("filename_match_enabled", True)),
@@ -148,17 +144,10 @@ async def update_ai_config(body: AIConfigUpdate) -> dict:
         bl["base_url"] = body.base_url
         changed.append("base_url")
 
-    if body.model_classification is not None:
-        ai_models["model_classification"] = body.model_classification
-        changed.append("model_classification")
-
-    if body.model_vision is not None:
-        ai_models["model_vision"] = body.model_vision
-        changed.append("model_vision")
-
-    if body.model_reasoning is not None:
-        ai_models["model_reasoning"] = body.model_reasoning
-        changed.append("model_reasoning")
+    # v7.7: 统一 model 字段（替代 model_classification/vision/reasoning）
+    if body.model is not None:
+        bl["model"] = body.model.strip()
+        changed.append("model")
 
     # v7: 两个开关
     if body.confidence_threshold is not None:
