@@ -995,8 +995,16 @@ def _process_one_directory(
                         break
 
     # v7.7: HITL 预分析模式——整目录也进待确认
+    _hitl_on_dir = False
+    try:
+        from app.api.routes_config import _load_raw_config as _lrc
+        _hitl_on_dir = bool(((_lrc().get("ai_flags") or {}).get("hitl_mode", True)))
+    except Exception:
+        _hitl_on_dir = True
     import os as _os_dir
     if _os_dir.environ.get("PBC_HITL_MODE") == "1":
+        _hitl_on_dir = True
+    if _hitl_on_dir:
         try:
             insert_pending_confirm(
                 project_id=project_id,
@@ -1551,10 +1559,18 @@ def _process_one_file_sync(
     })
 
     # v7.7: HITL 预分析模式——只写 pending_confirm，不归档
-    # 开启方式：环境变量 PBC_HITL_MODE=1
-    # 注意：不限制 item_id——未分类文件（item_id为空）也进待确认，Staff 手动指定
+    # 开启方式：api_config.json ai_flags.hitl_mode（默认 True）
+    # 兼容环境变量 PBC_HITL_MODE=1（优先级高于配置）
     import os as _os
-    if _os.environ.get("PBC_HITL_MODE") == "1":
+    _hitl_on = _os.environ.get("PBC_HITL_MODE") == "1"
+    if not _hitl_on:
+        try:
+            from app.api.routes_config import _load_raw_config
+            _raw = _load_raw_config()
+            _hitl_on = bool((_raw.get("ai_flags") or {}).get("hitl_mode", True))
+        except Exception:
+            _hitl_on = True  # 默认开启
+    if _hitl_on:
         # v7.7: auto 批量确认开关——auto 档 + 开关开了 → 直接归档，跳过待确认
         _decision = score_result.get("decision", "") if 'score_result' in dir() else ""
         _auto_confirm = False

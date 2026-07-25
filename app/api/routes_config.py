@@ -70,6 +70,8 @@ class AIConfigUpdate(BaseModel):
     filename_match_enabled: Optional[bool] = Field(None, description="文件名直配开关，True=启用文件名优先匹配跳过 AI，默认 True")
     # v7.7: auto 档批量确认开关（HITL）
     auto_confirm_enabled: Optional[bool] = Field(None, description="自动确认高置信度文件（auto档>0.70跳过待确认直接归档），默认 False")
+    # v7.7: HITL 模式开关（从环境变量改成配置项，默认开启）
+    hitl_mode: Optional[bool] = Field(None, description="HITL人机协同（AI预分析不归档，人确认后才归档），默认 True")
 
 
 def _mask_key(key: str) -> str:
@@ -116,6 +118,8 @@ async def get_ai_config() -> dict:
             "filename_match_enabled": bool(ai_flags.get("filename_match_enabled", True)),
             # v7.7: auto 批量确认开关
             "auto_confirm_enabled": bool(ai_flags.get("auto_confirm_enabled", False)),
+            # v7.7: HITL 模式开关
+            "hitl_mode": bool(ai_flags.get("hitl_mode", True)),
         },
     }
 
@@ -167,6 +171,11 @@ async def update_ai_config(body: AIConfigUpdate) -> dict:
     if body.auto_confirm_enabled is not None:
         ai_flags["auto_confirm_enabled"] = bool(body.auto_confirm_enabled)
         changed.append("auto_confirm_enabled")
+
+    # v7.7: HITL 模式开关
+    if body.hitl_mode is not None:
+        ai_flags["hitl_mode"] = bool(body.hitl_mode)
+        changed.append("hitl_mode")
 
     raw["bailian"] = bl
     raw["ai_models"] = ai_models
