@@ -1396,7 +1396,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
         <div><h1>已完成</h1><div class="desc">已复核归档的资料与不适用项。</div></div>
       </div>
       <div class="gauges" style="margin-bottom:16px">
-        <div class="gauge green"><div class="k">总体完成率</div><div class="v" x-text="progressPct+'%'"></div><div class="sub" x-text="'已提供或审核中 '+progressProvided+'，   '+progressTotal"></div></div>
+        <div class="gauge green"><div class="k">总体完成率</div><div class="v" x-text="progressPct+'%'"></div><div class="sub" x-text="'已提供或审核中 '+progressProvided+'，共 '+progressTotal"></div></div>
         <div class="gauge"><div class="k">已归档</div><div class="v" x-text="gauges.done"></div><div class="sub">终态，复核通过</div></div>
         <div class="gauge"><div class="k">不适用</div><div class="v" x-text="gauges.na"></div><div class="sub">不涉及本公司</div></div>
       </div>
@@ -1681,7 +1681,7 @@ function pbcApp(){
         }
       } else if(!this.showOnboarding){
         // P1-12: 没有项目且非首启，提示正在初始化
-        this.pushToast('mid','正在初始化示例项目…','后  正在异步创建 demo 项目，请稍候刷新');
+        this.pushToast('mid','正在初始化示例项目…','后端正在异步创建 demo 项目，请稍候刷新');
       }
       // 启动 briefing 事件轮询（watchdog 解除风险事件 → 主动推 toast）
       this._startBriefingPoll();
@@ -2084,7 +2084,7 @@ function pbcApp(){
       const a = document.createElement('a');
       a.href = '/api/pbc/'+pid+'/export';
       document.body.appendChild(a); a.click(); a.remove();
-      this.pushToast('low','正在导出清单','导出当前 PBC 清单  含已回写状态和文件路径）');
+      this.pushToast('low','正在导出清单','导出当前 PBC 清单（含已回写状态和文件路径）');
     },
     openTestData(){ this.testDataModal.show = true; },
     downloadTestPackage(){
