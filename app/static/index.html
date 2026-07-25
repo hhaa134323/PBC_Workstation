@@ -3,8 +3,6 @@
 <head>
 <link rel="stylesheet" href="/static/pbc-enhance.css">
 <script defer src="/static/pbc-enhance.js"></script>
-<link rel="stylesheet" href="/static/pbc-confirm.css">
-<script defer src="/static/pbc-confirm.js"></script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>IPO 审计 PBC 管理工作站</title>
@@ -1354,10 +1352,38 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
     <!-- Tab 2 待复核 -->
     <div x-show="!loading && currentTab==='review'">
       <div class="page-head">
-        <div><h1>待复核</h1><div class="desc">已初检，待高级审计员复核；低置信度项已置顶标红。</div></div>
+        <div><h1>待归档</h1><div class="desc">AI 预分析后的文件，确认后归档；低置信度已置顶标红。</div></div>
+        <button class="btn btn-pri btn-xs" x-show="pendingArchive.items.length>0" @click="batchArchiveAll()">全部归档</button>
       </div>
-      <div class="filters" x-html="filtersBarHtml()"></div>
-      <div x-html="tableViewHtml(filteredItems())"></div>
+      <!-- 待归档列表 -->
+      <template x-if="pendingArchive.items.length===0">
+        <div style="padding:40px;text-align:center;color:var(--text3);font-size:14px">暂无待归档文件。扫描文件后，AI 预分析结果会显示在这里。</div>
+      </template>
+      <template x-for="(item, idx) in pendingArchive.items" :key="item.id">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
+          <!-- 置信度圆点 -->
+          <div style="width:8px;height:8px;border-radius:99px;flex-shrink:0" :style="'background:'+(item.confidence>0.7?'#22c55e':item.confidence>0.3?'#f59e0b':'#ef4444')"></div>
+          <!-- 文件信息 -->
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500;color:var(--text)" x-text="item.file_name"></div>
+            <div style="font-size:12px;color:var(--text3);display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+              <span x-text="'建议: '+item.suggested_item_id"></span>
+              <span x-text="'置信度: '+((item.confidence||0)*100).toFixed(0)+'%'"></span>
+              <span x-show="item.decision" x-text="item.decision" style="padding:1px 6px;border-radius:3px;background:var(--bg2)"></span>
+            </div>
+            <!-- 编号矛盾高亮 -->
+            <div x-show="item.conflict_signal" style="margin-top:4px;padding:4px 8px;background:#fef9c3;border-radius:4px;font-size:12px;color:#7c5e00">
+              <span x-text="item.conflict_signal?.hint"></span>
+            </div>
+          </div>
+          <!-- 操作按钮 -->
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-pri btn-xs" @click="confirmArchive(item.id,'')">确认归档</button>
+            <button class="btn btn-ghost btn-xs" @click="openReclassifyConfirm(item)">改分类</button>
+            <button class="btn btn-ghost btn-xs" @click="skipArchive(item.id)">跳过</button>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Tab 3 超期未提供（风险雷达） -->
@@ -2390,6 +2416,47 @@ function pbcApp(){
       for(const m of items){ const t = String(m.changed_at || ''); if(t > newest) newest = t; }
       if(newest) localStorage.setItem('pbc_changelog_seen_' + this.currentProjectId, newest);
       this.changePanel.unread = 0;
+    },
+    /* v7.7: 待归档 HITL 方法 */
+    async confirmArchive(confirmId, newItemId){
+      try{
+        const r = await API.post('/api/files/'+this.currentProjectId+'/confirm/'+confirmId, {new_item_id: newItemId||''});
+        if(r.ok){
+          this.pushToast('low','已归档','文件已归档到 archives/');
+          await this.reloadAll();
+        } else { this.pushToast('high','归档失败', r.detail||r.error||''); }
+      }catch(e){ this.pushToast('high','归档失败', e.message); }
+    },
+    async skipArchive(confirmId){
+      try{
+        const r = await API.post('/api/files/'+this.currentProjectId+'/skip-confirm/'+confirmId, {});
+        if(r.ok){
+          this.pushToast('low','已跳过','文件未归档');
+          await this.reloadAll();
+        }
+      }catch(e){ this.pushToast('high','跳过失败', e.message); }
+    },
+    async batchArchiveAll(){
+      const ids = (this.pendingArchive.items||[]).map(i=>i.id);
+      if(!ids.length){ this.pushToast('mid','无待归档','没有文件可批量归档'); return; }
+      try{
+        const r = await API.post('/api/files/'+this.currentProjectId+'/batch-confirm', {confirm_ids: ids});
+        this.pushToast('low','批量归档完成', '已归档 '+r.confirmed_count+' 份'+(r.errors&&r.errors.length?('，'+r.errors.length+' 份失败'):''));
+        await this.reloadAll();
+      }catch(e){ this.pushToast('high','批量归档失败', e.message); }
+    },
+    openReclassifyConfirm(item){
+      // 复用现有改分类弹窗
+      this.reclassifyModal.show = true;
+      this.reclassifyModal.confirmId = item.id;
+      this.reclassifyModal.item = {item_id: item.suggested_item_id, category: '', doc_name: ''};
+      this.reclassifyModal.search = '';
+      this.reclassifyModal.selected = '';
+      this.reclassifyModal.reason = '';
+      this.reclassifyModal.error = '';
+      // 加载 PBC 项列表
+      this.reclassifyModal.allItems = (this.pbcList||[]).map(i=>({item_id:i.item_id, category:i.category||'', doc_name:i.doc_name||''}));
+      this.reclassifyModal.filtered = this.reclassifyModal.allItems;
     },
     changeLabel(t){
       return ({added:'新增', archived:'归档', reclassified:'改分类', approved:'复核通过', deleted:'删除', missing:'文件缺失'})[t] || t || '变更';
