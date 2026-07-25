@@ -1781,7 +1781,9 @@ function pbcApp(){
       this.dashboard = null;
       this.heatmapData = null;
       this.briefing = null;
+      this.fileZone.paths = null;  // 清旧路径
       await this.reloadAll();
+      this.loadFileZone();  // v7.7: 切项目后立即加载文件区路径（triage tab 依赖）
       if(!silent) this.pushToast('low','已切换项目', p.name);
     },
 
