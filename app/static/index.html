@@ -1234,7 +1234,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
     <div x-show="loading" style="text-align:center;padding:60px;color:var(--text3)"><span class="spin" style="width:20px;height:20px"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 加载中…</div>
 
     <!-- 今日简报首屏（L3 主动化产品） -->
-    <div x-show="!loading && briefing && briefing.events.length" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
+    <div x-show="!loading && briefing && (briefing.events||[]).length" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
       <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--soft)">
         <span style="width:10px;height:10px;border-radius:99px;background:var(--red);animation:pulse 2s infinite"></span>
         <style>@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,0.5)}70%{box-shadow:0 0 0 8px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}</style>
@@ -1293,18 +1293,18 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       </div>
 
       <div class="card card-pad" style="margin-bottom:16px">
-        <div x-show="currentFolderInfo.exists" style="font-size:12px;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px;flex-wrap:wrap">
+        <div x-show="fileZone.paths && fileZone.paths.client_folder && fileZone.paths.client_folder.exists" style="font-size:12px;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px;flex-wrap:wrap">
           <span style="color:var(--text3);white-space:nowrap">文件夹</span>
-          <code style="font-size:12px;background:var(--bg);padding:2px 8px;border-radius:4px;border:1px solid var(--border);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="currentFolderInfo.path" :title="currentFolderInfo.path"></code>
-          <span class="badge b-done" x-text="currentFolderInfo.count + ' 个文件'" style="white-space:nowrap"></span>
-          <button class="btn btn-ghost btn-xs" style="margin-left:auto;white-space:nowrap" @click="openExplorer(currentFolderInfo.path)">打开文件夹</button>
+          <code style="font-size:12px;background:var(--bg);padding:2px 8px;border-radius:4px;border:1px solid var(--border);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="(fileZone.paths&&fileZone.paths.client_folder&&fileZone.paths.client_folder.path)||''" :title="(fileZone.paths&&fileZone.paths.client_folder&&fileZone.paths.client_folder.path)||''"></code>
+          <span class="badge b-done" x-text="((fileZone.paths&&fileZone.paths.client_folder&&fileZone.paths.client_folder.file_count)||0) + ' 个文件'" style="white-space:nowrap"></span>
+          <button class="btn btn-ghost btn-xs" style="margin-left:auto;white-space:nowrap" @click="openExplorer(fileZone.paths?.client_folder?.path)">打开文件夹</button>
           <button class="btn btn-ghost btn-xs" style="white-space:nowrap" @click="openFolderConfig()">更改</button>
         </div>
-        <div x-show="!currentFolderInfo.exists && currentFolderInfo.path" style="font-size:12px;color:var(--orange);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--red-soft);padding:8px 12px;border-radius:8px">
-          <span>文件夹不存在：<code x-text="currentFolderInfo.path"></code></span>
+        <div x-show="fileZone.paths && fileZone.paths.client_folder && fileZone.paths.client_folder.path && !fileZone.paths.client_folder.exists" style="font-size:12px;color:var(--orange);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--red-soft);padding:8px 12px;border-radius:8px">
+          <span>文件夹不存在：<code x-text="fileZone.paths?.client_folder?.path"></code></span>
           <button class="btn btn-ghost btn-xs" style="margin-left:auto" @click="openFolderConfig()">重新配置</button>
         </div>
-        <div x-show="!currentFolderInfo.path" style="font-size:12px;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px">
+        <div x-show="!fileZone.paths || !fileZone.paths.client_folder || !fileZone.paths.client_folder.path" style="font-size:12px;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px">
           尚未配置客户共享文件夹
           <button class="btn btn-soft btn-xs" style="margin-left:auto" @click="openFolderConfig()">配置文件夹</button>
         </div>
@@ -2273,7 +2273,10 @@ function pbcApp(){
         const done = (rt?.tasks||[]).filter(t=>t.status==='done'||t.status==='done_with_errors');
         this.efficiencyCount = done.reduce((s,t)=>s+(t.done_count||0),0);
         // 文件夹路径
-        this.currentFolderInfo = {path: fc?.current?.path||'', count: fc?.current?.file_count||0, exists: fc?.current?.exists||false};
+        const _fc = fc?.current || {};
+        this.currentFolderInfo.path = _fc.path || '';
+        this.currentFolderInfo.count = _fc.file_count || 0;
+        this.currentFolderInfo.exists = _fc.exists || false;
       }catch(e){
         this.pushToast('mid','数据加载失败', e.message);
       }finally{
@@ -2284,7 +2287,7 @@ function pbcApp(){
     /* =========================================================
        Tab / 过滤
        ========================================================= */
-    switchTab(id){ this.currentTab = id; if(id==='files') this.loadFileZone(); },
+    switchTab(id){ this.currentTab = id; if(id==='files'||id==='triage') this.loadFileZone(); },
 
     stageOf(it){
       const st = it.status_normalized || it.status;
