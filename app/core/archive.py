@@ -303,20 +303,22 @@ def archive_directory(
     else:
         sub_dir_name = src_name
     base_dir = get_archive_root(project_id=project_id) / category_dir_name / sub_dir_name
-    base_dir.mkdir(parents=True, exist_ok=True)
 
-    # 目标文件夹名：直接用 sub_dir_name（已在父级路径里了，这里用原文件夹名）
+    # 目标文件夹名：直接用 sub_dir_name
     target_dir = base_dir
 
-    # 重名时加版本后缀
-    if target_dir.exists():
+    # 重名时：如果是空目录则复用，否则加版本后缀
+    if base_dir.exists() and any(base_dir.iterdir()):
+        # 目录非空，加版本后缀
         i = 2
         while True:
             candidate = base_dir.parent / f"{sub_dir_name}_v{i}"
-            if not candidate.exists():
+            if not candidate.exists() or (candidate.exists() and not any(candidate.iterdir())):
                 target_dir = candidate
                 break
             i += 1
+    
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     # 整目录拷贝（保留内部结构）
     try:
