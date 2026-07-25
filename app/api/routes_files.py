@@ -2018,7 +2018,6 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
     }
 
 
-@router.post("/{project_id}/skip-confirm/{confirm_id}")
 class BatchConfirmBody(BaseModel):
     confirm_ids: list[int] = Field(..., description="要批量确认的 pending_confirm id 列表")
 
@@ -2130,6 +2129,7 @@ async def batch_confirm(project_id: str, body: BatchConfirmBody) -> dict:
     return {"ok": len(errors) == 0, "confirmed_count": len(results), "results": results, "errors": errors}
 
 
+@router.post("/{project_id}/skip-confirm/{confirm_id}")
 async def skip_confirm(project_id: str, confirm_id: int) -> dict:
     """跳过确认：不归档，标记为已跳过 + manifest 标 processed（下次扫描不重复）。"""
     record = get_pending_confirm_by_id(confirm_id)
