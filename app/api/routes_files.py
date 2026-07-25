@@ -1921,19 +1921,31 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
 
     # 归档（拷贝到 archives/）
     try:
-        arc_result = archive_mod.archive_file(
-            source_path=file_path,
-            item_id=item_id,
-            entity=pbc_item.get("entity"),
-            sha256=record.get("sha256") or None,
-            archived_by="manual-confirm",
-            project_id=project_id,
-            category=pbc_item.get("category"),
-            description=pbc_item.get("doc_name"),
-            period=pbc_item.get("required_period"),
-        )
+        # v7.7: 如果是目录（walkthrough）调 archive_directory，否则 archive_file
+        if file_path.is_dir():
+            arc_result = archive_mod.archive_directory(
+                source_dir=file_path,
+                item_id=item_id,
+                entity=pbc_item.get("entity"),
+                category=pbc_item.get("category"),
+                archived_by="manual-confirm",
+                project_id=project_id,
+                description=pbc_item.get("doc_name"),
+            )
+        else:
+            arc_result = archive_mod.archive_file(
+                source_path=file_path,
+                item_id=item_id,
+                entity=pbc_item.get("entity"),
+                sha256=record.get("sha256") or None,
+                archived_by="manual-confirm",
+                project_id=project_id,
+                category=pbc_item.get("category"),
+                description=pbc_item.get("doc_name"),
+                period=pbc_item.get("required_period"),
+            )
     except Exception as e:
-        logger.exception("confirm archive_file 失败")
+        logger.exception("confirm archive 失败")
         raise HTTPException(status_code=500, detail=f"归档失败: {e}")
 
     if not arc_result.get("ok"):
@@ -2045,17 +2057,21 @@ async def batch_confirm(project_id: str, body: BatchConfirmBody) -> dict:
                 errors.append(f"id={cid} 原文件不存在: {file_path}")
                 continue
 
-            arc_result = archive_mod.archive_file(
-                source_path=file_path,
-                item_id=item_id,
-                entity=pbc_item.get("entity"),
-                sha256=record.get("sha256") or None,
-                archived_by="batch-confirm",
-                project_id=project_id,
-                category=pbc_item.get("category"),
-                description=pbc_item.get("doc_name"),
-                period=pbc_item.get("required_period"),
-            )
+            if file_path.is_dir():
+                arc_result = archive_mod.archive_directory(
+                    source_dir=file_path, item_id=item_id,
+                    entity=pbc_item.get("entity"), category=pbc_item.get("category"),
+                    archived_by="batch-confirm", project_id=project_id,
+                    description=pbc_item.get("doc_name"),
+                )
+            else:
+                arc_result = archive_mod.archive_file(
+                    source_path=file_path, item_id=item_id,
+                    entity=pbc_item.get("entity"), sha256=record.get("sha256") or None,
+                    archived_by="batch-confirm", project_id=project_id,
+                    category=pbc_item.get("category"), description=pbc_item.get("doc_name"),
+                    period=pbc_item.get("required_period"),
+                )
             if not arc_result.get("ok"):
                 errors.append(f"id={cid} 归档失败: {arc_result.get('error')}")
                 continue
