@@ -1587,7 +1587,7 @@ function pbcApp(){
     /* tab */
     tabs: [
       {id:'triage',  label:'待初检'},
-      {id:'review',  label:'待复核'},
+      {id:'review',  label:'待归档'},
       {id:'overdue', label:'超期未提供', alert:true},
       {id:'done',    label:'已完成'},
       {id:'files',   label:'文件区', noCount:true},
@@ -2264,8 +2264,9 @@ function pbcApp(){
         if(this.fileZone){
           this.fileZone.tree = (at && at.tree) || [];
         }
-        // 待归档 tab 计数
-        this.tabCounts = { ...this.tabCounts, review: (pa && pa.count) || 0 };
+        // 待归档 tab 计数（必须更新让角标显示）
+        const reviewCount = (pa && pa.count) || (this.pendingArchive?.items?.length||0);
+        this.tabCounts = Object.assign({}, this.tabCounts, {review: reviewCount});
         this.changePanel.items = (cl && cl.logs) || [];
         this.computeChangeUnread();
         // 效率锚点
