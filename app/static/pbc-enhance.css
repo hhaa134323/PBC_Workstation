@@ -1,0 +1,98 @@
+/* ============================================================
+   PBC 前端增强模块 - 样式
+   复用 index.html 的 EY 设计变量，不覆盖任何既有样式
+   ------------------------------------------------------------
+   模块一：今日简报收起
+   ============================================================ */
+
+/* 收起时隐掉大卡片。用 important 盖过 Alpine 的行内 display */
+.pbcg-brief-off{display:none !important}
+
+/* 收起后的一条细摘要 */
+.pbcg-brief-bar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 16px;
+  margin-bottom:16px;
+  background:hsl(var(--card));
+  border:1px solid hsl(var(--border));
+  border-left:3px solid hsl(var(--ey-yellow));
+  border-radius:10px;
+  cursor:pointer;
+  transition:.15s;
+  box-shadow:var(--shadow-sm,0 1px 2px rgba(26,26,36,.06));
+}
+.pbcg-brief-bar:hover{
+  border-color:hsl(var(--ey-yellow));
+  box-shadow:0 4px 10px -3px rgba(26,26,36,.16);
+}
+.pbcg-brief-bar .pbcg-bb-dot{
+  width:8px;height:8px;border-radius:99px;
+  background:var(--red,#dc2626);
+  flex-shrink:0;
+}
+.pbcg-brief-bar .pbcg-bb-dot.calm{background:var(--green,#16a34a)}
+.pbcg-brief-bar .pbcg-bb-name{
+  font-size:13px;
+  font-weight:700;
+  color:hsl(var(--foreground));
+  flex-shrink:0;
+}
+.pbcg-brief-bar .pbcg-bb-txt{
+  font-size:12.5px;
+  color:hsl(var(--muted-foreground));
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.pbcg-brief-bar .pbcg-bb-txt b{color:hsl(var(--foreground));font-weight:600}
+.pbcg-brief-bar .pbcg-bb-act{
+  margin-left:auto;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  font-size:12px;
+  font-weight:600;
+  color:hsl(var(--muted-foreground));
+}
+.pbcg-brief-bar:hover .pbcg-bb-act{color:hsl(var(--foreground))}
+.pbcg-brief-bar .pbcg-bb-act svg{
+  width:14px;height:14px;
+  fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+
+/* 展开卡片右上角的收起按钮 */
+.pbcg-brief-fold{
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  margin-left:14px;
+  padding:4px 10px;
+  font-family:inherit;
+  font-size:12px;
+  font-weight:600;
+  color:hsl(var(--muted-foreground));
+  background:transparent;
+  border:1px solid hsl(var(--border));
+  border-radius:6px;
+  cursor:pointer;
+  transition:.15s;
+}
+.pbcg-brief-fold:hover{
+  color:hsl(var(--foreground));
+  border-color:hsl(var(--ey-yellow));
+  background:hsl(var(--card));
+}
+.pbcg-brief-fold svg{
+  width:14px;height:14px;
+  fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+
+@media (max-width:640px){
+  .pbcg-brief-bar .pbcg-bb-txt{display:none}
+}
