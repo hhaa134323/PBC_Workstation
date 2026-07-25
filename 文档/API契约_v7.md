@@ -694,6 +694,34 @@ Staff 确认 AI 建议后，才真正拷贝文件到 archives/ + 推进状态。
 - 有剩余未确认 → 已提供，审核中
 - 全部确认完 → 已提供
 
+**注意**：确认后 manifest 标 processed（下次扫描不重复处理，避免"打地鼠"）。
+
+### 2.5 批量确认 `POST /api/files/{project_id}/batch-confirm`
+
+前端"一键确认全部"按钮调此接口，一次请求批量归档多份文件。
+
+**请求**：
+```json
+{
+  "confirm_ids": [1, 2, 3, 4]
+}
+```
+
+**响应**：
+```json
+{
+  "ok": true,
+  "confirmed_count": 3,
+  "results": [
+    {"confirm_id": 1, "item_id": "历-1", "archived_path": "...", "version": "v1"},
+    {"confirm_id": 2, "item_id": "财-1", "archived_path": "...", "version": "v1"}
+  ],
+  "errors": ["id=3 无 suggested_item_id，跳过"]
+}
+```
+
+循环调单条逻辑（归档+manifest标processed+状态推进+写日志），一次返回全部结果。
+
 ### 3. 跳过确认 `POST /api/files/{project_id}/skip-confirm/{confirm_id}`
 
 不归档，标记为已跳过。文件留在客户文件夹，manifest保持pending。
