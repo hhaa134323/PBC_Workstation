@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -657,6 +658,16 @@ async def get_archive_tree_by_project(project_id: str) -> dict:
     if proj is None:
         raise FileNotFoundError(f"项目不存在: {project_id}")
     root = get_archive_root(project_id=project_id)
+    # v7.7: 清理残留空目录（之前mkdir+exists bug产生的）
+    if root.exists():
+        for dirpath, dirnames, filenames in os.walk(root, topdown=False):
+            for d in dirnames:
+                full = os.path.join(dirpath, d)
+                try:
+                    if os.path.isdir(full) and not os.listdir(full):
+                        os.rmdir(full)
+                except Exception:
+                    pass
     tree = list_archive_tree(project_id=project_id)
     return {
         "project_id": project_id,
