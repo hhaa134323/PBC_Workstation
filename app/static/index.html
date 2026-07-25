@@ -557,6 +557,60 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
     </div>
   </div>
 
+  <!-- 文件变更面板（source control 时间线，右侧全高滑出） -->
+  <div x-show="changePanel.show" x-transition.opacity @click.self="changePanel.show=false" style="position:fixed;inset:0;z-index:70;background:hsl(var(--ey-confident-black) / 0.28)">
+    <div x-show="changePanel.show" x-transition.origin.right style="position:absolute;top:0;right:0;bottom:0;width:400px;max-width:calc(100vw - 32px);background:hsl(var(--popover));border-left:1px solid hsl(var(--border));box-shadow:-8px 0 30px -12px rgba(0,0,0,.25);display:flex;flex-direction:column">
+      <div style="padding:16px 20px;border-bottom:1px solid hsl(var(--border));display:flex;align-items:center;gap:10px;background:hsl(var(--soft))">
+        <span class="ico ico-sm" style="color:hsl(var(--primary))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+        <div>
+          <b style="font-size:15px;color:hsl(var(--popover-foreground))">文件变更</b>
+          <div style="font-size:12px;color:hsl(var(--muted-foreground))">谁改了什么，一条条按时间记录</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:4px">
+          <button class="btn btn-ghost btn-xs" @click="loadChangeLog()" style="font-size:11px">刷新</button>
+          <button style="background:none;border:none;font-size:18px;cursor:pointer;color:hsl(var(--muted-foreground));line-height:1;padding:0 2px" @click="changePanel.show=false">×</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid hsl(var(--border))">
+        <template x-for="f in [{k:'',l:'全部'},{k:'added',l:'新增'},{k:'archived',l:'归档'},{k:'reclassified',l:'改分类'},{k:'approved',l:'复核通过'},{k:'missing',l:'缺失'},{k:'deleted',l:'删除'}]" :key="f.k">
+          <button style="padding:4px 10px;font-size:12px;border-radius:99px;border:1px solid hsl(var(--border));cursor:pointer;background:none" :style="changePanel.filter===f.k?'background:hsl(var(--primary));color:hsl(var(--primary-foreground));border-color:hsl(var(--primary))':'color:hsl(var(--muted-foreground))'" @click="changePanel.filter=f.k; loadChangeLog()" x-text="f.l"></button>
+        </template>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:8px 0">
+        <template x-if="changePanel.loading">
+          <div style="padding:30px;text-align:center;color:hsl(var(--muted-foreground));font-size:13px">加载中…</div>
+        </template>
+        <template x-if="!changePanel.loading && changePanel.error">
+          <div style="padding:20px;color:hsl(var(--destructive));font-size:13px" x-text="changePanel.error"></div>
+        </template>
+        <template x-if="!changePanel.loading && !changePanel.error && changePanel.items.length===0">
+          <div style="padding:40px 20px;text-align:center;color:hsl(var(--muted-foreground));font-size:13px">还没有文件变更记录。扫描文件或复核后，这里会按时间记录每一次改动。</div>
+        </template>
+        <template x-for="(m, i) in changePanel.items" :key="(m.id||i)">
+          <div style="display:flex;gap:12px;padding:12px 20px">
+            <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+              <span style="width:10px;height:10px;border-radius:99px;margin-top:4px" :style="'background:'+changeColor(m.change_type)"></span>
+              <span x-show="i < changePanel.items.length-1" style="flex:1;width:2px;background:hsl(var(--border));margin-top:4px"></span>
+            </div>
+            <div style="flex:1;min-width:0;padding-bottom:4px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+                <span style="font-size:11px;font-weight:600;padding:1px 8px;border-radius:4px;color:#fff" :style="'background:'+changeColor(m.change_type)" x-text="changeLabel(m.change_type)"></span>
+                <span style="font-size:11px;color:hsl(var(--muted-foreground));margin-left:auto;flex-shrink:0" x-text="fmtChangeTime(m.changed_at)"></span>
+              </div>
+              <div style="font-size:13px;color:hsl(var(--popover-foreground));word-break:break-all;line-height:1.5" x-text="m.file_name || m.item_id || '（未命名文件）'"></div>
+              <div style="font-size:12px;color:hsl(var(--muted-foreground));margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
+                <span x-show="m.item_id" x-text="m.item_id"></span>
+                <span x-show="m.version" x-text="'版本 '+m.version"></span>
+                <span x-show="m.changed_by" x-text="'操作人：'+m.changed_by"></span>
+              </div>
+              <div x-show="m.reason" style="font-size:12px;color:hsl(var(--muted-foreground));margin-top:3px" x-text="m.reason"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast 区 -->
   <div class="toast-wrap">
     <template x-for="t in toasts" :key="t.id">
@@ -1165,12 +1219,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
         <span x-text="'('+progressProvided+'/'+progressTotal+')'"></span>
       </div>
       <button class="btn btn-ghost btn-xs" @click="reloadAll()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span>刷新</button>
-      <button class="btn btn-ghost btn-xs" style="position:relative" @click="messageCenter.show=!messageCenter.show">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
-        <span x-show="messageCenter.unread>0" style="position:absolute;top:-2px;right:-2px;background:hsl(var(--destructive));color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;display:flex;align-items:center;justify-content:center;padding:0 4px" x-text="messageCenter.unread"></span>
+      <button class="btn btn-pri btn-xs" style="position:relative" @click="openChangePanel()">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>文件变更
+        <span x-show="changePanel.unread>0" style="position:absolute;top:-2px;right:-2px;background:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black));font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;display:flex;align-items:center;justify-content:center;padding:0 4px" x-text="changePanel.unread"></span>
       </button>
       <button class="btn btn-ghost btn-xs" @click="exportPbcList()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>导出清单</button>
-      <button class="btn btn-pri btn-xs" @click="openEscalation()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>生成汇报</button>
+      <button class="btn btn-ghost btn-xs" @click="openEscalation()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>生成汇报</button>
       <button class="btn btn-ghost btn-xs" @click="openFolderConfig()"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>设置</button>
       <button class="btn btn-ghost btn-xs" @click="openAiConfig()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg></span>AI 配置</button>
     </div>
@@ -1483,6 +1537,7 @@ const API = {
   archiveTree(pid){ return this.get('/api/files/'+pid+'/archive-tree'); },
   setArchiveRoot(pid, root){ return this.post('/api/files/'+pid+'/config/archive-root', {archive_root: root}); },
   openFolderPath(pid, path){ return this.post('/api/files/'+pid+'/open-folder-path', {path: path}); },
+      changeLog(pid, type, limit){ const p = new URLSearchParams(); if(type) p.set('change_type', type); p.set('limit', limit||100); return this.get('/api/files/'+pid+'/change-log?'+p.toString()); },
   checkValid(pid, itemId){ return this.get('/api/files/'+pid+'/check-valid/'+encodeURIComponent(itemId)); },
   relocate(pid, itemId, newPath){ return this.post('/api/files/'+pid+'/relocate/'+encodeURIComponent(itemId), {new_path: newPath}); },
   aiGetConfig(){ return this.get('/api/config/ai'); },
@@ -1534,6 +1589,8 @@ function pbcApp(){
     pendingCount: 0,
     /* 消息中心 */
     messageCenter: {show:false, items:[], unread:0, tab:'todo'},
+    /* 文件变更（source control 时间线，接后端 change-log） */
+    changePanel: {show:false, loading:false, items:[], filter:'', error:'', unread:0},
     /* 扫描完成高亮 */
     _flashHighlight: false,
 
@@ -2160,7 +2217,7 @@ function pbcApp(){
       this.loading = true;
       try{
         // 全部并行（7 个 API 同时发，不等彼此）
-        const [list, dash, heat, brief, rt, fc, pc] = await Promise.all([
+        const [list, dash, heat, brief, rt, fc, pc, cl] = await Promise.all([
           API.pbcList(this.currentProjectId),
           API.dashboard(this.currentProjectId).catch(()=>null),
           API.heatmap(this.currentProjectId).catch(()=>null),
@@ -2168,12 +2225,15 @@ function pbcApp(){
           API.recentTasks(this.currentProjectId).catch(()=>null),
           API.getFolderConfig(this.currentProjectId).catch(()=>null),
           API.pendingCount(this.currentProjectId).catch(()=>null),
+          API.changeLog(this.currentProjectId, '', 100).catch(()=>null),
         ]);
         this.pbcList = list.items || [];
         this.dashboard = dash;
         this.heatmapData = heat;
         this.briefing = brief;
         this.pendingCount = pc?.pending_count || 0;
+        this.changePanel.items = (cl && cl.logs) || [];
+        this.computeChangeUnread();
         // 效率锚点
         const done = (rt?.tasks||[]).filter(t=>t.status==='done'||t.status==='done_with_errors');
         this.efficiencyCount = done.reduce((s,t)=>s+(t.done_count||0),0);
@@ -2218,7 +2278,7 @@ function pbcApp(){
       for(const it of this.pbcList){
         const st = it.status_normalized || it.status;
         if(st==='已提供') g.done++;
-        else if(st==='不适用') g.na++;
+        else if(st==='不   用') g.na++;
         else if(st==='已提供，审核中') g.review++;
         else if(st==='未提供'){
           if((it.overdue_days||0)>0){ g.overdue++; if(it.overdue_days>30) g.high++; }
@@ -2291,6 +2351,48 @@ function pbcApp(){
 
     saveMessages(){
       try{ localStorage.setItem('pbc_messages', JSON.stringify(this.messageCenter.items)); }catch(e){}
+    },
+
+    /* =========================================================
+       文件变更（source control 时间线）
+       ========================================================= */
+    async openChangePanel(){
+      this.changePanel.show = true;
+      await this.loadChangeLog();
+      this.markChangesSeen();
+    },
+    async loadChangeLog(){
+      if(!this.currentProjectId){ this.changePanel.items = []; return; }
+      this.changePanel.loading = true; this.changePanel.error = '';
+      try{
+        const r = await API.changeLog(this.currentProjectId, this.changePanel.filter || '', 100);
+        this.changePanel.items = (r && r.logs) || [];
+        this.computeChangeUnread();
+      }catch(e){ this.changePanel.error = '读取文件变更失败：' + (e.message || e); }
+      finally{ this.changePanel.loading = false; }
+    },
+    computeChangeUnread(){
+      const seen = localStorage.getItem('pbc_changelog_seen_' + this.currentProjectId) || '';
+      const items = this.changePanel.items || [];
+      this.changePanel.unread = items.filter(m => String(m.changed_at || '') > seen).length;
+    },
+    markChangesSeen(){
+      const items = this.changePanel.items || [];
+      let newest = '';
+      for(const m of items){ const t = String(m.changed_at || ''); if(t > newest) newest = t; }
+      if(newest) localStorage.setItem('pbc_changelog_seen_' + this.currentProjectId, newest);
+      this.changePanel.unread = 0;
+    },
+    changeLabel(t){
+      return ({added:'新增', archived:'归档', reclassified:'改分类', approved:'复核通过', deleted:'删除', missing:'文件缺失'})[t] || t || '变更';
+    },
+    changeColor(t){
+      return ({added:'hsl(142 60% 40%)', archived:'hsl(var(--primary))', reclassified:'hsl(38 92% 45%)', approved:'hsl(142 60% 40%)', deleted:'hsl(var(--destructive))', missing:'hsl(var(--destructive))'})[t] || 'hsl(var(--muted-foreground))';
+    },
+    fmtChangeTime(s){
+      if(!s) return '';
+      try{ const d = new Date(String(s).replace(' ', 'T')); if(isNaN(d)) return String(s); return d.toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); }
+      catch(e){ return String(s); }
     },
 
     filteredItems(){
