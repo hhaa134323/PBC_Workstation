@@ -329,9 +329,9 @@ def archive_directory(
     
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # 整目录拷贝（保留内部结构）
+    # 整目录拷贝（保留内部结构，允许目录已存在）
     try:
-        shutil.copytree(str(src), str(target_dir))
+        shutil.copytree(str(src), str(target_dir), dirs_exist_ok=True)
     except Exception as e:
         return {
             "ok": False,
