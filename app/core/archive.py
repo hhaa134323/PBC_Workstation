@@ -307,13 +307,22 @@ def archive_directory(
     # 目标文件夹名：直接用 sub_dir_name
     target_dir = base_dir
 
-    # 重名时：如果是空目录则复用，否则加版本后缀
+    # v7.7: 先清理可能残留的空目录（之前mkdir+exists bug产生的）
+    if base_dir.exists() and not any(base_dir.iterdir()):
+        try:
+            base_dir.rmdir()
+        except Exception:
+            pass
+
+    # 重名时：非空目录加版本后缀
     if base_dir.exists() and any(base_dir.iterdir()):
-        # 目录非空，加版本后缀
         i = 2
         while True:
             candidate = base_dir.parent / f"{sub_dir_name}_v{i}"
             if not candidate.exists() or (candidate.exists() and not any(candidate.iterdir())):
+                if candidate.exists():
+                    try: candidate.rmdir()
+                    except: pass
                 target_dir = candidate
                 break
             i += 1

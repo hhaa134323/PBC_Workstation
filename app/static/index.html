@@ -877,7 +877,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
               <span style="color:var(--text3);margin-left:8px" x-text="opt.doc_name"></span>
             </div>
           </template>
-          <div style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text3)" @click="reclassifyModal.selected = '未分类'; reclassifyModal.search = '未分类（清单外）'">
+          <div style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text3)" x-show="false">
             <span style="font-weight:600">未分类</span>
             <span style="margin-left:8px">清单外文件</span>
           </div>
@@ -2973,7 +2973,7 @@ function pbcApp(){
                 if(priority !== 'low') this.messageCenter.unread++;
                 if(this.messageCenter.items.length > 200) this.messageCenter.items = this.messageCenter.items.slice(0,200);
                 this.saveMessages();
-                if(toastIt) this.pushToast(priority, title, text);
+                // v7.7: 不每个事件都弹toast，只记录到消息中心
               }
             }
           }
@@ -2998,7 +2998,7 @@ function pbcApp(){
               summary = `扫描完成：${total} 份文件均已处理，无新增`;
             }
             this.scan.summary = summary;
-            this.pushToast('low','扫描完成', summary + '。清单已更新，请查看待复核');
+            this.pushToast('low','扫描完成', summary + '。请查看待归档');
             await this.reloadAll();
             // 自动切到待复核 tab + 高亮提示
             this.currentTab = 'triage';
