@@ -1223,7 +1223,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       <template x-for="t in tabs" :key="t.id">
         <button class="tab" :class="[currentTab===t.id && 'active', t.alert && tabCounts[t.id]>0 && 't-alert', _flashHighlight && t.id==='triage' && 'flash-highlight']" @click="switchTab(t.id)">
           <span class="txt" x-text="t.label"></span>
-          <span class="count" x-show="!t.noCount" x-text="tabCounts[t.id]||0"></span>
+          <span class="count" x-show="!t.noCount" x-text="t.id==='review' ? (pendingArchive.items||[]).length : (tabCounts[t.id]||0)"></span>
         </button>
       </template>
     </nav>
@@ -1368,8 +1368,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
             <div style="font-size:14px;font-weight:500;color:var(--text)" x-text="item.file_name"></div>
             <div style="font-size:12px;color:var(--text3);display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
               <span x-text="'建议: '+item.suggested_item_id"></span>
-              <span x-text="'置信度: '+((item.confidence||0)*100).toFixed(0)+'%'"></span>
-              <span x-show="item.decision" x-text="item.decision" style="padding:1px 6px;border-radius:3px;background:var(--bg2)"></span>
+              <template x-if="item.decision==='walkthrough'">
+                <span style="padding:1px 6px;border-radius:3px;background:var(--bg2);color:var(--text3)">整目录归档</span>
+              </template>
+              <template x-if="item.decision!=='walkthrough'">
+                <span x-text="'置信度: '+((item.confidence||0)*100).toFixed(0)+'%'"></span>
+              </template>
+              <template x-if="item.decision!=='walkthrough'">
+                <span x-show="item.decision" x-text="item.decision" style="padding:1px 6px;border-radius:3px;background:var(--bg2)"></span>
+              </template>
             </div>
             <!-- 编号矛盾高亮 -->
             <div x-show="item.conflict_signal" style="margin-top:4px;padding:4px 8px;background:#fef9c3;border-radius:4px;font-size:12px;color:#7c5e00">
@@ -2066,20 +2073,38 @@ function pbcApp(){
     async doReclassify(){
       const it = this.reclassifyModal.item;
       const newId = this.reclassifyModal.selected;
+      const confirmId = this.reclassifyModal.confirmId;
       if(!it || !newId){ this.reclassifyModal.error = '请选择要改到的分类'; return; }
       this.reclassifyModal.saving = true; this.reclassifyModal.error='';
       try{
-        const r = await fetch('/api/files/'+this.currentProjectId+'/reclassify/'+encodeURIComponent(it.item_id), {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({new_item_id:newId, changed_by:'senior', reason:this.reclassifyModal.reason||''})
-        });
-        const d = await r.json();
-        if(d.ok || d.reclassified_count > 0){
-          this.reclassifyModal.show = false;
-          this.pushToast('low','改分类成功', `${it.item_id} → ${newId}（${d.reclassified_count||0} 个文件重新归档）`);
-          await this.reloadAll();
+        // v7.7: 如果是待归档（有 confirmId），调 reclassify-confirm
+        if(confirmId){
+          const r = await fetch('/api/files/'+this.currentProjectId+'/reclassify-confirm/'+confirmId, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({new_item_id:newId})
+          });
+          const d = await r.json();
+          if(d.ok){
+            this.reclassifyModal.show = false;
+            this.pushToast('low','已改分类', `建议改为 ${newId}，请点确认归档`);
+            await this.reloadAll();
+          } else {
+            this.reclassifyModal.error = d.detail || '改分类失败';
+          }
         } else {
-          this.reclassifyModal.error = (d.errors||[]).join('; ') || '改分类失败';
+          // 旧流程：已归档文件改分类
+          const r = await fetch('/api/files/'+this.currentProjectId+'/reclassify/'+encodeURIComponent(it.item_id), {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({new_item_id:newId, changed_by:'senior', reason:this.reclassifyModal.reason||''})
+          });
+          const d = await r.json();
+          if(d.ok || d.reclassified_count > 0){
+            this.reclassifyModal.show = false;
+            this.pushToast('low','改分类成功', `${it.item_id} → ${newId}（${d.reclassified_count||0} 个文件重新归档）`);
+            await this.reloadAll();
+          } else {
+            this.reclassifyModal.error = (d.errors||[]).join('; ') || '改分类失败';
+          }
         }
       }catch(e){ this.reclassifyModal.error = '改分类失败：'+e.message; }
       finally{ this.reclassifyModal.saving = false; }
@@ -2259,16 +2284,16 @@ function pbcApp(){
         this.briefing = brief;
         this.pendingCount = pc?.pending_count || 0;
         // v7.7: 待归档列表
+        const paItems = (pa && pa.items) || [];
         if(this.pendingArchive){
-          this.pendingArchive.items = (pa && pa.items) || [];
+          this.pendingArchive.items = paItems;
         }
         // v7.7: 归档树
         if(this.fileZone){
           this.fileZone.tree = (at && at.tree) || [];
         }
-        // 待归档 tab 计数（必须更新让角标显示）
-        const reviewCount = (pa && pa.count) || (this.pendingArchive?.items?.length||0);
-        this.tabCounts = Object.assign({}, this.tabCounts, {review: reviewCount});
+        // 待归档 tab 计数
+        this.tabCounts.review = paItems.length;
         this.changePanel.items = (cl && cl.logs) || [];
         this.computeChangeUnread();
         // 效率锚点
