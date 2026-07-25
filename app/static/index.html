@@ -811,25 +811,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
               <input type="text" x-model="aiConfig.form.base_url" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
             </div>
             <div class="ai-field">
-              <label>分类模型</label>
-              <select x-model="aiConfig.form.model_classification">
-                <option value="">（选择模型）</option>
-                <template x-for="m in aiConfig.models" :key="'c'+m.id"><option :value="m.id" x-text="m.name+(m.use_case?(' — '+m.use_case):'')"></option></template>
-              </select>
-            </div>
-            <div class="ai-field">
-              <label>视觉模型</label>
-              <select x-model="aiConfig.form.model_vision">
-                <option value="">（选择模型）</option>
-                <template x-for="m in aiConfig.models" :key="'v'+m.id"><option :value="m.id" x-text="m.name"></option></template>
-              </select>
-            </div>
-            <div class="ai-field">
-              <label>推理模型</label>
-              <select x-model="aiConfig.form.model_reasoning">
-                <option value="">（选择模型）</option>
-                <template x-for="m in aiConfig.models" :key="'r'+m.id"><option :value="m.id" x-text="m.name"></option></template>
-              </select>
+              <label>模型名</label>
+              <input type="text" x-model="aiConfig.form.model" placeholder="qwen-plus（默认百炼，可填 gpt-4o / deepseek-chat 等）">
             </div>
             <div class="ai-field">
               <label>置信度阈值（0–1，低于此值标红需人工复核）</label>
@@ -837,6 +820,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
             </div>
             <div class="ai-field">
               <label class="ai-switch"><input type="checkbox" x-model="aiConfig.form.filename_match_enabled"> 启用文件名直配（文件名带编号时跳过 AI，加速）</label>
+            </div>
+            <div class="ai-field">
+              <label class="ai-switch"><input type="checkbox" x-model="aiConfig.form.hitl_mode"> 人机协同（AI 预分析后人工确认才归档）</label>
+            </div>
+            <div class="ai-field">
+              <label class="ai-switch"><input type="checkbox" x-model="aiConfig.form.auto_confirm_enabled"> 自动归档高置信度文件（auto 档 >0.70 跳过待归档）</label>
             </div>
             <div x-show="aiConfig.testResult" style="font-size:13px;margin-bottom:4px" :class="aiConfig.testResult && aiConfig.testResult.ok ? 'ai-test-ok':'ai-test-err'" x-text="aiConfig.testResult ? (aiConfig.testResult.ok ? ('✓ '+(aiConfig.testResult.message||'连接成功')) : ('✕ '+(aiConfig.testResult.hint||aiConfig.testResult.error||'连接失败'))) : ''"></div>
           </div>
@@ -1612,7 +1601,7 @@ function pbcApp(){
     /* v7.6 改分类 */
     reclassifyModal: {show:false, item:null, allItems:[], filtered:[], selected:'', search:'', reason:'', error:'', saving:false},
     /* v7 AI 配置 */
-    aiConfig: {show:false, loading:false, saving:false, testing:false, testResult:null, models:[], masked:'', keySet:false, form:{api_key:'', base_url:'', model_classification:'', model_vision:'', model_reasoning:'', confidence_threshold:0.7, filename_match_enabled:true}},
+    aiConfig: {show:false, loading:false, saving:false, testing:false, testResult:null, models:[], masked:'', keySet:false, form:{api_key:'', base_url:'', model:'', confidence_threshold:0.7, filename_match_enabled:true, auto_confirm_enabled:false, hitl_mode:true}},
     /* v7 测试数据包说明 */
     testDataModal: {show:false},
     fileDetail: {show:false, loading:false, item:null, archives:[]},
@@ -2112,11 +2101,11 @@ function pbcApp(){
         this.aiConfig.form = {
           api_key: c.api_key_masked || '',
           base_url: c.base_url || '',
-          model_classification: c.model_classification || '',
-          model_vision: c.model_vision || '',
-          model_reasoning: c.model_reasoning || '',
+          model: c.model || '',
           confidence_threshold: (c.confidence_threshold!=null? c.confidence_threshold : 0.7),
           filename_match_enabled: (c.filename_match_enabled!==false),
+          auto_confirm_enabled: (c.auto_confirm_enabled===true),
+          hitl_mode: (c.hitl_mode!==false),
         };
       }catch(e){ this.pushToast('mid','读取 AI 配置失败', e.message); }
       finally{ this.aiConfig.loading = false; }
@@ -2127,10 +2116,11 @@ function pbcApp(){
         const f = this.aiConfig.form;
         const r = await API.aiSaveConfig({
           api_key: f.api_key, base_url: f.base_url,
-          model_classification: f.model_classification,
-          model_vision: f.model_vision, model_reasoning: f.model_reasoning,
+          model: f.model,
           confidence_threshold: Number(f.confidence_threshold),
           filename_match_enabled: !!f.filename_match_enabled,
+          auto_confirm_enabled: !!f.auto_confirm_enabled,
+          hitl_mode: !!f.hitl_mode,
         });
         if(r.ok){
           this.pushToast('low','AI 配置已保存', (r.changed&&r.changed.length)? ('已更新：'+r.changed.join('、')) : (r.message||'配置已写入'));
@@ -2143,7 +2133,7 @@ function pbcApp(){
       this.aiConfig.testing = true; this.aiConfig.testResult = null;
       try{
         const f = this.aiConfig.form;
-        const r = await API.aiTest({api_key: f.api_key, base_url: f.base_url, model: f.model_classification});
+        const r = await API.aiTest({api_key: f.api_key, base_url: f.base_url, model: f.model});
         this.aiConfig.testResult = r.ok
           ? {ok:true, msg: r.message || ('连接成功，模型 '+(r.model||'')+' 响应正常')}
           : {ok:false, msg: (r.hint||r.error||'连接失败')};
