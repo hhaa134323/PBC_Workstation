@@ -285,34 +285,63 @@ async def set_folder_config_by_project(project_id: str, body: FolderConfigUpdate
 
 
 # ----------------------------------------------------------------------
-# 多项目路由：drag-drop
+# 多项目路由：drag-drop（v7.7: 复制到客户文件夹，统一入口）
 # ----------------------------------------------------------------------
 @router.post("/{project_id}/drag-drop")
 async def drag_drop_by_project(project_id: str, files: list[UploadFile] = File(...)) -> dict:
-    """接收前端 HTML5 拖拽的文件列表，立即返回 task_id，异步处理。"""
+    """接收前端 HTML5 拖拽的文件列表。
+
+    v7.7: 不再保存到 uploads/，改成复制到客户共享文件夹，统一处理流程。
+    - 文件名冲突 → 拒绝并提示（不覆盖）
+    - 复制后自动 mark_pending（不等 watchdog）
+    - 然后异步走标准 _process_paths（跟 scan-folder 同流程）
+    """
     proj = get_project(project_id)
     if proj is None:
         raise FileNotFoundError(f"项目不存在: {project_id}")
 
+    client_folder = proj.get("client_folder")
+    if not client_folder:
+        raise HTTPException(status_code=400, detail="项目未配置客户共享文件夹路径")
+    client_folder = Path(client_folder)
+    client_folder.mkdir(parents=True, exist_ok=True)
+
     task_id = _new_task_id()
     received = []
     saved_paths: list[Path] = []
-
-    upload_dir = Path(proj.get("archive_root") or "") / "uploads"
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    conflicts: list[str] = []
 
     for f in files:
         name = f.filename or "unnamed"
         safe_name = Path(name).name
-        dest = upload_dir / f"{uuid.uuid4().hex[:8]}_{safe_name}"
+        dest = client_folder / safe_name
+        # v7.7: 文件名冲突检查（拒绝不覆盖）
+        if dest.exists():
+            conflicts.append(safe_name)
+            received.append({"name": name, "error": f"已存在同名文件，拒绝覆盖：{safe_name}"})
+            logger.info("drag-drop 文件名冲突跳过: %s", safe_name)
+            continue
         try:
             content = await f.read()
             dest.write_bytes(content)
             saved_paths.append(dest)
-            received.append({"name": name, "size": len(content), "saved": str(dest)})
+            received.append({"name": name, "size": len(content), "saved": str(dest), "copied_to_client_folder": True})
         except Exception as e:
             logger.warning("drag-drop save %s failed: %r", name, e)
             received.append({"name": name, "error": str(e)})
+
+    # v7.7: 复制后主动标 pending（不等 watchdog，立即进队列）
+    from app.core.manifest import mark_pending
+    for p in saved_paths:
+        try:
+            mark_pending(p, project_id=project_id, client_folder=client_folder, reason="drag-drop")
+            # 写变更日志
+            try:
+                insert_change_log(project_id, p.name, "added", changed_by="drag-drop", detail=f"拖拽复制到客户文件夹: {p.name}")
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning("drag-drop mark_pending %s failed: %r", p, e)
 
     _set_task(
         task_id,
@@ -325,14 +354,17 @@ async def drag_drop_by_project(project_id: str, files: list[UploadFile] = File(.
         started_at=_now_iso(),
     )
 
-    # 异步处理
-    asyncio.create_task(_process_paths(task_id, project_id, saved_paths, source="drag-drop"))
+    # 异步处理（跟 scan-folder 同流程，走 _process_one_file_sync）
+    if saved_paths:
+        asyncio.create_task(_process_paths(task_id, project_id, saved_paths, source="drag-drop"))
 
     return {
         "task_id": task_id,
         "project_id": project_id,
-        "status": "processing",
+        "status": "processing" if saved_paths else "done",
         "received_files": received,
+        "conflicts": conflicts,
+        "copied_to_client_folder": True,
         "next": f"/api/files/{project_id}/task/{task_id}",
     }
 
