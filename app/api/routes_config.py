@@ -70,6 +70,8 @@ class AIConfigUpdate(BaseModel):
     # v7: Opus 4.8 收敛清单 #6 要求的两个开关
     confidence_threshold: Optional[float] = Field(None, description="置信度阈值（0-1），低于此值标红需人工复核，默认 0.7")
     filename_match_enabled: Optional[bool] = Field(None, description="文件名直配开关，True=启用文件名优先匹配跳过 AI，默认 True")
+    # v7.7: auto 档批量确认开关（HITL）
+    auto_confirm_enabled: Optional[bool] = Field(None, description="自动确认高置信度文件（auto档>0.70跳过待确认直接归档），默认 False")
 
 
 def _mask_key(key: str) -> str:
@@ -116,6 +118,8 @@ async def get_ai_config() -> dict:
             # v7: 两个开关
             "confidence_threshold": float(ai_flags.get("confidence_threshold", 0.7)),
             "filename_match_enabled": bool(ai_flags.get("filename_match_enabled", True)),
+            # v7.7: auto 批量确认开关
+            "auto_confirm_enabled": bool(ai_flags.get("auto_confirm_enabled", False)),
         },
     }
 
@@ -169,6 +173,11 @@ async def update_ai_config(body: AIConfigUpdate) -> dict:
     if body.filename_match_enabled is not None:
         ai_flags["filename_match_enabled"] = bool(body.filename_match_enabled)
         changed.append("filename_match_enabled")
+
+    # v7.7: auto 批量确认开关
+    if body.auto_confirm_enabled is not None:
+        ai_flags["auto_confirm_enabled"] = bool(body.auto_confirm_enabled)
+        changed.append("auto_confirm_enabled")
 
     raw["bailian"] = bl
     raw["ai_models"] = ai_models

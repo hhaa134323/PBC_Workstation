@@ -1535,26 +1535,43 @@ def _process_one_file_sync(
     # 开启方式：环境变量 PBC_HITL_MODE=1
     import os as _os
     if _os.environ.get("PBC_HITL_MODE") == "1" and item_id:
+        # v7.7: auto 批量确认开关——auto 档 + 开关开了 → 直接归档，跳过待确认
+        _decision = score_result.get("decision", "") if 'score_result' in dir() else ""
+        _auto_confirm = False
         try:
-            import json as _json
-            conflict = result.get("conflict_signal") or score_result.get("conflict_signal") if 'score_result' in dir() else None
-            insert_pending_confirm(
-                project_id=project_id,
-                file_path=str(path),
-                file_name=path.name,
-                sha256=h,
-                suggested_item_id=item_id,
-                confidence=confidence,
-                decision=score_result.get("decision", "") if 'score_result' in dir() else "",
-                conflict_signal=_json.dumps(conflict, ensure_ascii=False) if conflict else "",
-                advisory_notes=_json.dumps(advisory_notes, ensure_ascii=False) if advisory_notes else "",
-            )
-            result["pending_confirm"] = True
-            result["hitl_mode"] = True
-            # 不归档，不推进状态——等 Staff 确认
-            return result
-        except Exception as e:
-            logger.warning("pending_confirm 写入失败（降级到直接归档）: %r", e)
+            from app.api.routes_config import _load_raw_config
+            _raw = _load_raw_config()
+            _auto_confirm = bool((_raw.get("ai_flags") or {}).get("auto_confirm_enabled", False))
+        except Exception:
+            pass
+        # 有编号矛盾信号时强制进待确认（即使 auto 也要人看）
+        _has_conflict = bool(result.get("conflict_signal") or (score_result.get("conflict_signal") if 'score_result' in dir() else None))
+        if _decision == "auto" and _auto_confirm and not _has_conflict:
+            # auto 档 + 开关开了 + 无矛盾 → 直接归档，跳过待确认
+            result["auto_confirmed"] = True
+            logger.info("auto 批量确认跳过待确认: %s → %s", path.name, item_id)
+            # 继续走下面的归档流程（不 return）
+        else:
+            try:
+                import json as _json
+                conflict = result.get("conflict_signal") or score_result.get("conflict_signal") if 'score_result' in dir() else None
+                insert_pending_confirm(
+                    project_id=project_id,
+                    file_path=str(path),
+                    file_name=path.name,
+                    sha256=h,
+                    suggested_item_id=item_id,
+                    confidence=confidence,
+                    decision=_decision,
+                    conflict_signal=_json.dumps(conflict, ensure_ascii=False) if conflict else "",
+                    advisory_notes=_json.dumps(advisory_notes, ensure_ascii=False) if advisory_notes else "",
+                )
+                result["pending_confirm"] = True
+                result["hitl_mode"] = True
+                # 不归档，不推进状态——等 Staff 确认
+                return result
+            except Exception as e:
+                logger.warning("pending_confirm 写入失败（降级到直接归档）: %r", e)
 
     try:
         arc_result = archive_mod.archive_file(
