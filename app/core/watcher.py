@@ -253,7 +253,7 @@ class FolderWatcher:
         except Exception as e:
             logger.warning("PBC 清单备注写入失败: %r", e)
 
-        # 3. 推送 briefing 事件（前端 toast 弹出，需审计员确认）
+        # 3. 推送 briefing 事件（前端在今日简报显示，不弹toast）
         try:
             from app.api.routes_files import _push_briefing_event
             import time
@@ -261,6 +261,7 @@ class FolderWatcher:
                 "timestamp": time.time(),
                 "event_type": "file_missing",
                 "item_id": item_id,
+                "project_id": self.project_id or "",
                 "summary": f"⚠ 文件缺失: {item_id} ({rel_name})。归档目录文件仍在，但客户文件夹中已不存在。请核实后决定是否标记为未提供",
                 "needs_confirm": True,
             })

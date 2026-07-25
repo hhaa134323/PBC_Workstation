@@ -76,7 +76,7 @@ _DEFAULT_PROJECT = "demo"
 # 推到这个队列，前端轮询 /api/files/briefing-events 拉取，呈现"主动开口"效果）
 # ----------------------------------------------------------------------
 _briefing_events: list[dict[str, Any]] = []
-_BRIEFING_EVENTS_MAX = 20
+_BRIEFING_EVENTS_MAX = 50
 
 
 def _push_briefing_event(evt: dict[str, Any]) -> None:
@@ -87,9 +87,14 @@ def _push_briefing_event(evt: dict[str, Any]) -> None:
 
 
 @router.get("/briefing-events")
-async def get_briefing_events(since: float = 0.0) -> dict[str, Any]:
-    """前端轮询：返回 since 之后所有新事件（含 watchdog 触发的"解除风险"）。"""
+async def get_briefing_events(since: float = 0.0, project_id: str = "") -> dict[str, Any]:
+    """前端轮询：返回 since 之后所有新事件。
+    
+    v7.7: 加 project_id 过滤，只返回当前项目的事件（不跨项目）。
+    """
     events = [e for e in _briefing_events if e.get("timestamp", 0) > since]
+    if project_id:
+        events = [e for e in events if e.get("project_id") == project_id]
     return {"events": events, "count": len(events), "latest_ts": _briefing_events[0].get("timestamp", 0) if _briefing_events else 0}
 
 

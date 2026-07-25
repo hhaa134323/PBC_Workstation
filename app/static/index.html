@@ -1544,7 +1544,7 @@ const API = {
   getFolderConfig(pid){ return this.get('/api/files/'+pid+'/config/folder'); },
   setFolderConfig(pid, path){ return this.post('/api/files/'+pid+'/config/folder', {client_folder: path}); },
   briefing(pid){ return pid ? this.get('/api/briefing/'+pid) : this.get('/api/briefing'); },
-  briefingEvents(since){ return this.get('/api/files/briefing-events?since='+(since||0)); },
+  briefingEvents(since){ return this.get('/api/files/briefing-events?since='+(since||0)+'&project_id='+(this.currentProjectId||'')); },
   recentTasks(pid){ return this.get('/api/files/'+pid+'/recent-tasks'); },
   archiveDetail(pid, itemId){ return this.get('/api/files/'+pid+'/archive-detail/'+itemId); },
   openFolder(pid){ return this.post('/api/open-folder/'+pid, {}); },
@@ -1589,7 +1589,7 @@ function pbcApp(){
     efficiencyCount: 0,
     currentFolderInfo: {path:'', count:0, exists:false},
     _briefingPollTimer: null,
-    _briefingLastTs: 0,
+    _briefingLastTs: Date.now() / 1000,  // v7.7: 初始化为当前时间，不拉历史事件
 
     /* tab */
     tabs: [
@@ -1716,20 +1716,23 @@ function pbcApp(){
     },
 
     _startBriefingPoll(){
+      if(!this._evtSeen) this._evtSeen = new Set();
       const tick = async ()=>{
         try{
           const r = await API.briefingEvents(this._briefingLastTs);
           if(r && r.events && r.events.length){
             for(const e of r.events){
+              const key = 'evt_'+e.event_type+'_'+(e.item_id||'');
+              if(this._evtSeen.has(key)) continue;
+              this._evtSeen.add(key);
               if(e.event_type==='file_resolved_risk'){ this.pushToast('low', '解除风险', e.title+'，'+e.detail); }
-              else if(e.event_type==='file_missing'){ this.pushToast('high', '文件缺失', e.summary || (e.title+'，'+e.detail)); }
-              else { this.pushToast(e.priority==='high'?'high':'mid', e.title, e.detail); }
+              // file_missing 不弹toast（今日简报里已显示）
             }
             await this.reloadBriefing();
             if(r.latest_ts) this._briefingLastTs = r.latest_ts;
           }
         }catch(e){}
-        // 同时拉 pendingCount（借鉴 git status 实时更新未提交数）
+        // 同时拉 pendingCount
         if(!this.scan.active){
           try{ const pc = await API.pendingCount(this.currentProjectId); if(pc) this.pendingCount = pc.pending_count||0; }catch(e){}
         }
@@ -1783,6 +1786,9 @@ function pbcApp(){
       this.currentProjectId = p.project_id;
       localStorage.setItem('pbc_last_project', p.project_id);
       this.showProjectDrawer = false;
+      // v7.7: 切项目重置 briefing 时间戳 + 清事件缓存
+      this._briefingLastTs = Date.now() / 1000;
+      this._evtSeen = new Set();
       // 立即清空旧数据，显示 loading（不残留上一个项目内容）
       this.pbcList = [];
       this.dashboard = null;

@@ -281,17 +281,29 @@ def get_pending_files(
         else:
             changed_files.append(p)
 
-    # 检测删除：manifest 里有但客户文件夹里不存在的文件
-    for rn, record in manifest.items():
-        if rn not in existing_rels:
-            if record.get("status") == STATUS_PROCESSED:
-                missing_files.append({
-                    "rel_name": rn,
-                    "item_id": record.get("item_id", ""),
-                    "sha256": record.get("sha256", ""),
-                    "version": record.get("version", "v1"),
-                    "processed_at": record.get("processed_at", ""),
-                })
+    # v7.7: 检测删除——只查有 file_archive 记录的（曾经归档过但现在客户文件夹没了）
+    # 不检查"清单有但没提供"的——那不是缺失
+    try:
+        from app.core.db import get_conn
+        with get_conn() as conn:
+            cur = conn.execute(
+                "SELECT item_id, original_path, sha256, version FROM file_archive WHERE project_id=?",
+                (project_id or "",),
+            )
+            for row in cur:
+                orig = row["original_path"] if isinstance(row, dict) else row[2]
+                if not orig or not isinstance(orig, str):
+                    continue
+                if not Path(orig).exists():
+                    missing_files.append({
+                        "rel_name": Path(orig).name,
+                        "item_id": row["item_id"] if isinstance(row, dict) else row[0],
+                        "sha256": row["sha256"] if isinstance(row, dict) else row[1],
+                        "version": row["version"] if isinstance(row, dict) else row[3],
+                        "processed_at": "",
+                    })
+    except Exception as e:
+        logger.warning("file_archive missing check failed: %r", e)
 
     logger.info(
         "get_pending_files: total=%d, pending=%d, new=%d, changed=%d, skipped=%d, missing=%d (project=%s)",
@@ -370,19 +382,37 @@ def detect_missing_files(
     manifest: dict[str, dict],
     project_id: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    """检测客户文件夹中哪些已处理文件被删除了。"""
+    """检测客户文件夹中哪些已归档文件被删除了。
+    
+    v7.7: 只检查有 file_archive 记录的文件（曾经归档过），
+    不检查"清单有但没提供"的——那不是缺失，是还没提供。
+    """
     missing: list[dict[str, Any]] = []
-    for rel_name, record in manifest.items():
-        if record.get("status") != STATUS_PROCESSED:
+    
+    # v7.7: 从 file_archive 表查曾经归档过的文件（original_path）
+    try:
+        from app.core.db import get_conn
+        with get_conn() as conn:
+            cur = conn.execute(
+                "SELECT item_id, original_path, sha256, version FROM file_archive WHERE project_id=?",
+                (project_id or "",),
+            )
+            archive_records = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        archive_records = []
+    
+    # 检查每个曾归档过的文件在不在客户文件夹
+    for ar in archive_records:
+        orig = ar.get("original_path", "")
+        if not orig:
             continue
-        file_path = client_folder / rel_name
+        file_path = Path(orig)
         if not file_path.exists():
             missing.append({
-                "rel_name": rel_name,
-                "item_id": record.get("item_id", ""),
-                "sha256": record.get("sha256", ""),
-                "version": record.get("version", "v1"),
-                "processed_at": record.get("processed_at", ""),
+                "rel_name": file_path.name,
+                "item_id": ar.get("item_id", ""),
+                "sha256": ar.get("sha256", ""),
+                "version": ar.get("version", "v1"),
             })
             # v7.6: 写变更日志
             try:
