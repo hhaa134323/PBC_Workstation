@@ -142,3 +142,68 @@
     boot();
   }
 })();
+
+/* ============================================================
+   模块二：顶栏按钮统一
+   重排顺序：文件变更 导出清单 生成汇报 分隔线 刷新 设置 AI 配置
+   文件变更从实心黄降为浅黄底加黄描边
+   只动 class 和节点位置，不碰任何 Alpine 绑定
+   ============================================================ */
+(function () {
+  'use strict';
+
+  function pick(nav) {
+    var out = {};
+    var list = nav.children;
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i];
+      if (el.tagName !== 'BUTTON') continue;
+      var t = (el.textContent || '').replace(/\s+/g, '');
+      if (t.indexOf('文件变更') >= 0) out.change = el;
+      else if (t.indexOf('导出清单') >= 0) out.exp = el;
+      else if (t.indexOf('生成汇报') >= 0) out.report = el;
+      else if (t.indexOf('刷新') >= 0) out.reload = el;
+      else if (t.indexOf('设置') >= 0) out.setting = el;
+      else if (t.indexOf('AI') >= 0) out.ai = el;
+    }
+    return out;
+  }
+
+  function tidy() {
+    var nav = document.querySelector('.nav-top');
+    if (!nav || nav.classList.contains('pbcg-nav-tidy')) return !!nav;
+
+    var b = pick(nav);
+    if (!b.change || !b.reload) return false;
+
+    var line = document.createElement('span');
+    line.className = 'pbcg-nav-div';
+
+    // 按新顺序重新挂到末尾，项目、品牌、进度条位置不变
+    var order = [b.change, b.exp, b.report, line, b.reload, b.setting, b.ai];
+    for (var i = 0; i < order.length; i++) {
+      if (order[i]) nav.appendChild(order[i]);
+    }
+
+    // 文件变更降一档
+    b.change.classList.remove('btn-pri');
+    b.change.classList.add('pbcg-nav-chg');
+
+    nav.classList.add('pbcg-nav-tidy');
+    return true;
+  }
+
+  function boot() {
+    var tries = 0;
+    var timer = setInterval(function () {
+      tries++;
+      if (tidy() || tries > 80) clearInterval(timer);
+    }, 250);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
