@@ -3,7 +3,7 @@
 > **本文件是项目唯一权威规格**。改任何代码/接口/功能前，先看本文件；
 > 改完同步更新本文件的「当前状态」段。代码必须对齐 SPEC，不是反过来。
 >
-> 最后更新：2026-07-24 v7.6
+> 最后更新：2026-07-25 v7.7
 
 ---
 
@@ -91,6 +91,10 @@ AI 原生（上）   |  通用审计 SaaS    |  ★ 我们（空白象限）
 | 12 | `POST /api/files/{pid}/reclassify/{item_id}` | §5.4 复核 | `routes_files.py` |
 | 13 | `GET /api/files/{pid}/change-log` | 审计留痕 | `routes_files.py` |
 | 14 | `conflict_signal`（matcher 返回字段） | §5.2 完整性 | `matcher.py` |
+| 15 | `GET /api/files/{pid}/pending-confirm` | §5.4 HITL | `routes_files.py` |
+| 16 | `POST /api/files/{pid}/confirm/{confirm_id}` | §5.4 HITL | `routes_files.py` |
+| 17 | `POST /api/files/{pid}/skip-confirm/{confirm_id}` | §5.4 HITL | `routes_files.py` |
+| 18 | `POST /api/files/{pid}/reclassify-confirm/{confirm_id}` | §5.4 HITL | `routes_files.py` |
 
 ### 3 个对齐口径（重要！）
 
@@ -156,7 +160,14 @@ interaction_test_v2.py      # Playwright 交互测试（70 项）
   - 变更日志 `GET /change-log`（file_change_log 表持久化，5 处写入，永久保留）
   - 编号矛盾信号（F2 检测文件名含编号但描述不匹配 → advisory_notes level=high）
   - changed_by 只记 watchdog/ai-auto/manual（不记角色不记人名）
-- **未完成**：审计员还没有用 v7.4 测试过；Demo 视频未拍；前端未对接打分 score_breakdown 展示
+- **v7.7 新增**：
+  - HITL 人机协同：AI 预分析不归档 → 人确认 → AI 归档（`PBC_HITL_MODE=1` 开启）
+  - pending_confirm 表（文件维度收件箱）+ 4 个接口（pending-confirm/confirm/skip-confirm/reclassify-confirm）
+  - 拖拽改复制到客户文件夹（统一入口，文件名冲突拒绝不覆盖）
+  - auto 批量确认开关（auto_confirm_enabled，auto 档跳过待确认直接归档）
+  - 编号矛盾强制进待确认（即使 auto 也要人看）
+  - 状态推进：有剩余未确认→审核中，全确认→已提供
+- **未完成**：前端待确认 tab + 确认/改分类/跳过按钮（Opus 4.8）；Demo 视频未拍
 
 ---
 

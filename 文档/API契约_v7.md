@@ -618,3 +618,138 @@ F2 打分时检测文件名含编号但描述不匹配。
 **routes_files 传递**：conflict_signal → advisory_notes（level=high）+ result.conflict_signal
 
 **前端**：advisory_notes 里 level=high 的项高亮显示，提示"编号矛盾"
+
+---
+
+## v7.7 新增接口（2026-07-25）
+
+### 设计理念：HITL 人机协同
+
+旧流程：AI扫描→归档→状态推进→人复核（先斩后奏）
+新流程：**AI建议→人确认→AI归档**（标准人机协同）
+
+关键变化：
+- AI 预分析只打分+建议，**不归档**
+- 文件进 pending_confirm 收件箱（文件维度）
+- 人确认后才 archive_file 拷贝 + 状态推进
+- 确认前改分类不用删旧归档（还没拷贝）
+- auto 档可批量确认跳过待确认（开关控制）
+
+### 1. 待确认列表 `GET /api/files/{project_id}/pending-confirm`
+
+获取待确认收件箱（AI 预分析后等人确认的文件）。
+
+**响应**：
+```json
+{
+  "project_id": "demo",
+  "count": 3,
+  "items": [
+    {
+      "id": 1,
+      "project_id": "demo",
+      "file_path": "D:/.../客户共享文件夹/历-1_股权架构图.pdf",
+      "file_name": "历-1_股权架构图.pdf",
+      "sha256": "abc123...",
+      "suggested_item_id": "历-1",
+      "confidence": 0.95,
+      "decision": "auto",
+      "conflict_signal": null,
+      "advisory_notes": [],
+      "created_at": "2026-07-25T14:00:00",
+      "confirmed": 0
+    }
+  ]
+}
+```
+
+**confirmed 字段**：0未确认 1已确认 2已跳过 3已归档
+
+### 2. 确认归档 `POST /api/files/{project_id}/confirm/{confirm_id}`
+
+Staff 确认 AI 建议后，才真正拷贝文件到 archives/ + 推进状态。
+
+**请求**：
+```json
+{
+  "new_item_id": ""        // 空=用AI建议的suggested_item_id；填了=改分类
+}
+```
+
+**响应**：
+```json
+{
+  "ok": true,
+  "confirm_id": 1,
+  "project_id": "demo",
+  "item_id": "历-1",
+  "archived_path": "D:/.../archives/历史沿革/历-1_股权架构图/历-1_股权架构图_2024_v1.pdf",
+  "version": "v1"
+}
+```
+
+**流程**：archive_file拷贝 → 写file_archive → 写PBC Excel file_path → 状态推进 → 写change_log(archived)
+
+**状态推进逻辑**：
+- 有剩余未确认 → 已提供，审核中
+- 全部确认完 → 已提供
+
+### 3. 跳过确认 `POST /api/files/{project_id}/skip-confirm/{confirm_id}`
+
+不归档，标记为已跳过。文件留在客户文件夹，manifest保持pending。
+
+**响应**：`{"ok": true, "confirm_id": 1, "skipped": true}`
+
+### 4. 确认前改分类 `POST /api/files/{project_id}/reclassify-confirm/{confirm_id}`
+
+还没归档，直接改 suggested_item_id，不删旧归档（因为还没拷贝）。
+
+**请求**：`{"new_item_id": "财-1"}`
+
+**响应**：`{"ok": true, "confirm_id": 1, "new_item_id": "财-1"}`
+
+改完后 Staff 再调 `confirm` 接口用新的 item_id 归档。
+
+### 5. 拖拽改造 `POST /api/files/{project_id}/drag-drop`（v7.7 修改）
+
+不再保存到 uploads/，改成**复制到客户共享文件夹**，统一处理流程。
+
+**变化**：
+- 文件复制到 `proj.client_folder`（不是 uploads/）
+- 文件名冲突检查：同名拒绝不覆盖，返回 `conflicts` 列表
+- 复制后主动 mark_pending（不等 watchdog）
+- 写变更日志 added（changed_by=drag-drop）
+- 异步走标准 _process_paths（跟 scan-folder 同流程）
+
+**响应新增字段**：
+```json
+{
+  "copied_to_client_folder": true,
+  "conflicts": ["conflict_file.txt"]
+}
+```
+
+### 6. auto 批量确认开关 `PUT /api/config/ai`（v7.7 新增字段）
+
+AI 配置加 `auto_confirm_enabled` 字段：
+
+```json
+{
+  "auto_confirm_enabled": true    // auto档(>0.70)跳过待确认直接归档
+}
+```
+
+**逻辑**（在 _process_one_file_sync HITL 分支）：
+- `decision=auto + auto_confirm_enabled=True + 无编号矛盾` → 直接归档，跳过待确认
+- `有编号矛盾` → **强制进待确认**（即使 auto 也要人看）
+
+### 环境变量
+
+`PBC_HITL_MODE=1` 开启 HITL 预分析模式（不开启则走旧流程直接归档）。
+
+### 前端待做（Opus 4.8）
+
+1. 加「待确认」tab（显示 pending_confirm 收件箱）
+2. 每条待确认行：确认/改分类/跳过 3 个按钮
+3. AI 配置面板加 auto_confirm_enabled 开关
+4. 拖拽区提示改："拖拽文件到这里（复制到客户共享文件夹，自动AI预分析）"
