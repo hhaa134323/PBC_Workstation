@@ -53,6 +53,9 @@ from app.core.db import (
     list_recent_archives, list_recent_tasks, update_ai_history_item_id,
     upsert_task, get_archive_by_item, delete_archive_by_item, delete_archive_by_path,
     insert_change_log, get_change_log,
+    insert_pending_confirm, get_pending_confirm_list, get_pending_confirm_by_id,
+    update_pending_confirm_status, update_pending_confirm_item,
+    get_pending_confirm_count, get_pending_confirm_count_by_item,
 )
 from app.core.excel_io import (
     STATUS_NOT_PROVIDED, STATUS_REVIEWING,
@@ -1493,8 +1496,33 @@ def _process_one_file_sync(
             "trigger": "unclassified_archive",
             "message": f"AI 无法识别文件 {path.name} 对应 PBC 清单项，已归档到 未分类/，请人工指定",
             "action": "在 PBC 清单中手动指定对应编号",
-            "item_id": None,
-        })
+        "item_id": None,
+    })
+
+    # v7.7: HITL 预分析模式——只写 pending_confirm，不归档
+    # 开启方式：环境变量 PBC_HITL_MODE=1
+    import os as _os
+    if _os.environ.get("PBC_HITL_MODE") == "1" and item_id:
+        try:
+            import json as _json
+            conflict = result.get("conflict_signal") or score_result.get("conflict_signal") if 'score_result' in dir() else None
+            insert_pending_confirm(
+                project_id=project_id,
+                file_path=str(path),
+                file_name=path.name,
+                sha256=h,
+                suggested_item_id=item_id,
+                confidence=confidence,
+                decision=score_result.get("decision", "") if 'score_result' in dir() else "",
+                conflict_signal=_json.dumps(conflict, ensure_ascii=False) if conflict else "",
+                advisory_notes=_json.dumps(advisory_notes, ensure_ascii=False) if advisory_notes else "",
+            )
+            result["pending_confirm"] = True
+            result["hitl_mode"] = True
+            # 不归档，不推进状态——等 Staff 确认
+            return result
+        except Exception as e:
+            logger.warning("pending_confirm 写入失败（降级到直接归档）: %r", e)
 
     try:
         arc_result = archive_mod.archive_file(
@@ -1741,6 +1769,171 @@ async def get_project_change_log(
         "count": len(logs),
         "logs": logs,
     }
+
+
+# ----------------------------------------------------------------------
+# v7.7: 待确认队列（HITL：AI 预分析后等人确认才归档）
+# ----------------------------------------------------------------------
+
+@router.get("/{project_id}/pending-confirm")
+async def get_pending_confirm(project_id: str) -> dict:
+    """获取待确认列表（收件箱）。"""
+    items = get_pending_confirm_list(project_id=project_id, confirmed=0)
+    # 反序列化 conflict_signal / advisory_notes
+    import json as _json
+    for it in items:
+        if it.get("conflict_signal"):
+            try: it["conflict_signal"] = _json.loads(it["conflict_signal"])
+            except Exception: pass
+        if it.get("advisory_notes"):
+            try: it["advisory_notes"] = _json.loads(it["advisory_notes"])
+            except Exception: pass
+    return {"project_id": project_id, "count": len(items), "items": items}
+
+
+class ConfirmBody(BaseModel):
+    new_item_id: str = Field("", description="Staff 指定的 item_id（改分类时用，空则用 AI 建议的）")
+
+
+@router.post("/{project_id}/confirm/{confirm_id}")
+async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -> dict:
+    """确认归档：Staff 确认 AI 建议后，才真正拷贝文件到 archives/ + 推进状态。
+
+    流程：
+    1. 查 pending_confirm 记录
+    2. 用 new_item_id（或建议的 suggested_item_id）调 archive_file 归档
+    3. 写 file_archive + change_log(archived)
+    4. PBC 状态推进（有剩余未确认→审核中，全确认→已提供）
+    5. pending_confirm.confirmed = 1
+    """
+    from app.core import archive as archive_mod
+    from app.core.excel_io import get_item_by_id, write_pbc_list, read_pbc_list
+
+    record = get_pending_confirm_by_id(confirm_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"待确认记录不存在: {confirm_id}")
+    if record.get("confirmed") != 0:
+        raise HTTPException(status_code=400, detail=f"该记录已处理（confirmed={record.get('confirmed')}）")
+
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_id}")
+
+    # 确定最终 item_id
+    item_id = body.new_item_id.strip() or record.get("suggested_item_id", "")
+    if not item_id:
+        raise HTTPException(status_code=400, detail="无法确认：既无 new_item_id 也无 suggested_item_id")
+
+    # 查 PBC item 信息
+    pbc_item = get_item_by_id(item_id, project_id=project_id)
+    if pbc_item is None:
+        raise HTTPException(status_code=400, detail=f"item_id '{item_id}' 在 PBC 清单中不存在")
+
+    # 原文件路径
+    file_path = Path(record.get("file_path", ""))
+    if not file_path.exists():
+        raise HTTPException(status_code=400, detail=f"原文件不存在: {file_path}")
+
+    # 归档（拷贝到 archives/）
+    try:
+        arc_result = archive_mod.archive_file(
+            source_path=file_path,
+            item_id=item_id,
+            entity=pbc_item.get("entity"),
+            sha256=record.get("sha256") or None,
+            archived_by="manual-confirm",
+            project_id=project_id,
+            category=pbc_item.get("category"),
+            description=pbc_item.get("doc_name"),
+            period=pbc_item.get("required_period"),
+        )
+    except Exception as e:
+        logger.exception("confirm archive_file 失败")
+        raise HTTPException(status_code=500, detail=f"归档失败: {e}")
+
+    if not arc_result.get("ok"):
+        raise HTTPException(status_code=500, detail=f"归档失败: {arc_result.get('error')}")
+
+    archived_path = arc_result.get("archived_path", "")
+
+    # 写 PBC Excel file_path
+    try:
+        pbc_items = read_pbc_list(project_id=project_id)
+        for it in pbc_items:
+            if it.get("item_id") == item_id:
+                it["file_path"] = archived_path
+                break
+        write_pbc_list(pbc_items, project_id=project_id)
+    except Exception as e:
+        logger.warning("write_pbc_list 失败（非阻断）: %r", e)
+
+    # PBC 状态推进
+    try:
+        from app.core.excel_io import update_item_status, STATUS_REVIEWING, STATUS_PROVIDED
+        remaining = get_pending_confirm_count_by_item(item_id, project_id=project_id)
+        # 更新 pending_confirm 状态（先更新再查剩余，否则剩余数不对）
+        update_pending_confirm_status(confirm_id, 1)
+        remaining = get_pending_confirm_count_by_item(item_id, project_id=project_id)
+        if remaining == 0:
+            # 全部确认完 → 已提供
+            update_item_status(item_id, STATUS_PROVIDED, changed_by="manual",
+                              note="全部文件确认归档", project_id=project_id)
+        else:
+            # 还有未确认 → 审核中
+            update_item_status(item_id, STATUS_REVIEWING, changed_by="manual",
+                              note=f"已确认 {confirm_id}，剩余 {remaining} 份待确认",
+                              project_id=project_id)
+    except Exception as e:
+        logger.warning("状态推进失败（非阻断）: %r", e)
+
+    # 写变更日志
+    try:
+        insert_change_log(
+            project_id=project_id,
+            file_name=file_path.name,
+            change_type="archived",
+            item_id=item_id,
+            sha256=record.get("sha256", ""),
+            changed_by="manual",
+            detail=f"确认归档到 {pbc_item.get('category', '未分类')}/{item_id} v{arc_result.get('version', 'v1')}",
+        )
+    except Exception:
+        logger.debug("change_log archived 写入失败（非阻断）", exc_info=True)
+
+    return {
+        "ok": True,
+        "confirm_id": confirm_id,
+        "project_id": project_id,
+        "item_id": item_id,
+        "archived_path": archived_path,
+        "version": arc_result.get("version", "v1"),
+    }
+
+
+@router.post("/{project_id}/skip-confirm/{confirm_id}")
+async def skip_confirm(project_id: str, confirm_id: int) -> dict:
+    """跳过确认：不归档，标记为已跳过。"""
+    record = get_pending_confirm_by_id(confirm_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"待确认记录不存在: {confirm_id}")
+    update_pending_confirm_status(confirm_id, 2)
+    return {"ok": True, "confirm_id": confirm_id, "skipped": True}
+
+
+@router.post("/{project_id}/reclassify-confirm/{confirm_id}")
+async def reclassify_confirm(project_id: str, confirm_id: int, body: ConfirmBody) -> dict:
+    """确认前改分类：还没归档，直接改 suggested_item_id，不删旧归档。"""
+    record = get_pending_confirm_by_id(confirm_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"待确认记录不存在: {confirm_id}")
+    new_id = body.new_item_id.strip()
+    if not new_id:
+        raise HTTPException(status_code=400, detail="new_item_id 不能为空")
+    from app.core.excel_io import get_item_by_id
+    if get_item_by_id(new_id, project_id=project_id) is None:
+        raise HTTPException(status_code=400, detail=f"item_id '{new_id}' 不在 PBC 清单中")
+    update_pending_confirm_item(confirm_id, new_id)
+    return {"ok": True, "confirm_id": confirm_id, "new_item_id": new_id}
 
 
 # ----------------------------------------------------------------------

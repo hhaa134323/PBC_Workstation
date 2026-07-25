@@ -129,6 +129,24 @@ CREATE TABLE IF NOT EXISTS file_change_log (
 CREATE INDEX IF NOT EXISTS idx_change_log_project ON file_change_log(project_id);
 CREATE INDEX IF NOT EXISTS idx_change_log_type ON file_change_log(change_type);
 CREATE INDEX IF NOT EXISTS idx_change_log_at ON file_change_log(changed_at DESC);
+
+-- v7.7: 待确认队列（AI预分析结果，等人确认后才归档）
+CREATE TABLE IF NOT EXISTS pending_confirm (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id        TEXT,
+    file_path         TEXT NOT NULL,      -- 客户文件夹里的文件路径
+    file_name         TEXT,
+    sha256            TEXT,
+    suggested_item_id TEXT,               -- AI建议的item_id
+    confidence        REAL,
+    decision          TEXT,               -- auto/suggest/llm
+    conflict_signal   TEXT,              -- JSON序列化
+    advisory_notes    TEXT,              -- JSON序列化
+    created_at        TEXT NOT NULL,
+    confirmed         INTEGER DEFAULT 0   -- 0未确认 1已确认 2已跳过 3已归档
+);
+CREATE INDEX IF NOT EXISTS idx_pending_confirm_project ON pending_confirm(project_id);
+CREATE INDEX IF NOT EXISTS idx_pending_confirm_status ON pending_confirm(confirmed);
 """
 
 
@@ -877,6 +895,113 @@ def get_change_log(
         params.append(limit)
         cur = conn.execute(sql, params)
         return [dict(r) for r in cur.fetchall()]
+
+
+# ----------------------------------------------------------------------
+# v7.7: 待确认队列（pending_confirm CRUD）
+# ----------------------------------------------------------------------
+
+def insert_pending_confirm(
+    project_id: Optional[str],
+    file_path: str,
+    file_name: str = "",
+    sha256: str = "",
+    suggested_item_id: str = "",
+    confidence: float = 0.0,
+    decision: str = "",
+    conflict_signal: str = "",
+    advisory_notes: str = "",
+) -> int:
+    """写入一条待确认记录。返回新 id。"""
+    now = datetime.now().isoformat(timespec="seconds")
+    with get_conn() as conn:
+        cur = execute_with_retry(
+            """INSERT INTO pending_confirm
+               (project_id, file_path, file_name, sha256, suggested_item_id,
+                confidence, decision, conflict_signal, advisory_notes, created_at, confirmed)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+            (
+                project_id or "", file_path, file_name, sha256,
+                suggested_item_id, confidence, decision,
+                conflict_signal, advisory_notes, now,
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def get_pending_confirm_list(
+    project_id: Optional[str] = None,
+    confirmed: int = 0,
+) -> list[dict[str, Any]]:
+    """获取待确认列表。confirmed: 0未确认 1已确认 2已跳过 3已归档。"""
+    with get_conn() as conn:
+        sql = "SELECT * FROM pending_confirm"
+        params: list = []
+        conditions: list[str] = []
+        if project_id:
+            conditions.append("project_id = ?")
+            params.append(project_id)
+        conditions.append("confirmed = ?")
+        params.append(confirmed)
+        sql += " WHERE " + " AND ".join(conditions)
+        sql += " ORDER BY created_at DESC, id DESC"
+        cur = conn.execute(sql, params)
+        return [dict(r) for r in cur.fetchall()]
+
+
+def get_pending_confirm_by_id(confirm_id: int) -> Optional[dict[str, Any]]:
+    """按 id 取单条待确认记录。"""
+    with get_conn() as conn:
+        cur = conn.execute("SELECT * FROM pending_confirm WHERE id = ?", (confirm_id,))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def update_pending_confirm_status(confirm_id: int, confirmed: int) -> bool:
+    """更新待确认状态。confirmed: 0未确认 1已确认 2已跳过 3已归档。"""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE pending_confirm SET confirmed = ? WHERE id = ?",
+            (confirmed, confirm_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def update_pending_confirm_item(confirm_id: int, new_item_id: str) -> bool:
+    """更新待确认的建议 item_id（改分类时用）。"""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE pending_confirm SET suggested_item_id = ? WHERE id = ?",
+            (new_item_id, confirm_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def get_pending_confirm_count(project_id: Optional[str] = None) -> int:
+    """获取未确认数量（前端待确认 tab 角标用）。"""
+    with get_conn() as conn:
+        sql = "SELECT COUNT(*) FROM pending_confirm WHERE confirmed = 0"
+        params: list = []
+        if project_id:
+            sql += " AND project_id = ?"
+            params.append(project_id)
+        cur = conn.execute(sql, params)
+        return cur.fetchone()[0]
+
+
+def get_pending_confirm_count_by_item(item_id: str, project_id: Optional[str] = None) -> int:
+    """获取某 item_id 下未确认数量（判断是否全部确认完）。"""
+    with get_conn() as conn:
+        sql = "SELECT COUNT(*) FROM pending_confirm WHERE confirmed = 0 AND suggested_item_id = ?"
+        params: list = [item_id]
+        if project_id:
+            sql += " AND project_id = ?"
+            params.append(project_id)
+        cur = conn.execute(sql, params)
+        return cur.fetchone()[0]
 
 
 # ----------------------------------------------------------------------
