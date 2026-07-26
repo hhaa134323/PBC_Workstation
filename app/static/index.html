@@ -1357,7 +1357,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
             <div style="font-size:14px;font-weight:500;color:var(--text)" x-text="item.file_name"></div>
             <div style="font-size:12px;color:var(--text3);display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
               <template x-if="item.suggested_item_id">
-                <span x-text="'建议: '+item.suggested_item_id"></span>
+                <span x-text="'归档到: ' + (item.category||'') + ' / ' + (item.suggested_item_id||'') + (item.doc_name ? ' ' + item.doc_name : '')"></span>
               </template>
               <template x-if="!item.suggested_item_id">
                 <span style="padding:1px 6px;border-radius:3px;background:#fef2f2;color:#dc2626;font-weight:600">⚠ 待手动分类</span>
@@ -1379,6 +1379,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
           </div>
           <!-- 操作按钮 -->
           <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-ghost btn-xs" @click="openExplorer(item.file_path)" title="预览原文件">预览</button>
             <button class="btn btn-pri btn-xs" @click="confirmArchive(item.id,'')" :disabled="!item.suggested_item_id">确认归档</button>
             <button class="btn btn-ghost btn-xs" @click="openReclassifyConfirm(item)">改分类</button>
           </div>
@@ -2404,12 +2405,10 @@ function pbcApp(){
     get tabCounts(){
       const c = {triage:0, review:0, overdue:0, done:0};
       for(const it of this.pbcList){
-        c[this.stageOf(it)]++;
-        // 风险分析 tab 数字 = 所有未提供的（超期+不超期）
-        const st = it.status_normalized || it.status;
-        if(st && st !== '已提供' && st !== '不适用' && st !== '已提供，审核中'){
-          c.overdue++;
-        }
+        const stage = this.stageOf(it);
+        c[stage]++;
+        // 待初检 = 所有未提供（含超期）+ 有文件待扫描
+        if(stage === 'overdue') c.triage++;
       }
       return c;
     },

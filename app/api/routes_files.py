@@ -2083,6 +2083,22 @@ async def get_pending_confirm(project_id: str) -> dict:
     items = get_pending_confirm_list(project_id=project_id, confirmed=0)
     # 反序列化 conflict_signal / advisory_notes
     import json as _json
+    # v7.7: 加入 PBC 清单的 doc_name/category 用于前端显示完整名称
+    pbc_map = {}
+    try:
+        from app.core.excel_io import read_pbc_list
+        pbc_items = read_pbc_list(project_id=project_id)
+        for it in pbc_items:
+            iid = it.get("item_id", "")
+            if iid:
+                pbc_map[iid] = {
+                    "doc_name": it.get("doc_name", ""),
+                    "category": it.get("category", ""),
+                    "entity": it.get("entity", ""),
+                    "required_period": it.get("required_period", ""),
+                }
+    except Exception:
+        pass
     for it in items:
         if it.get("conflict_signal"):
             try: it["conflict_signal"] = _json.loads(it["conflict_signal"])
@@ -2090,6 +2106,19 @@ async def get_pending_confirm(project_id: str) -> dict:
         if it.get("advisory_notes"):
             try: it["advisory_notes"] = _json.loads(it["advisory_notes"])
             except Exception: pass
+        # 加入 PBC 信息
+        iid = it.get("suggested_item_id", "")
+        if iid and iid in pbc_map:
+            pbc_info = pbc_map[iid]
+            it["doc_name"] = pbc_info["doc_name"]
+            it["category"] = pbc_info["category"]
+            it["entity"] = pbc_info["entity"]
+            it["required_period"] = pbc_info["required_period"]
+        else:
+            it["doc_name"] = ""
+            it["category"] = ""
+            it["entity"] = ""
+            it["required_period"] = ""
     return {"project_id": project_id, "count": len(items), "items": items}
 
 
