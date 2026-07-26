@@ -23,7 +23,7 @@ from playwright.sync_api import sync_playwright
 BASE = 'http://127.0.0.1:8000'
 CLIENT = r'D:\AgentProjects\IpoPBC\0\data\test_data_package\客户共享文件夹_混合形态'
 PBC = r'D:\AgentProjects\IpoPBC\0\data\test_data_package\01_PBC_List_混合形态.xlsx'
-ARCH = r'D:\AgentProjects\IpoPBC\0\projects\accept_test_v2'
+ARCH = r'D:\AgentProjects\IpoPBC\0\projects\accept_test_v2_' + str(int(time.time()))
 
 PASS = 0
 FAIL = 0

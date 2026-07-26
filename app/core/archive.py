@@ -306,11 +306,13 @@ def archive_directory(
 
     # v7.7: 检查是否已归档过同一源目录（防止重复归档加 _v2）
     # 注意：同 item 不同目录不能复用（如 货-1 2023年度 vs 2024年度）
+    # v7.8: 检查范围扩大——查所有项目，避免不同项目共用 archive_root 时产生 _v2 重复目录
     try:
         from app.core.db import get_conn
         with get_conn() as conn:
+            # 1. 先查当前项目是否已归档过同一源目录
             existing = conn.execute(
-                "SELECT id, archived_path FROM file_archive WHERE project_id=? AND item_id=? AND is_directory=1 AND original_path=?",
+                "SELECT id, archived_path, project_id FROM file_archive WHERE project_id=? AND item_id=? AND is_directory=1 AND original_path=?",
                 (project_id or "", item_id or "", str(src)),
             ).fetchone()
             if existing:
@@ -347,6 +349,17 @@ def archive_directory(
                         "file_count": file_count, "item_id": item_id or "",
                         "skipped": True, "reason": "already_archived_same_item",
                     }
+            # 2. v7.8: 查别的项目是否用了同一个 archive_root 且已归档过同源目录
+            # 这种情况说明不同项目误用了同一个 archive_root，应该加 _v2 隔离
+            other_proj = conn.execute(
+                "SELECT id, archived_path, project_id FROM file_archive WHERE project_id!=? AND item_id=? AND is_directory=1 AND original_path=?",
+                (project_id or "", item_id or "", str(src)),
+            ).fetchone()
+            if other_proj:
+                logger.warning(
+                    "archive_directory: 检测到别的项目 %s 已归档过同源目录到 %s，当前项目 %s 将使用 _v2 隔离",
+                    other_proj[2], other_proj[1], project_id,
+                )
     except Exception as e:
         logger.warning("check existing archive failed: %r", e)
 
