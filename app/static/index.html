@@ -610,6 +610,13 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
           </div>
         </template>
       </div>
+      <!-- 底部操作栏：整理新文件 -->
+      <div style="padding:12px 16px;border-top:1px solid hsl(var(--border));background:hsl(var(--soft));display:flex;gap:8px;align-items:center">
+        <button class="btn btn-pri btn-xs" style="flex:1" @click="startScan()" :disabled="scan.active || pendingCount===0">
+          <span x-show="!scan.active" x-text="pendingCount>0 ? '整理新文件 ('+pendingCount+')' : '无待整理文件'"></span>
+          <span x-show="scan.active">整理中...</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -874,6 +881,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
             <div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px" @click="reclassifyModal.selected = opt.item_id; reclassifyModal.search = opt.item_id+' '+opt.doc_name" :style="reclassifyModal.selected === opt.item_id ? 'background:var(--bg2)' : ''">
               <span style="font-weight:600" x-text="opt.item_id"></span>
               <span style="color:var(--text2);margin-left:8px" x-text="opt.category"></span>
+              <span style="color:var(--text3);margin-left:8px" x-show="opt.entity" x-text="'｜'+opt.entity"></span>
               <span style="color:var(--text3);margin-left:8px" x-text="opt.doc_name"></span>
             </div>
           </template>
@@ -1311,15 +1319,11 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
         </div>
         <div class="scan-hero">
           <div class="big">
-            <div style="font-weight:600;font-size:16px;margin-bottom:2px">环节 1：从客户共享文件夹取件</div>
-            <div style="font-size:12px;color:var(--text2);margin-bottom:12px">后端直接读本地路径，零上传。主路径为扫描，拖拽为兜底。</div>
+            <div style="font-weight:600;font-size:16px;margin-bottom:2px">环节 1：客户共享文件夹</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:12px">后端直接读本地路径，零上传。文件增删改请在左侧"文件变更"面板查看并整理。</div>
             <div style="display:flex;gap:10px;align-items:center">
-              <button class="btn btn-pri btn-lg" @click="startScan()" :disabled="scan.active">
-                <span x-show="pendingCount>0 && !scan.active" style="background:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black));font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-right:6px" x-text="pendingCount"></span>
-                <span x-text="scan.active?'扫描中...':'扫描新文件'"></span>
-              </button>
-              <span x-show="pendingCount>0 && !scan.active" style="font-size:12px;color:hsl(var(--muted-foreground))" x-text="pendingCount+' 份待处理'"></span>
-              <span x-show="pendingCount===0 && !scan.active" style="font-size:12px;color:hsl(var(--muted-foreground))">无待处理文件</span>
+              <span x-show="pendingCount>0" style="font-size:12px;color:hsl(var(--muted-foreground))" x-text="pendingCount+' 份待处理'"></span>
+              <span x-show="pendingCount===0" style="font-size:12px;color:hsl(var(--muted-foreground))">无待处理文件</span>
             </div>
           </div>
           <div style="flex:1;min-width:240px">
@@ -1327,22 +1331,6 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
                  @dragover.prevent="$el.classList.add('drag')"
                  @dragleave="$el.classList.remove('drag')"
                  @drop.prevent="onDrop($event)">拖拽文件到此作为兜底，单文件超过 50MB 建议改用扫描文件夹</div>
-          </div>
-        </div>
-        <div style="margin-top:18px" x-show="scan.active || scan.finished">
-          <div class="steps">
-            <template x-for="(s, i) in ['解析','分类','归档','回写']" :key="i">
-              <div class="step" :class="[scan.step>i && 'done', scan.step===i && scan.active && 'active']">
-                <div class="dot" x-text="scan.step>i ? '✓' : (i+1)"></div>
-                <div class="lbl" x-text="s"></div>
-              </div>
-            </template>
-          </div>
-          <div class="scan-live" x-show="scan.active">
-            <span class="spin"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span><span x-html="scan.liveText"></span>
-          </div>
-          <div class="scan-live" style="color:var(--green)" x-show="!scan.active && scan.finished">
-            ✓ <span x-text="scan.summary"></span>
           </div>
         </div>
       </div>
@@ -1368,11 +1356,16 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
           <div style="flex:1;min-width:0">
             <div style="font-size:14px;font-weight:500;color:var(--text)" x-text="item.file_name"></div>
             <div style="font-size:12px;color:var(--text3);display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
-              <span x-text="'建议: '+item.suggested_item_id"></span>
+              <template x-if="item.suggested_item_id">
+                <span x-text="'建议: '+item.suggested_item_id"></span>
+              </template>
+              <template x-if="!item.suggested_item_id">
+                <span style="padding:1px 6px;border-radius:3px;background:#fef2f2;color:#dc2626;font-weight:600">⚠ 待手动分类</span>
+              </template>
               <template x-if="item.decision==='walkthrough'">
                 <span style="padding:1px 6px;border-radius:3px;background:var(--bg2);color:var(--text3)">整目录归档</span>
               </template>
-              <template x-if="item.decision!=='walkthrough'">
+              <template x-if="item.decision!=='walkthrough' && item.suggested_item_id">
                 <span x-text="'置信度: '+((item.confidence||0)*100).toFixed(0)+'%'"></span>
               </template>
               <template x-if="item.decision!=='walkthrough'">
@@ -1386,9 +1379,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
           </div>
           <!-- 操作按钮 -->
           <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn btn-pri btn-xs" @click="confirmArchive(item.id,'')">确认归档</button>
+            <button class="btn btn-pri btn-xs" @click="confirmArchive(item.id,'')" :disabled="!item.suggested_item_id">确认归档</button>
             <button class="btn btn-ghost btn-xs" @click="openReclassifyConfirm(item)">改分类</button>
-            <button class="btn btn-ghost btn-xs" @click="skipArchive(item.id)">跳过</button>
           </div>
         </div>
       </template>
@@ -1733,9 +1725,44 @@ function pbcApp(){
             if(r.latest_ts) this._briefingLastTs = r.latest_ts;
           }
         }catch(e){}
-        // 同时拉 pendingCount
+        // 同时拉 pendingCount（只数新文件）
         if(!this.scan.active){
-          try{ const pc = await API.pendingCount(this.currentProjectId); if(pc) this.pendingCount = pc.pending_count||0; }catch(e){}
+          try{
+            const nfc = await this.get('/api/files/'+this.currentProjectId+'/new-file-count').catch(()=>null);
+            this.pendingCount = nfc?.new_file_count || 0;
+            // 更新 pbc-enhance 的整理按钮
+            var orgBtn = document.querySelector('.pbcg-vh-organize');
+            if(orgBtn){
+              var pc = this.pendingCount;
+              var pendingConfirm = (this.pendingArchive && this.pendingArchive.items) ? this.pendingArchive.items.length : 0;
+              // 异步查 API 拿 pending-confirm count
+              if(pendingConfirm === 0){
+                fetch('/api/files/'+this.currentProjectId+'/pending-confirm')
+                  .then(r=>r.json()).then(data=>{
+                    var cnt = (data.items||[]).length;
+                    if(cnt > 0){
+                      orgBtn.textContent = '请先处理待归档 (' + cnt + ')';
+                      orgBtn.disabled = true;
+                    } else if(pc > 0){
+                      orgBtn.textContent = '整理新文件 (' + pc + ')';
+                      orgBtn.disabled = false;
+                    } else {
+                      orgBtn.textContent = '无待整理文件';
+                      orgBtn.disabled = true;
+                    }
+                  }).catch(()=>{});
+              } else if(pendingConfirm > 0){
+                orgBtn.textContent = '请先处理待归档 (' + pendingConfirm + ')';
+                orgBtn.disabled = true;
+              } else if(pc > 0){
+                orgBtn.textContent = '整理新文件 (' + pc + ')';
+                orgBtn.disabled = false;
+              } else {
+                orgBtn.textContent = '无待整理文件';
+                orgBtn.disabled = true;
+              }
+            }
+          }catch(e){}
         }
         this._briefingPollTimer = setTimeout(tick, 5000);
       };
@@ -2273,7 +2300,7 @@ function pbcApp(){
       this.loading = true;
       try{
         // 全部并行（9 个 API 同时发，不等彼此）
-        const [list, dash, heat, brief, rt, fc, pc, cl, pa, at] = await Promise.all([
+        const [list, dash, heat, brief, rt, fc, pc, cl, pa, at, nfc] = await Promise.all([
           API.pbcList(this.currentProjectId),
           API.dashboard(this.currentProjectId).catch(()=>null),
           API.heatmap(this.currentProjectId).catch(()=>null),
@@ -2284,12 +2311,14 @@ function pbcApp(){
           API.changeLog(this.currentProjectId, '', 100).catch(()=>null),
           API.get('/api/files/'+this.currentProjectId+'/pending-confirm').catch(()=>null),
           API.archiveTree(this.currentProjectId).catch(()=>null),
+          API.get('/api/files/'+this.currentProjectId+'/new-file-count').catch(()=>null),
         ]);
         this.pbcList = list.items || [];
         this.dashboard = dash;
         this.heatmapData = heat;
         this.briefing = brief;
-        this.pendingCount = pc?.pending_count || 0;
+        // pendingCount = 新文件数（还没扫描的）；待归档数用按钮状态控制
+        this.pendingCount = nfc?.new_file_count || 0;
         // v7.7: 待归档列表
         const paItems = (pa && pa.items) || [];
         if(this.pendingArchive){
@@ -2301,11 +2330,39 @@ function pbcApp(){
         }
         // 待归档 tab 计数
         this.tabCounts.review = paItems.length;
-        this.changePanel.items = (cl && cl.logs) || [];
+        // v7.7: 同步检测新文件 → 写 change_log → 变更列表显示
+        try {
+          await fetch('/api/files/'+this.currentProjectId+'/sync-changes', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+          const cl2 = await API.changeLog(this.currentProjectId, '', 100).catch(()=>null);
+          this.changePanel.items = (cl2 && cl2.logs) || [];
+        } catch(e) {
+          this.changePanel.items = (cl && cl.logs) || [];
+        }
         this.computeChangeUnread();
         // 效率锚点
         const done = (rt?.tasks||[]).filter(t=>t.status==='done'||t.status==='done_with_errors');
         this.efficiencyCount = done.reduce((s,t)=>s+(t.done_count||0),0);
+        // v7.7: 立即更新 pbc-enhance 的整理按钮
+        try {
+          var _orgBtn = document.querySelector('.pbcg-vh-organize');
+          if(_orgBtn){
+            var _pc = this.pendingCount;
+            var _pcCount = paItems.length;
+            if(_pcCount > 0){
+              _orgBtn.textContent = '请先处理待归档 (' + _pcCount + ')';
+              _orgBtn.disabled = true;
+              _orgBtn.style.opacity = '0.7';
+            } else if(_pc > 0){
+              _orgBtn.textContent = '整理新文件 (' + _pc + ')';
+              _orgBtn.disabled = false;
+              _orgBtn.style.opacity = '1';
+            } else {
+              _orgBtn.textContent = '无待整理文件';
+              _orgBtn.disabled = true;
+              _orgBtn.style.opacity = '0.5';
+            }
+          }
+        } catch(e) {}
         // 文件夹路径
         const _fc = fc?.current || {};
         this.currentFolderInfo.path = _fc.path || '';
@@ -2982,13 +3039,13 @@ function pbcApp(){
                   text = (evt.file_name||'') + ' → ' + (evt.item_id||'');
                   priority = 'low';
                 } else if(evt.type === 'needs_confirm'){
-                  title = '建议确认';
-                  text = (evt.file_name||'') + ' 建议匹配到 ' + (evt.item_id||'') + '（置信度 '+(evt.confidence||0)+'）';
+                  title = '建议复核';
+                  text = (evt.file_name||'') + ' 建议匹配到 ' + (evt.item_id||'') + ' 置信度 '+(evt.confidence||0);
                   priority = 'mid';
                   toastIt = true;
                 } else if(evt.type === 'unclassified'){
-                  title = '需人工确认';
-                  text = (evt.file_name||'') + ' 无法自动识别，已归档到未分类';
+                  title = 'AI 未能分类';
+                  text = (evt.file_name||'') + ' 需手动指定 PBC 编号';
                   priority = 'high';
                   toastIt = true;
                 } else {
@@ -3012,13 +3069,14 @@ function pbcApp(){
             // 审计员友好的汇总
             const total = results.length;
             const matched = results.filter(r=>r.classify && r.classify.item_id).length;
-            const unclassified = results.filter(r=>!r.classify || !r.classify.item_id).length;
+            const highConf = results.filter(r=>r.classify && r.classify.item_id && (r.classify.confidence||0) >= 0.7).length;
+            const lowConf = matched - highConf;
+            const failed = results.filter(r=>!r.classify || !r.classify.item_id).length;
             const deduped = results.filter(r=>r.dedup).length;
             const newFiles = total - deduped;
             let summary = '';
             if(newFiles > 0){
-              summary = `扫描完成：${newFiles} 份新文件，已自动归类 ${matched} 份`;
-              if(unclassified > 0) summary += `，${unclassified} 份需人工确认`;
+              summary = `扫描完成：${newFiles} 份文件，AI 分类成功 ${matched} 份，其中高置信度 ${highConf} 份，低置信度建议复核 ${lowConf} 份，AI 分类失败 ${failed} 份`;
             } else {
               summary = `扫描完成：${total} 份文件均已处理，无新增`;
             }

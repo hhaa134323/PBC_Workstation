@@ -298,7 +298,10 @@
         '<input type="text" placeholder="搜文件名或编号">' +
         '<select>' + opts + '</select>' +
       '</div>' +
-      '<div class="pbcg-vh-list"></div>';
+      '<div class="pbcg-vh-list"></div>' +
+      '<div class="pbcg-vh-foot" style="padding:12px 16px;border-top:1px solid hsl(var(--border));background:hsl(var(--soft));display:flex;gap:8px;align-items:center">' +
+        '<button class="pbcg-vh-organize" style="flex:1;padding:8px 12px;font-size:13px;font-weight:600;border-radius:7px;border:1px solid hsl(var(--primary));background:hsl(var(--primary));color:hsl(var(--primary-foreground));cursor:pointer">整理新文件</button>' +
+      '</div>';
     document.body.appendChild(panel);
 
     listEl = panel.querySelector('.pbcg-vh-list');
@@ -310,6 +313,16 @@
     panel.querySelector('[data-act="close"]').addEventListener('click', close);
     panel.querySelector('[data-act="refresh"]').addEventListener('click', function(){ load(true); });
     listEl.addEventListener('click', onRowClick);
+    // 整理新文件按钮
+    var orgBtn = panel.querySelector('.pbcg-vh-organize');
+    if(orgBtn){
+      orgBtn.addEventListener('click', function(){
+        var d = root();
+        if(d && typeof d.startScan === 'function' && !d.scan?.active && d.pendingCount > 0){
+          d.startScan();
+        }
+      });
+    }
     return panel;
   }
 
@@ -451,6 +464,52 @@
         return;
       }
       render();
+      // 更新整理新文件按钮状态
+      var orgBtn = panel.querySelector('.pbcg-vh-organize');
+      if(orgBtn){
+        var pc = d.pendingCount || 0;
+        var active = d.scan && d.scan.active;
+        // 先用 Alpine 的 pendingArchive
+        var pendingConfirm = (d.pendingArchive && d.pendingArchive.items) ? d.pendingArchive.items.length : 0;
+        
+        function updateBtn(pc, pendingConfirm, active){
+          if(active){
+            orgBtn.textContent = '整理中...';
+            orgBtn.disabled = true;
+            orgBtn.style.opacity = '0.6';
+          } else if(pendingConfirm > 0){
+            orgBtn.textContent = '请先处理待归档 (' + pendingConfirm + ')';
+            orgBtn.disabled = true;
+            orgBtn.style.opacity = '0.7';
+          } else if(pc > 0){
+            orgBtn.textContent = '整理新文件 (' + pc + ')';
+            orgBtn.disabled = false;
+            orgBtn.style.opacity = '1';
+          } else {
+            orgBtn.textContent = '无待整理文件';
+            orgBtn.disabled = true;
+            orgBtn.style.opacity = '0.5';
+          }
+        }
+        
+        updateBtn(pc, pendingConfirm, active);
+        
+        // 同步查 API 拿 pending-confirm（用 XMLHttpRequest 同步）
+        if(!active && d.currentProjectId){
+          try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/files/'+d.currentProjectId+'/pending-confirm', false);
+            xhr.send(null);
+            if(xhr.status === 200){
+              var data = JSON.parse(xhr.responseText);
+              var cnt = (data.items||[]).length;
+              if(cnt > 0 || pendingConfirm > 0){
+                updateBtn(pc, Math.max(cnt, pendingConfirm), false);
+              }
+            }
+          } catch(e) {}
+        }
+      }
       if(typeof d.markChangesSeen === 'function'){
         try{ d.markChangesSeen(); }catch(e){}
       }

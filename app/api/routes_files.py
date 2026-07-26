@@ -559,6 +559,192 @@ async def get_pending_count_route(project_id: str) -> dict:
     return {"project_id": project_id, "pending_count": count}
 
 
+@router.get("/{project_id}/new-file-count")
+async def get_new_file_count_route(project_id: str) -> dict:
+    """统计待整理文件数（manifest没记录的 + pending状态但pending_confirm没有的）。
+    
+    这是"整理新文件"按钮要用的数字——告诉用户有多少文件待整理。
+    跟 pending_count 不同：pending_count 数的是已扫描待确认的，这个数的是还没扫描的。
+    """
+    from app.core.manifest import load_manifest, STATUS_PENDING
+    from app.core.db import get_project, get_conn
+    from pathlib import Path
+    
+    proj = get_project(project_id)
+    if not proj or not proj.get("client_folder"):
+        return {"project_id": project_id, "new_file_count": 0}
+    
+    client_folder = Path(proj["client_folder"])
+    if not client_folder.exists():
+        return {"project_id": project_id, "new_file_count": 0, "error": "文件夹不存在"}
+    
+    manifest = load_manifest(project_id)
+    
+    # 拿 pending_confirm 里已有的 file_path（已整理过的不数）
+    pending_paths = set()
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT file_path FROM pending_confirm WHERE project_id=? AND confirmed=0",
+                (project_id,),
+            ).fetchall()
+            for r in rows:
+                pending_paths.add(r[0] if isinstance(r, str) else r[0])
+    except Exception:
+        pass
+    
+    # 遍历客户文件夹所有文件
+    new_count = 0
+    for p in client_folder.rglob("*"):
+        if not p.is_file():
+            continue
+        if p.name.startswith(".") or p.name in ("Thumbs.db", "desktop.ini"):
+            continue
+        rel = str(p.relative_to(client_folder)).replace("\\", "/")
+        abs_path = str(p)
+        rec = manifest.get(rel)
+        
+        # 情况1: manifest没记录 → 新文件
+        if not rec:
+            new_count += 1
+            continue
+        
+        # 情况2: manifest记录了pending + pending_confirm没有对应记录 → 待扫描
+        if rec.get("status") == STATUS_PENDING and abs_path not in pending_paths:
+            new_count += 1
+    
+    return {"project_id": project_id, "new_file_count": new_count}
+
+
+@router.post("/{project_id}/sync-changes")
+async def sync_changes_route(project_id: str) -> dict:
+    """打开项目时自动同步：检测新文件，写到 change_log。
+    
+    对比 manifest，发现没记录的文件就写 added 到 change_log。
+    只做检测，不跑 AI。
+    """
+    from app.core.manifest import load_manifest, STATUS_PENDING
+    from app.core.db import get_project, get_conn, insert_change_log
+    from pathlib import Path
+    
+    proj = get_project(project_id)
+    if not proj or not proj.get("client_folder"):
+        return {"project_id": project_id, "added": 0}
+    
+    client_folder = Path(proj["client_folder"])
+    if not client_folder.exists():
+        return {"project_id": project_id, "added": 0, "error": "文件夹不存在"}
+    
+    manifest = load_manifest(project_id)
+    
+    # 拿 pending_confirm 里已有的 file_path
+    pending_paths = set()
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT file_path FROM pending_confirm WHERE project_id=? AND confirmed=0",
+                (project_id,),
+            ).fetchall()
+            for r in rows:
+                pending_paths.add(r[0] if isinstance(r, str) else r[0])
+    except Exception:
+        pass
+    
+    # 拿已有 change_log 里 added 但还没处理的（避免重复写）
+    existing_added = set()
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT file_name FROM file_change_log WHERE project_id=? AND change_type='added' AND changed_by='sync'",
+                (project_id,),
+            ).fetchall()
+            for r in rows:
+                existing_added.add(r[0] if isinstance(r, str) else r[0])
+    except Exception:
+        pass
+    
+    added_count = 0
+    for p in client_folder.rglob("*"):
+        if not p.is_file():
+            continue
+        if p.name.startswith(".") or p.name in ("Thumbs.db", "desktop.ini"):
+            continue
+        rel = str(p.relative_to(client_folder)).replace("\\", "/")
+        abs_path = str(p)
+        rec = manifest.get(rel)
+        
+        # 情况1: manifest没记录 → 新文件
+        is_new = False
+        if not rec:
+            is_new = True
+        elif rec.get("status") == STATUS_PENDING and abs_path not in pending_paths:
+            is_new = True
+        
+        if is_new and rel not in existing_added:
+            try:
+                insert_change_log(
+                    project_id=project_id,
+                    file_name=rel,
+                    change_type="added",
+                    changed_by="sync",
+                    detail="检测到新文件",
+                )
+                added_count += 1
+            except Exception:
+                pass
+    
+    # 检测删除：manifest 里有但客户文件夹没有的
+    deleted_count = 0
+    existing_deleted = set()
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT file_name FROM file_change_log WHERE project_id=? AND change_type='deleted' AND changed_by='sync'",
+                (project_id,),
+            ).fetchall()
+            for r in rows:
+                existing_deleted.add(r[0] if isinstance(r, str) else r[0])
+    except Exception:
+        pass
+    
+    # 客户文件夹里现有的文件和目录列表
+    existing_files = set()
+    existing_dirs = set()
+    for p in client_folder.rglob("*"):
+        rel = str(p.relative_to(client_folder)).replace("\\", "/")
+        if p.is_file() and not p.name.startswith("."):
+            existing_files.add(rel)
+        elif p.is_dir():
+            existing_dirs.add(rel)
+    
+    for rel, rec in manifest.items():
+        if rel in existing_deleted:
+            continue
+        # 检查：manifest 的 key 在客户文件夹里存不存在
+        # key 可能是文件路径（"目录/文件.xlsx"）或目录名（"2023年度"）
+        if rel in existing_files:
+            continue  # 文件存在
+        if rel in existing_dirs:
+            continue  # 目录存在
+        # 也检查是不是目录下的文件（key 是目录名但实际有目录内的文件）
+        if any(f.startswith(rel + "/") for f in existing_files):
+            continue  # 目录下的文件存在
+        # manifest 有记录但客户文件夹没有 → 删了
+        try:
+            insert_change_log(
+                project_id=project_id,
+                file_name=rel,
+                change_type="deleted",
+                changed_by="sync",
+                detail="客户删除了文件",
+            )
+            deleted_count += 1
+        except Exception:
+            pass
+    
+    return {"project_id": project_id, "added": added_count, "deleted": deleted_count}
+
+
 @router.get("/{project_id}/recent-tasks")
 async def recent_tasks_by_project(
     project_id: str, limit: int = Query(20, ge=1, le=500)
@@ -1636,7 +1822,6 @@ def _process_one_file_sync(
                 )
                 result["pending_confirm"] = True
                 result["hitl_mode"] = True
-                # 不归档，不推进状态——等 Staff 确认
                 return result
             except Exception as e:
                 logger.warning("pending_confirm 写入失败（降级到直接归档）: %r", e)
@@ -1939,7 +2124,7 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
     # 确定最终 item_id
     item_id = body.new_item_id.strip() or record.get("suggested_item_id", "")
     if not item_id:
-        raise HTTPException(status_code=400, detail="无法确认：既无 new_item_id 也无 suggested_item_id")
+        raise HTTPException(status_code=400, detail="AI 未能分类，请先点改分类选择 PBC 编号")
 
     # 查 PBC item 信息
     pbc_item = get_item_by_id(item_id, project_id=project_id)
@@ -2025,7 +2210,7 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
                                  arc_result.get("version", "v1"),
                                  project_id=project_id, client_folder=_client_folder, manifest=_manifest)
         except Exception as e:
-            logger.warning("manifest update 失败（非阻断）: %r", e)
+            logger.error("manifest update 失败（confirm）: %r", e, exc_info=True)
         if remaining == 0:
             # 全部确认完 → 已提供
             update_item_status(item_id, STATUS_PROVIDED, changed_by="manual",
