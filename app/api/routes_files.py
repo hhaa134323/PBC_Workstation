@@ -912,29 +912,52 @@ async def set_archive_root_by_project(project_id: str, body: dict) -> dict:
 async def open_folder_path(project_id: str, body: dict) -> dict:
     """v7: 打开任意路径（归档目录 / 文件所在目录 / 客户文件夹）。
 
-    请求体：{"path": "D:/.../PBC归档/历史沿革"}
+    请求体：{"path": "D:/.../PBC归档/历史沿革", "select": false}
     - 如果 path 是目录，直接打开
-    - 如果 path 是文件，打开其父目录
+    - 如果 path 是文件：
+        - select=true（默认）：在文件管理器中定位并选中该文件
+          Windows: explorer /select,"path"
+          macOS: open -R path
+          Linux: 打开父目录（无统一 /select 方案）
+        - select=false：打开其父目录
     """
     import os
     import sys
+    import subprocess
+    import shlex
     path_str = body.get("path")
+    select = body.get("select", True)  # 默认定位到文件
     if not path_str:
         return {"ok": False, "error": "path 不能为空"}
     p = Path(path_str)
-    target = p if p.is_dir() else p.parent
-    if not target.exists():
+    if not p.exists():
         return {"ok": False, "error": f"路径不存在: {path_str}"}
     try:
-        if sys.platform == "win32":
-            os.startfile(str(target))
-        elif sys.platform == "darwin":
-            import subprocess
-            subprocess.Popen(["open", str(target)])
+        if p.is_file() and select:
+            # 定位到文件并选中
+            if sys.platform == "win32":
+                # explorer /select,"D:\path\to\file.pdf"
+                # 用 subprocess 避免路径含空格/中文的问题
+                subprocess.Popen(["explorer", "/select,", str(p)])
+                return {"ok": True, "path": str(p), "action": "select"}
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(p)])
+                return {"ok": True, "path": str(p), "action": "select"}
+            else:
+                # Linux 无统一 /select，回退到打开父目录
+                target = p.parent
+                subprocess.Popen(["xdg-open", str(target)])
+                return {"ok": True, "path": str(target), "action": "open_parent"}
         else:
-            import subprocess
-            subprocess.Popen(["xdg-open", str(target)])
-        return {"ok": True, "path": str(target)}
+            # 目录或 select=false：直接打开（文件则打开父目录）
+            target = p if p.is_dir() else p.parent
+            if sys.platform == "win32":
+                os.startfile(str(target))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(target)])
+            else:
+                subprocess.Popen(["xdg-open", str(target)])
+            return {"ok": True, "path": str(target)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
