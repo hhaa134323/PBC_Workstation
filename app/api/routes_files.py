@@ -2001,14 +2001,26 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
         remaining = get_pending_confirm_count_by_item(item_id, project_id=project_id)
         # v7.7: 更新 manifest → processed（下次扫描不重复处理）
         try:
-            from app.core.manifest import update_entry as _manifest_update, load_manifest as _load_manifest
+            from app.core.manifest import update_entry as _manifest_update, load_manifest as _load_manifest, _file_stat
             from app.core.db import get_project as _get_proj
             _proj = _get_proj(project_id)
             _client_folder = Path(_proj["client_folder"]) if _proj and _proj.get("client_folder") else None
             _manifest = _load_manifest(project_id)
-            _manifest_update(file_path, record.get("sha256") or "", item_id,
-                             arc_result.get("version", "v1"),
-                             project_id=project_id, client_folder=_client_folder, manifest=_manifest)
+            if file_path.is_dir():
+                # 目录归档——把目录内每个文件都记到 manifest（key=目录名/文件名）
+                for sub_file in file_path.rglob("*"):
+                    if sub_file.is_file():
+                        _manifest_update(sub_file, record.get("sha256") or "", item_id,
+                                         arc_result.get("version", "v1"),
+                                         project_id=project_id, client_folder=_client_folder, manifest=_manifest)
+                # 也记目录本身（scan时判断目录是否已归档）
+                _manifest_update(file_path, "", item_id,
+                                 arc_result.get("version", "v1"),
+                                 project_id=project_id, client_folder=_client_folder, manifest=_manifest)
+            else:
+                _manifest_update(file_path, record.get("sha256") or "", item_id,
+                                 arc_result.get("version", "v1"),
+                                 project_id=project_id, client_folder=_client_folder, manifest=_manifest)
         except Exception as e:
             logger.warning("manifest update 失败（非阻断）: %r", e)
         if remaining == 0:
