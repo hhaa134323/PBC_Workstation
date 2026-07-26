@@ -468,6 +468,18 @@ def detect_missing_files(
 
 
 def get_pending_count(project_id: Optional[str] = None) -> int:
-    """获取 pending 文件数（供前端展示待处理数）。"""
-    manifest = load_manifest(project_id)
-    return sum(1 for r in manifest.values() if r.get("status") == STATUS_PENDING)
+    """获取待归档文件数（pending_confirm 表 confirmed=0 的）。
+    
+    v7.7: 不再数 manifest 的 pending 状态（那是 watchdog 内部状态，会误导用户）。
+    改为数 pending_confirm 表里等待用户确认的记录。
+    """
+    try:
+        from app.core.db import get_conn
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM pending_confirm WHERE project_id=? AND confirmed=0",
+                (project_id or "",),
+            ).fetchone()
+            return row[0] if row else 0
+    except Exception:
+        return 0
