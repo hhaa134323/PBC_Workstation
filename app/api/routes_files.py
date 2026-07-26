@@ -1187,17 +1187,20 @@ def _process_one_file_sync(
         result["dedup"] = True
         result["prev_task_id"] = seen_task
         return result
-    # 再查 SQLite（重启后的去重）
+    # 再查 SQLite（重启后的去重）——同 sha256 + 同路径才算重复
     try:
         existing = get_archive_by_sha(h, project_id=project_id)
     except Exception as e:
         logger.warning("get_archive_by_sha 失败: %r", e)
         existing = None
     if existing is not None:
-        _hash_seen[(pid, h)] = ""
-        result["dedup"] = True
-        result["prev_archived_path"] = existing.get("archived_path")
-        return result
+        # v7.7: 同sha但不同文件路径→不算重复（不同文件可能内容相同）
+        existing_path = existing.get("original_path", "")
+        if existing_path and os.path.normpath(existing_path) == os.path.normpath(str(path)):
+            _hash_seen[(pid, h)] = ""
+            result["dedup"] = True
+            result["prev_archived_path"] = existing.get("archived_path")
+            return result
     _hash_seen[(pid, h)] = ""  # 占位
 
     # 2. 解析文件 — P0-2: 先检查文件大小是否稳定，不稳定直接跳过并提示前端
