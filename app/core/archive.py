@@ -304,6 +304,35 @@ def archive_directory(
         sub_dir_name = src_name
     base_dir = get_archive_root(project_id=project_id) / category_dir_name / sub_dir_name
 
+    # v7.7: 检查是否已归档过同一 item（防止重复归档加 _v2）
+    try:
+        from app.core.db import get_conn
+        with get_conn() as conn:
+            existing = conn.execute(
+                "SELECT id, archived_path FROM file_archive WHERE project_id=? AND item_id=? AND is_directory=1",
+                (project_id or "", item_id or ""),
+            ).fetchone()
+            if existing:
+                # 已归档过——复用旧目录，不加 _v2
+                old_path = existing[1]
+                if old_path and Path(old_path).exists():
+                    target_dir = Path(old_path)
+                    logger.info("archive_directory: 复用已有目录（同item）: %s", old_path)
+                    # copytree 合并进去
+                    try:
+                        shutil.copytree(str(src), str(target_dir), dirs_exist_ok=True)
+                    except Exception as e:
+                        return {"ok": False, "error": f"copytree(merge) failed: {e}", "source_dir": str(src)}
+                    file_count = sum(1 for p in target_dir.rglob("*") if p.is_file())
+                    total_size = sum(p.stat().st_size for p in target_dir.rglob("*") if p.is_file())
+                    return {
+                        "ok": True, "archived_dir": str(target_dir),
+                        "file_count": file_count, "item_id": item_id or "",
+                        "skipped": True, "reason": "already_archived_same_item",
+                    }
+    except Exception as e:
+        logger.warning("check existing archive failed: %r", e)
+
     # 目标文件夹名：直接用 sub_dir_name
     target_dir = base_dir
 
