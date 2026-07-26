@@ -1627,6 +1627,9 @@ function pbcApp(){
     /* 过滤器 */
     filters: {entity:'', category:'', risk:''},
 
+    /* v7.9: 表格分页+搜索状态 */
+    tableState: {q:'', pageSize:50, page:1},
+
     /* 列设置：按需显示列（每个 Tab 记住各自勾选） */
     colVisible: {},
     colMenuOpen: false,
@@ -1855,6 +1858,7 @@ function pbcApp(){
       this.heatmapData = null;
       this.briefing = null;
       this.fileZone.paths = null;  // 清旧路径
+      this.tableState = {q:'', pageSize:50, page:1};  // v7.9: 切项目重置表格状态
       await this.reloadAll();
       this.loadFileZone();  // v7.7: 切项目后立即加载文件区路径（triage tab 依赖）
       if(!silent) this.pushToast('low','已切换项目', p.name);
@@ -2431,7 +2435,7 @@ function pbcApp(){
     /* =========================================================
        Tab / 过滤
        ========================================================= */
-    switchTab(id){ this.currentTab = id; if(id==='files'||id==='triage') this.loadFileZone(); },
+    switchTab(id){ this.currentTab = id; this.tableState.page=1; this.tableState.q=''; if(id==='files'||id==='triage') this.loadFileZone(); },
 
     stageOf(it){
       const st = it.status_normalized || it.status || '';
@@ -2658,6 +2662,32 @@ function pbcApp(){
       return list;
     },
 
+    /* v7.9: 跨字段搜索 — 在 filteredItems 基础上按 q 过滤 */
+    searchedItems(){
+      const list = this.filteredItems();
+      const q = (this.tableState.q||'').trim().toLowerCase();
+      if(!q) return list;
+      return list.filter(it=>{
+        // 跨字段：文件名/编号(item_id)/分类/实体/资料名称/描述
+        const hay = [
+          it.item_id, it.code, it.category, it.entity,
+          it.doc_name, it.subject, it.desc, it.description,
+          it.file_path, it.status, it.status_normalized
+        ].map(v=>(v||'').toString().toLowerCase());
+        return hay.some(h=>h.indexOf(q)>=0);
+      });
+    },
+    /* v7.9: 分页后的当前页条目 */
+    paginatedItems(){
+      const list = this.searchedItems();
+      const ps = this.tableState.pageSize;
+      const start = (this.tableState.page-1) * ps;
+      return list.slice(start, start + ps);
+    },
+    get tableTotalPages(){ return Math.max(1, Math.ceil(this.searchedItems().length / this.tableState.pageSize)); },
+    get tableCurrentPage(){ return Math.min(this.tableState.page, this.tableTotalPages); },
+    get tableTotalCount(){ return this.searchedItems().length; },
+
     allColumns(){
       return [
         {k:'code',label:'二级分类',lock:true},
@@ -2776,11 +2806,14 @@ function pbcApp(){
       const entities = [...new Set(this.pbcList.map(i=>i.entity).filter(Boolean))];
       const cats = [...new Set(this.pbcList.map(i=>i.category).filter(Boolean))];
       const opt = (v,l,cur)=>'<option value="'+this.esc(v)+'" '+(cur===v?'selected':'')+'>'+this.esc(l)+'</option>';
+      // v7.9: 顶部跨字段搜索框
+      const searchInput = '<input type="text" placeholder="搜索文件名/编号/分类/实体…" value="'+this.esc(this.tableState.q||'')+'" oninput="window.__tableSearch(this.value)" style="flex:1;min-width:180px;max-width:280px;padding:5px 10px;font-size:12px;border:1px solid hsl(var(--border));border-radius:5px;background:hsl(var(--card));color:hsl(var(--foreground))" />';
       return ''+
+        searchInput+
         '<select onchange="window.__setFilter(\'entity\', this.value)">'+opt('','全部实体',f.entity)+entities.map(e=>opt(e,e,f.entity)).join('')+'</select>'+
         '<select onchange="window.__setFilter(\'category\', this.value)">'+opt('','全部分类',f.category)+cats.map(c=>opt(c,c,f.category)).join('')+'</select>'+
         '<select onchange="window.__setFilter(\'risk\', this.value)">'+opt('','全部风险',f.risk)+opt('high','高风险(>30天)',f.risk)+opt('mid','中风险(≤30天)',f.risk)+opt('low','未逾期',f.risk)+'</select>'+
-        '<span class="filter-info">共 '+this.filteredItems().length+' 项</span>';
+        '<span class="filter-info">共 '+this.searchedItems().length+' 项' + (this.tableState.q ? '（搜索：'+this.esc(this.tableState.q)+'）' : '') + '</span>';
     },
 
     /* =========================================================
@@ -2856,7 +2889,10 @@ function pbcApp(){
     },
 
     tableViewHtml(list){
-      if(!list.length){
+      // v7.9: list 参数忽略，改用 paginatedItems()（当前页）
+      const pageList = this.paginatedItems();
+      const total = this.searchedItems().length;
+      if(!pageList.length && !total){
         // P1-17/P1-18/P1-19: 按 Tab 给不同的空状态文案
         const emptyMsg = {
           triage:  '暂无待初检项。AI 已自动完成初检的文件进入“待复核”。点“扫描新文件”从客户文件夹取件。',
@@ -2865,13 +2901,11 @@ function pbcApp(){
           done:    '尚未完成任何项，等复核通过后会自动归档到这里',
         };
         const msg = emptyMsg[this.currentTab] || '当前筛选下没有事项';
-        // review Tab 加"去扫描"按钮
         const actionBtn = (this.currentTab==='review' || this.currentTab==='triage')
           ? '<button class="btn btn-pri btn-xs" style="margin-top:10px" onclick="window.__goToTriageAndScan()">去扫描文件</button>'
           : (this.currentTab==='overdue'
               ? '<div style="margin-top:10px;font-size:14px;color:var(--green);font-weight:600">项目完成度 '+(this.progressPct||0)+'%，所有 PBC 项均按时提供或审核中</div>'
               : '');
-        // 用 SVG icon 替代 emoji
         const iconSvg = this.currentTab==='overdue'
           ? '<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>'
           : '<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
@@ -2881,13 +2915,43 @@ function pbcApp(){
           '<div>'+this.esc(msg)+'</div>'+actionBtn+
         '</div></div>';
       }
+      if(!pageList.length && total){
+        // 有总数但当前页空（搜索无匹配）
+        return '<div class="card"><div class="empty">'+
+          '<div class="em"><span class="ico ico-lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span></div>'+
+          '<div>无匹配条目</div>'+
+          '<div style="font-size:12px;margin-top:6px;color:var(--text3)">共 '+total+' 项，搜索"'+this.esc(this.tableState.q||'')+'"无匹配，换个关键词试试</div>'+
+        '</div></div>';
+      }
       const cols = this.activeColumns();
-      const rows = list.map(it=>{
+      const rows = pageList.map(it=>{
         const low = it.confidence!=null && it.confidence<0.7;
         return '<tr class="'+(low?'lowconf':'')+'">'+cols.map(c=>this.colCell(it,c.k)).join('')+'</tr>';
       }).join('');
       const ths = cols.map(c=>'<th>'+this.esc(c.label)+'</th>').join('');
-      return this.colToolbarHtml()+'<div class="card tbl-wrap"><table class="tbl"><thead><tr>'+ths+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+      // v7.9: 分页控制条
+      const pagination = this.tablePaginationHtml(total);
+      return this.colToolbarHtml()+'<div class="card tbl-wrap"><table class="tbl"><thead><tr>'+ths+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+pagination;
+    },
+    /* v7.9: 分页+搜索控制条 */
+    tablePaginationHtml(total){
+      const ps = this.tableState.pageSize;
+      const tp = this.tableTotalPages;
+      const cp = this.tableCurrentPage;
+      const start = total===0 ? 0 : (cp-1)*ps+1;
+      const end = Math.min(cp*ps, total);
+      const q = this.tableState.q||'';
+      // 每页条数选择 20/50/100
+      const sizeOpts = [20,50,100].map(n=>'<option value="'+n+'"'+(ps===n?' selected':'')+'>'+n+' 条/页</option>').join('');
+      return '<div class="tbl-pagination" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;background:hsl(var(--soft));border:1px solid hsl(var(--border));border-top:none;border-radius:0 0 8px 8px;font-size:12px;color:hsl(var(--muted-foreground))">'+
+        '<span>显示 '+start+'-'+end+'，共 '+total+' 项</span>'+
+        '<div style="display:flex;align-items:center;gap:4px">'+
+          '<button class="btn btn-ghost btn-xs" onclick="window.__tablePage('+(cp>1?cp-1:1)+')" '+(cp<=1?'disabled style="opacity:.4;cursor:not-allowed"':'')+'>'+'上一页'+'</button>'+
+          '<span style="padding:0 6px">'+cp+' / '+tp+'</span>'+
+          '<button class="btn btn-ghost btn-xs" onclick="window.__tablePage('+(cp<tp?cp+1:tp)+')" '+(cp>=tp?'disabled style="opacity:.4;cursor:not-allowed"':'')+'>'+'下一页'+'</button>'+
+        '</div>'+
+        '<select onchange="window.__tablePageSize(parseInt(this.value))" style="padding:4px 8px;font-size:12px;border:1px solid hsl(var(--border));border-radius:5px;background:hsl(var(--card));color:hsl(var(--foreground))">'+sizeOpts+'</select>'+
+      '</div>';
     },
 
     heatColor(d){
@@ -3278,6 +3342,22 @@ function pbcApp(){
 window.__setFilter = function(k, v){
   const app = Alpine.$data(document.querySelector('[x-data]'));
   app.filters[k] = v;
+  app.tableState.page = 1;  // v7.9: 切筛选时重置到第一页
+};
+/* v7.9: 表格分页+搜索全局桥接 */
+window.__tablePage = function(page){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.tableState.page = Math.max(1, Math.min(page, app.tableTotalPages));
+};
+window.__tablePageSize = function(size){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.tableState.pageSize = size;
+  app.tableState.page = 1;  // 切每页条数时重置到第一页
+};
+window.__tableSearch = function(q){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.tableState.q = q;
+  app.tableState.page = 1;  // 搜索时重置到第一页
 };
 window.__changeStatus = function(itemId, status){
   const app = Alpine.$data(document.querySelector('[x-data]'));
