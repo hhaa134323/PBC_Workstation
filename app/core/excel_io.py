@@ -217,6 +217,32 @@ def _row_to_item(row_idx: int, ws) -> dict[str, Any]:
     status_raw = item.get("status_raw")
     item["status_raw"]      = status_raw if status_raw is not None else ""
     item["status_normalized"] = normalize_status(status_raw)
+
+    # v7.7: 实时计算 overdue_days（每天自动更新）
+    # 如果有 expected_by 日期，且状态不是已提供/不适用，实时算超期天数
+    eb = item.get("expected_by")
+    if eb:
+        from datetime import date
+        try:
+            if isinstance(eb, str):
+                from datetime import datetime
+                eb_date = datetime.fromisoformat(eb).date() if 'T' in eb or '-' in eb else None
+            elif isinstance(eb, (int, float)):
+                # Excel 日期序列号
+                from datetime import datetime, timedelta
+                base = datetime(1899, 12, 30)
+                eb_date = (base + timedelta(days=int(eb))).date()
+            else:
+                eb_date = None
+            if eb_date:
+                today = date.today()
+                delta = (today - eb_date).days
+                # 只在未提供状态下才算超期
+                sn = item["status_normalized"]
+                if sn not in ("已提供", "不适用") and delta > 0:
+                    item["overdue_days"] = delta
+        except Exception:
+            pass
     item["risk_level"]       = compute_risk_level(item["overdue_days"])
     return item
 

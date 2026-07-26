@@ -1214,8 +1214,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
         </div>
       </div>
       <div class="nav-spacer"></div>
-      <div class="nav-progress" x-show="dashboard">
-        <span>总体进度</span>
+      <div class="nav-progress" x-show="dashboard" title="统计的是 PBC 清单中已提供或审核中的条目数占总条目数的比例，一个条目可能对应多个归档文件">
+        <span>总体进度 <span style="cursor:help">?</span></span>
         <div class="bar"><i :style="'width:'+progressPct+'%'"></i></div>
         <b style="color:var(--text)" x-text="progressPct+'%'"></b>
         <span x-text="'('+progressProvided+'/'+progressTotal+')'"></span>
@@ -1393,7 +1393,11 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
         <button class="btn btn-pri" @click="openEscalation()">生成缺口汇报</button>
       </div>
       <div class="gauges" style="margin-bottom:16px">
-        <div class="gauge green"><div class="k">已收齐</div><div class="v" x-text="gauges.done"></div><div class="sub">复核通过已归档</div></div>
+        <div class="gauge green" style="position:relative">
+          <div class="k">已收齐 <span style="cursor:help" title="统计的是 PBC 清单中状态为「已提供」的条目数，一个条目可能对应多个归档文件">?</span></div>
+          <div class="v" x-text="gauges.done"></div>
+          <div class="sub">复核通过已归档</div>
+        </div>
         <div class="gauge orange"><div class="k">待复核</div><div class="v" x-text="gauges.review"></div><div class="sub">已收整理，待复核</div></div>
         <div class="gauge red"><div class="k">缺口项</div><div class="v" x-text="gauges.overdue"></div><div class="sub">超 5 工作日未提供</div></div>
         <div class="gauge"><div class="k">高风险（&gt;30 天）</div><div class="v" style="color:var(--red-deep)" x-text="gauges.high"></div><div class="sub">需优先处理</div></div>
@@ -1416,7 +1420,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       </div>
       <div class="gauges" style="margin-bottom:16px">
         <div class="gauge green"><div class="k">总体完成率</div><div class="v" x-text="progressPct+'%'"></div><div class="sub" x-text="'已提供或审核中 '+progressProvided+'，共 '+progressTotal"></div></div>
-        <div class="gauge"><div class="k">已归档</div><div class="v" x-text="gauges.done"></div><div class="sub">终态，复核通过</div></div>
+        <div class="gauge"><div class="k">已归档 <span style="cursor:help" title="统计的是 PBC 清单中状态为「已提供」的条目数，一个条目可能对应多个归档文件">?</span></div><div class="v" x-text="gauges.done"></div><div class="sub">终态，复核通过</div></div>
         <div class="gauge"><div class="k">不适用</div><div class="v" x-text="gauges.na"></div><div class="sub">不涉及本公司</div></div>
       </div>
       <div class="filters" x-html="filtersBarHtml()"></div>
@@ -2381,11 +2385,13 @@ function pbcApp(){
     switchTab(id){ this.currentTab = id; if(id==='files'||id==='triage') this.loadFileZone(); },
 
     stageOf(it){
-      const st = it.status_normalized || it.status;
+      const st = it.status_normalized || it.status || '';
       const od = it.overdue_days || 0;
       if(st==='已提供' || st==='不适用') return 'done';
       if(st==='已提供，审核中') return 'review';
-      // 未提供——全部进待初检（不管超不超期）
+      // 未提供 + 超期 → 风险分析
+      if(od > 0) return 'overdue';
+      // 未提供 + 没超期 → 待初检
       return 'triage';
     },
 
@@ -2411,11 +2417,12 @@ function pbcApp(){
     get gauges(){
       const g = {done:0, review:0, overdue:0, high:0, na:0};
       for(const it of this.pbcList){
-        const st = it.status_normalized || it.status;
+        const st = it.status_normalized || it.status || '';
         if(st==='已提供') g.done++;
-        else if(st==='不   用') g.na++;
+        else if(st==='不适用') g.na++;
         else if(st==='已提供，审核中') g.review++;
-        else if(st==='未提供'){
+        else {
+          // 未提供/待定/空 → 算未提供
           if((it.overdue_days||0)>0){ g.overdue++; if(it.overdue_days>30) g.high++; }
         }
       }
@@ -2575,13 +2582,15 @@ function pbcApp(){
       let list = this.pbcList.filter(it=>{
         const st = this.stageOf(it);
         if(this.currentTab==='triage'){
-          // 待初检：未提供的（不管超不超期）+ 有文件待扫描
-          return st === 'triage';
+          // 待初检：所有未提供的（不管超不超期）+ 有文件待扫描
+          // 包含 triage + overdue（超期的也在待初检显示）
+          return st === 'triage' || st === 'overdue';
         }
         if(this.currentTab==='overdue'){
-          // 缺口分析：所有未提供的（含超期和不超期）
-          const s = it.status_normalized || it.status;
-          return s && s !== '已提供' && s !== '不适用' && s !== '已提供，审核中';
+          // 风险分析：只显示超期的（overdue_days>0）
+          const s = it.status_normalized || it.status || '';
+          const isProvided = s==='已提供' || s==='不适用' || s==='已提供，审核中';
+          return !isProvided && (it.overdue_days||0) > 0;
         }
         return st === this.currentTab;
       });
