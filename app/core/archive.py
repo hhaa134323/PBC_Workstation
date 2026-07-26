@@ -304,13 +304,14 @@ def archive_directory(
         sub_dir_name = src_name
     base_dir = get_archive_root(project_id=project_id) / category_dir_name / sub_dir_name
 
-    # v7.7: 检查是否已归档过同一 item（防止重复归档加 _v2）
+    # v7.7: 检查是否已归档过同一源目录（防止重复归档加 _v2）
+    # 注意：同 item 不同目录不能复用（如 货-1 2023年度 vs 2024年度）
     try:
         from app.core.db import get_conn
         with get_conn() as conn:
             existing = conn.execute(
-                "SELECT id, archived_path FROM file_archive WHERE project_id=? AND item_id=? AND is_directory=1",
-                (project_id or "", item_id or ""),
+                "SELECT id, archived_path FROM file_archive WHERE project_id=? AND item_id=? AND is_directory=1 AND original_path=?",
+                (project_id or "", item_id or "", str(src)),
             ).fetchone()
             if existing:
                 # 已归档过——复用旧目录，不加 _v2
@@ -318,9 +319,25 @@ def archive_directory(
                 if old_path and Path(old_path).exists():
                     target_dir = Path(old_path)
                     logger.info("archive_directory: 复用已有目录（同item）: %s", old_path)
-                    # copytree 合并进去
+                    # v7.7: 逐文件合并，同名加后缀
                     try:
-                        shutil.copytree(str(src), str(target_dir), dirs_exist_ok=True)
+                        for src_file in src.rglob("*"):
+                            if not src_file.is_file():
+                                continue
+                            rel = src_file.relative_to(src)
+                            tf = target_dir / rel
+                            tf.parent.mkdir(parents=True, exist_ok=True)
+                            if tf.exists():
+                                stem = tf.stem
+                                suffix = tf.suffix
+                                i = 2
+                                while True:
+                                    cand = tf.parent / f"{stem}_v{i}{suffix}"
+                                    if not cand.exists():
+                                        tf = cand
+                                        break
+                                    i += 1
+                            shutil.copy2(str(src_file), str(tf))
                     except Exception as e:
                         return {"ok": False, "error": f"copytree(merge) failed: {e}", "source_dir": str(src)}
                     file_count = sum(1 for p in target_dir.rglob("*") if p.is_file())
@@ -358,13 +375,32 @@ def archive_directory(
     
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # 整目录拷贝（保留内部结构，允许目录已存在）
+    # v7.7: 整目录拷贝——逐文件拷贝，同名文件加后缀避免覆盖
     try:
-        shutil.copytree(str(src), str(target_dir), dirs_exist_ok=True)
+        for src_file in src.rglob("*"):
+            if not src_file.is_file():
+                continue
+            # 计算相对路径，保持目录结构
+            rel = src_file.relative_to(src)
+            target_file = target_dir / rel
+            # 确保父目录存在
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            # 同名文件加 _v2 _v3 后缀
+            if target_file.exists():
+                stem = target_file.stem
+                suffix = target_file.suffix
+                i = 2
+                while True:
+                    candidate = target_file.parent / f"{stem}_v{i}{suffix}"
+                    if not candidate.exists():
+                        target_file = candidate
+                        break
+                    i += 1
+            shutil.copy2(str(src_file), str(target_file))
     except Exception as e:
         return {
             "ok": False,
-            "error": f"copytree failed: {type(e).__name__}: {e}",
+            "error": f"copy failed: {type(e).__name__}: {e}",
             "source_dir": str(src),
         }
 
