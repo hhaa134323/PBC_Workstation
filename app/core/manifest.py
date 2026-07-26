@@ -270,15 +270,35 @@ def get_pending_files(
 
         status = record.get("status", "")
         if status == STATUS_PENDING:
-            # v7.7: pending 状态检查 sha 变化——没变就跳过（已在待归档），变了就重跑AI
+            # v7.7: pending 状态——检查是否已跑过AI（pending_confirm有记录）
+            # 如果pending_confirm没有记录，需要跑AI（加到to_process）
+            # 如果已有记录且sha没变，跳过；sha变了重跑AI
+            rn_check = _rel_name(p, client_folder)
+            has_pc = False
+            try:
+                from app.core.db import get_conn
+                with get_conn() as conn:
+                    pc_row = conn.execute(
+                        "SELECT id FROM pending_confirm WHERE project_id=? AND file_path=? AND confirmed=0",
+                        (project_id or "", str(p)),
+                    ).fetchone()
+                    has_pc = bool(pc_row)
+            except Exception:
+                pass
+
             stat_info = _file_stat(p)
-            if stat_info and (stat_info["size"] == record.get("size")
-                              and stat_info["mtime"] == record.get("mtime")):
-                # 没变——已在待归档列表里，跳过不重跑
-                skipped += 1
-            else:
-                # 变了——文件被改过，加到 changed_files 重跑 AI 更新建议
+            sha_changed = not (stat_info and (stat_info["size"] == record.get("size")
+                              and stat_info["mtime"] == record.get("mtime")))
+
+            if not has_pc:
+                # 还没跑过AI——需要处理（加到new_files让AI跑）
+                new_files.append(p)
+            elif sha_changed:
+                # 跑过AI但文件变了——重跑
                 changed_files.append(p)
+            else:
+                # 已跑过AI且没变——跳过
+                skipped += 1
             continue
 
         # processed → 检查 size+mtime
