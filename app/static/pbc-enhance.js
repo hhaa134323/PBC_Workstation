@@ -159,7 +159,7 @@
       var el = list[i];
       if (el.tagName !== 'BUTTON') continue;
       var t = (el.textContent || '').replace(/\s+/g, '');
-      if (t.indexOf('文件变更') >= 0) out.change = el;
+      if (t.indexOf('变更记录') >= 0 || t.indexOf('文件变更') >= 0) out.change = el;
       else if (t.indexOf('导出清单') >= 0) out.exp = el;
       else if (t.indexOf('生成汇报') >= 0) out.report = el;
       else if (t.indexOf('刷新') >= 0) out.reload = el;
@@ -288,11 +288,15 @@
     panel.innerHTML =
       '<div class="pbcg-vh-hd">' +
         '<span class="ic">' + SVG_HIST + '</span>' +
-        '<div><b>文件变更</b><span class="sub">谁改了什么，一条条按时间记录</span></div>' +
+        '<div><b>变更记录</b><span class="sub">客户与审计员的操作记录</span></div>' +
         '<div class="sp">' +
           '<button class="pbcg-vh-ico" data-act="refresh" title="刷新">' + SVG_REFRESH + '</button>' +
           '<button class="pbcg-vh-ico" data-act="close" title="关闭">' + SVG_CLOSE + '</button>' +
         '</div>' +
+      '</div>' +
+      '<div class="pbcg-vh-tabs" style="display:flex;border-bottom:1px solid hsl(var(--border))">' +
+        '<button class="pbcg-vh-tab" data-tab="client" style="flex:1;padding:10px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid hsl(var(--primary));color:hsl(var(--primary))">文件变更</button>' +
+        '<button class="pbcg-vh-tab" data-tab="auditor" style="flex:1;padding:10px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:hsl(var(--muted-foreground))">操作日志</button>' +
       '</div>' +
       '<div class="pbcg-vh-tools">' +
         '<input type="text" placeholder="搜文件名或编号">' +
@@ -313,6 +317,25 @@
     panel.querySelector('[data-act="close"]').addEventListener('click', close);
     panel.querySelector('[data-act="refresh"]').addEventListener('click', function(){ load(true); });
     listEl.addEventListener('click', onRowClick);
+    // 子页签切换
+    var currentTab = 'client'; // client=文件变更, auditor=操作日志
+    var tabBtns = panel.querySelectorAll('.pbcg-vh-tab');
+    for(var ti = 0; ti < tabBtns.length; ti++){
+      tabBtns[ti].addEventListener('click', function(){
+        currentTab = this.getAttribute('data-tab');
+        // 更新页签样式
+        for(var tj = 0; tj < tabBtns.length; tj++){
+          if(tabBtns[tj].getAttribute('data-tab') === currentTab){
+            tabBtns[tj].style.borderBottomColor = 'hsl(var(--primary))';
+            tabBtns[tj].style.color = 'hsl(var(--primary))';
+          } else {
+            tabBtns[tj].style.borderBottomColor = 'transparent';
+            tabBtns[tj].style.color = 'hsl(var(--muted-foreground))';
+          }
+        }
+        render();
+      });
+    }
     // 整理新文件按钮
     var orgBtn = panel.querySelector('.pbcg-vh-organize');
     if(orgBtn){
@@ -330,6 +353,9 @@
     var q = (searchEl && searchEl.value || '').trim().toLowerCase();
     var t = (filterEl && filterEl.value) || '';
     return raw.filter(function(m){
+      // 子页签过滤：client=文件变更(sync), auditor=操作日志(非sync)
+      if(currentTab === 'client' && m.changed_by !== 'sync') return false;
+      if(currentTab === 'auditor' && m.changed_by === 'sync') return false;
       if(t && m.change_type !== t) return false;
       if(!q) return true;
       var hay = ((m.file_name || '') + ' ' + (m.item_id || '') + ' ' + (m.changed_by || '')).toLowerCase();
@@ -341,10 +367,10 @@
     if(!listEl) return;
     var items = visible();
     if(!items.length){
-      listEl.innerHTML = '<div class="pbcg-vh-msg">' +
-        (raw.length ? '当前筛选下没有变更记录，换个类型或清空搜索试试'
-                      : '还没有变更记录。扫描、归档、改分类、复核通过都会在这里留下一条') +
-        '</div>';
+      var emptyMsg = currentTab === 'client'
+        ? '客户共享文件夹没有新的变化。整理新文件后，新增/修改/删除会显示在这里'
+        : '还没有操作记录。归档、改分类后会在操作日志里记录';
+      listEl.innerHTML = '<div class="pbcg-vh-msg">' + emptyMsg + '</div>';
       return;
     }
 
@@ -548,7 +574,7 @@
       if(!btn) return;
       if(panel && panel.contains(btn)) return;
       var txt = (btn.textContent || '').replace(/\s/g,'');
-      if(txt.indexOf('文件变更') < 0) return;
+      if(txt.indexOf('变更记录') < 0 && txt.indexOf('文件变更') < 0) return;
       e.preventDefault();
       e.stopPropagation();
       if(document.body.classList.contains('pbcg-vh-open')) close();
