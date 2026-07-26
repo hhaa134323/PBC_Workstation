@@ -561,7 +561,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 
   <!-- 文件变更面板（source control 时间线，右侧全高滑出） -->
   <div x-show="changePanel.show" x-transition.opacity @click.self="changePanel.show=false" style="position:fixed;inset:0;z-index:70;background:hsl(var(--ey-confident-black) / 0.28)">
-    <div x-show="changePanel.show" x-transition.origin.right style="position:absolute;top:0;right:0;bottom:0;width:400px;max-width:calc(100vw - 32px);background:hsl(var(--popover));border-left:1px solid hsl(var(--border));box-shadow:-8px 0 30px -12px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div x-show="changePanel.show" x-transition.origin.left style="position:absolute;top:0;left:0;bottom:0;width:400px;max-width:calc(100vw - 32px);background:hsl(var(--popover));border-right:1px solid hsl(var(--border));box-shadow:8px 0 30px -12px rgba(0,0,0,.25);display:flex;flex-direction:column">
       <div style="padding:16px 20px;border-bottom:1px solid hsl(var(--border));display:flex;align-items:center;gap:10px;background:hsl(var(--soft))">
         <span class="ico ico-sm" style="color:hsl(var(--primary))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
         <div>
@@ -710,8 +710,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
   </div>
 
   <!-- 项目切换抽屉（左侧） -->
-  <div x-show="showProjectDrawer" class="overlay" style="display:none;justify-content:flex-start;padding:0" :style="showProjectDrawer && 'display:flex'" @click.self="showProjectDrawer=false">
-    <div class="drawer" @click.stop>
+  <div x-show="showProjectDrawer" class="overlay" style="display:none;justify-content:flex-end;padding:0" :style="showProjectDrawer && 'display:flex'" @click.self="showProjectDrawer=false">
+    <div class="drawer drawer-r" @click.stop>
       <div class="modal-h">
         <div><div class="tt">项目列表</div><div class="st">共 <span x-text="projects.length"></span> 个项目</div></div>
         <button class="x" @click="showProjectDrawer=false">×</button>
@@ -1193,7 +1193,10 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
   <!-- 顶部导航 -->
   <header class="nav">
     <div class="nav-top">
-      <button class="btn btn-ghost btn-xs" @click="openProjectDrawer()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></span>项目</button>
+      <button class="btn btn-pri btn-xs" style="position:relative" @click="openChangePanel()">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>文件变更
+        <span x-show="changePanel.unread>0" style="position:absolute;top:-2px;right:-2px;background:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black));font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;display:flex;align-items:center;justify-content:center;padding:0 4px" x-text="changePanel.unread"></span>
+      </button>
       <span class="nav-sep"></span>
       <div class="brand">
         <div class="logo">P</div>
@@ -1210,14 +1213,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
         <span x-text="'('+progressProvided+'/'+progressTotal+')'"></span>
       </div>
       <button class="btn btn-ghost btn-xs" @click="reloadAll()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></span>刷新</button>
-      <button class="btn btn-pri btn-xs" style="position:relative" @click="openChangePanel()">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>文件变更
-        <span x-show="changePanel.unread>0" style="position:absolute;top:-2px;right:-2px;background:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black));font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;display:flex;align-items:center;justify-content:center;padding:0 4px" x-text="changePanel.unread"></span>
-      </button>
       <button class="btn btn-ghost btn-xs" @click="exportPbcList()"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>导出清单</button>
       <button class="btn btn-ghost btn-xs" @click="openEscalation()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></span>生成汇报</button>
       <button class="btn btn-ghost btn-xs" @click="openFolderConfig()"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>设置</button>
       <button class="btn btn-ghost btn-xs" @click="openAiConfig()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg></span>AI 配置</button>
+      <span class="nav-sep"></span>
+      <button class="btn btn-ghost btn-xs" @click="openProjectDrawer()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></span>项目</button>
     </div>
     <nav class="tabs">
       <template x-for="t in tabs" :key="t.id">

@@ -165,6 +165,7 @@
       else if (t.indexOf('刷新') >= 0) out.reload = el;
       else if (t.indexOf('设置') >= 0) out.setting = el;
       else if (t.indexOf('AI') >= 0) out.ai = el;
+      else if (t.indexOf('项目') >= 0) out.project = el;
     }
     return out;
   }
@@ -179,8 +180,8 @@
     var line = document.createElement('span');
     line.className = 'pbcg-nav-div';
 
-    // 按新顺序重新挂到末尾，项目、品牌、进度条位置不变
-    var order = [b.change, b.exp, b.report, line, b.reload, b.setting, b.ai];
+    // v7.7: 文件变更在最左边不动，只排后面的按钮
+    var order = [b.exp, b.report, line, b.reload, b.setting, b.ai, b.project];
     for (var i = 0; i < order.length; i++) {
       if (order[i]) nav.appendChild(order[i]);
     }

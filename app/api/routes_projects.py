@@ -235,6 +235,16 @@ async def update_project_detail(project_id: str, body: ProjectUpdateBody) -> dic
         logger.exception("update_project failed")
         raise HTTPException(status_code=500, detail=f"更新项目失败: {e}")
 
+    # v7.7: 设了 client_folder 后动态注册 watcher
+    if "client_folder" in fields and fields["client_folder"]:
+        try:
+            from app.core.watcher import _global_multi_watcher
+            if _global_multi_watcher is not None:
+                _global_multi_watcher.add_project(project_id, fields["client_folder"])
+                logger.info("项目 %s watcher 动态注册", project_id)
+        except Exception as e:
+            logger.warning("watcher 动态注册失败 %s: %r", project_id, e)
+
     return {"ok": True, "project": updated, "changed": list(fields.keys())}
 
 

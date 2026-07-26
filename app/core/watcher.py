@@ -379,6 +379,29 @@ class MultiProjectWatcher:
         with self._lock:
             return any(w.is_running() for w in self._watchers.values())
 
+    def add_project(self, project_id: str, client_folder: str) -> bool:
+        """v7.7: 动态注册新项目的 watcher（项目创建后调用）。"""
+        if not client_folder:
+            return False
+        folder = Path(client_folder)
+        if not folder.exists() or not folder.is_dir():
+            logger.info("add_project: client_folder 不存在，跳过: %s", folder)
+            return False
+        with self._lock:
+            if project_id in self._watchers:
+                # 已有 watcher——先停掉旧的
+                try: self._watchers[project_id].stop()
+                except: pass
+            w = FolderWatcher(
+                folder=folder,
+                on_new_file=self.on_new_file,
+                project_id=project_id,
+            )
+            ok = w.start()
+            self._watchers[project_id] = w
+            logger.info("add_project: 项目 %s watcher 注册 %s", project_id, "成功" if ok else "失败")
+            return ok
+
     def get_watched_projects(self) -> list[str]:
         with self._lock:
             return list(self._watchers.keys())

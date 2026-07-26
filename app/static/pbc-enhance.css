@@ -151,18 +151,18 @@
    ============================================================ */
 
 /* 打开时整页往左让出宽度，表格照样看得见 */
-body.pbcg-vh-open{padding-right:400px;transition:padding-right .18s ease}
+body.pbcg-vh-open{padding-left:400px;transition:padding-left .18s ease}
 
 .pbcg-vh{
   position:fixed;
-  top:0;right:0;bottom:0;
+  top:0;left:0;bottom:0;
   width:400px;
   z-index:60;
   display:none;
   flex-direction:column;
   background:hsl(var(--card));
-  border-left:1px solid hsl(var(--border));
-  box-shadow:-10px 0 34px -18px rgba(26,26,36,.4);
+  border-right:1px solid hsl(var(--border));
+  box-shadow:10px 0 34px -18px rgba(26,26,36,.4);
 }
 body.pbcg-vh-open .pbcg-vh{display:flex}
 
