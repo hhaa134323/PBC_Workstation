@@ -912,9 +912,20 @@ def insert_pending_confirm(
     conflict_signal: str = "",
     advisory_notes: str = "",
 ) -> int:
-    """写入一条待确认记录。返回新 id。"""
+    """写入一条待确认记录。返回新 id。
+    
+    v7.7: 去重——同 project_id + file_path + confirmed=0 已存在则不重复插入。
+    """
     now = datetime.now().isoformat(timespec="seconds")
     with get_conn() as conn:
+        # 先检查是否已有未确认的相同记录
+        existing = conn.execute(
+            """SELECT id FROM pending_confirm 
+               WHERE project_id=? AND file_path=? AND confirmed=0""",
+            (project_id or "", file_path),
+        ).fetchone()
+        if existing:
+            return existing[0]  # 已存在，返回旧 id 不重复插入
         cur = execute_with_retry(
             """INSERT INTO pending_confirm
                (project_id, file_path, file_name, sha256, suggested_item_id,
