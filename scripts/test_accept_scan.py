@@ -158,15 +158,25 @@ for a in archives:
         break
 
 if src_archive:
+    # 找源文件的 item_id
+    src_item_id = None
+    for a in archives:
+        if a.get("original_path") == src_archive:
+            src_item_id = a.get("item_id", "")
+            break
     # 复制一份当临时文件
     _sh.copy2(src_archive, temp_file)
     # 扫描让它进待归档
     wait_scan(pid)
-    # 确认归档
+    # 确认归档（用源文件的item_id）
     items = get_pending(pid)
     temp_item = next((it for it in items if "临时删除测试" in it.get("file_name","")), None)
     if temp_item:
-        api_post(f"{BASE}/api/files/{pid}/confirm/{temp_item['id']}", json.dumps({"new_item_id": temp_item.get("suggested_item_id","")}).encode())
+        item_id = temp_item.get("suggested_item_id","") or src_item_id or ""
+        if item_id:
+            api_post(f"{BASE}/api/files/{pid}/confirm/{temp_item['id']}", json.dumps({"new_item_id": item_id}).encode())
+        else:
+            print("  跳过归档（无item_id）")
     # 现在删了它（从客户文件夹）
     safe_remove(temp_file)
     # 再扫描

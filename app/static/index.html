@@ -1393,10 +1393,10 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       </template>
     </div>
 
-    <!-- Tab 3 缺口分析（风险雷达） -->
+    <!-- Tab 3 风险分析（风险雷达） -->
     <div x-show="!loading && currentTab==='overdue'">
       <div class="page-head">
-        <div><h1>缺口分析</h1><div class="desc">识别缺口与超期，定位风险热点；点高风险项查看处理建议。</div></div>
+        <div><h1>风险分析</h1><div class="desc">识别缺口与超期，定位风险热点；点高风险项查看处理建议。</div></div>
         <button class="btn btn-pri" @click="openEscalation()">生成缺口汇报</button>
       </div>
       <div class="gauges" style="margin-bottom:16px">
@@ -1596,7 +1596,7 @@ function pbcApp(){
       {id:'triage',  label:'待初检'},
       {id:'review',  label:'待归档'},
       {id:'done',    label:'已完成'},
-      {id:'overdue', label:'缺口分析', alert:true},
+      {id:'overdue', label:'风险分析', alert:true},
       {id:'files',   label:'文件区', noCount:true},
     ],
     currentTab: 'triage',
@@ -2339,7 +2339,14 @@ function pbcApp(){
 
     get tabCounts(){
       const c = {triage:0, review:0, overdue:0, done:0};
-      for(const it of this.pbcList) c[this.stageOf(it)]++;
+      for(const it of this.pbcList){
+        c[this.stageOf(it)]++;
+        // 风险分析 tab 数字 = 所有未提供的（超期+不超期）
+        const st = it.status_normalized || it.status;
+        if(st && st !== '已提供' && st !== '不适用' && st !== '已提供，审核中'){
+          c.overdue++;
+        }
+      }
       return c;
     },
 
