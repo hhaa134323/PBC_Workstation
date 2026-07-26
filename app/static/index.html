@@ -1393,16 +1393,16 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       </template>
     </div>
 
-    <!-- Tab 3 超期未提供（风险雷达） -->
+    <!-- Tab 3 缺口分析（风险雷达） -->
     <div x-show="!loading && currentTab==='overdue'">
       <div class="page-head">
-        <div><h1>超期未提供与缺料风险雷达</h1><div class="desc">识别超期与缺口，定位风险热点；点高风险项查看处理建议。</div></div>
+        <div><h1>缺口分析</h1><div class="desc">识别缺口与超期，定位风险热点；点高风险项查看处理建议。</div></div>
         <button class="btn btn-pri" @click="openEscalation()">生成缺口汇报</button>
       </div>
       <div class="gauges" style="margin-bottom:16px">
         <div class="gauge green"><div class="k">已收齐</div><div class="v" x-text="gauges.done"></div><div class="sub">复核通过已归档</div></div>
         <div class="gauge orange"><div class="k">待复核</div><div class="v" x-text="gauges.review"></div><div class="sub">已收整理，待复核</div></div>
-        <div class="gauge red"><div class="k">超期未提供</div><div class="v" x-text="gauges.overdue"></div><div class="sub">超 5 工作日未提供</div></div>
+        <div class="gauge red"><div class="k">缺口项</div><div class="v" x-text="gauges.overdue"></div><div class="sub">超 5 工作日未提供</div></div>
         <div class="gauge"><div class="k">高风险（&gt;30 天）</div><div class="v" style="color:var(--red-deep)" x-text="gauges.high"></div><div class="sub">需优先处理</div></div>
       </div>
       <div class="card card-pad" style="margin-bottom:16px">
@@ -1595,8 +1595,8 @@ function pbcApp(){
     tabs: [
       {id:'triage',  label:'待初检'},
       {id:'review',  label:'待归档'},
-      {id:'overdue', label:'超期未提供', alert:true},
       {id:'done',    label:'已完成'},
+      {id:'overdue', label:'缺口分析', alert:true},
       {id:'files',   label:'文件区', noCount:true},
     ],
     currentTab: 'triage',
@@ -2327,8 +2327,7 @@ function pbcApp(){
       const od = it.overdue_days || 0;
       if(st==='已提供' || st==='不适用') return 'done';
       if(st==='已提供，审核中') return 'review';
-      // 未提供
-      if(od>0) return 'overdue';
+      // 未提供——全部进待初检（不管超不超期）
       return 'triage';
     },
 
@@ -2508,7 +2507,19 @@ function pbcApp(){
     },
 
     filteredItems(){
-      let list = this.pbcList.filter(it=>this.stageOf(it)===this.currentTab);
+      let list = this.pbcList.filter(it=>{
+        const st = this.stageOf(it);
+        if(this.currentTab==='triage'){
+          // 待初检：未提供的（不管超不超期）+ 有文件待扫描
+          return st === 'triage';
+        }
+        if(this.currentTab==='overdue'){
+          // 缺口分析：所有未提供的（含超期和不超期）
+          const s = it.status_normalized || it.status;
+          return s && s !== '已提供' && s !== '不适用' && s !== '已提供，审核中';
+        }
+        return st === this.currentTab;
+      });
       const f = this.filters;
       if(f.entity) list = list.filter(i=>i.entity===f.entity);
       if(f.category) list = list.filter(i=>(i.category||'').includes(f.category));
