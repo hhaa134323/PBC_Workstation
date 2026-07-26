@@ -925,7 +925,17 @@ def insert_pending_confirm(
             (project_id or "", file_path),
         ).fetchone()
         if existing:
-            return existing[0]  # 已存在，返回旧 id 不重复插入
+            # v7.7: 文件被改过重跑AI——更新建议（不重新插入）
+            execute_with_retry(
+                """UPDATE pending_confirm 
+                   SET suggested_item_id=?, confidence=?, decision=?, 
+                       conflict_signal=?, advisory_notes=?, created_at=?
+                   WHERE id=?""",
+                (suggested_item_id, confidence, decision,
+                 conflict_signal, advisory_notes, now, existing[0]),
+            )
+            conn.commit()
+            return existing[0]
         cur = execute_with_retry(
             """INSERT INTO pending_confirm
                (project_id, file_path, file_name, sha256, suggested_item_id,

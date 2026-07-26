@@ -432,8 +432,8 @@ async def scan_folder_by_project(project_id: str, folder: Optional[str] = None) 
     total = pending_result["total_count"]
     missing_files = pending_result["missing_files"]
 
-    # 合并待处理文件列表
-    to_process_paths = pending_files + new_files + changed_files
+    # v7.7: 合并待处理——只处理 new + changed，pending 且没变的跳过
+    to_process_paths = new_files + changed_files
 
     # 识别穿行测试子目录（一级子目录作为整目录归档单元）
     allowed_ext = {".pdf", ".xlsx", ".xlsm", ".csv", ".txt", ".md", ".json", ".xml"}

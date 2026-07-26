@@ -270,7 +270,15 @@ def get_pending_files(
 
         status = record.get("status", "")
         if status == STATUS_PENDING:
-            pending_files.append(p)
+            # v7.7: pending 状态检查 sha 变化——没变就跳过（已在待归档），变了就重跑AI
+            stat_info = _file_stat(p)
+            if stat_info and (stat_info["size"] == record.get("size")
+                              and stat_info["mtime"] == record.get("mtime")):
+                # 没变——已在待归档列表里，跳过不重跑
+                skipped += 1
+            else:
+                # 变了——文件被改过，加到 changed_files 重跑 AI 更新建议
+                changed_files.append(p)
             continue
 
         # processed → 检查 size+mtime
@@ -304,6 +312,34 @@ def get_pending_files(
                     })
     except Exception as e:
         logger.warning("file_archive missing check failed: %r", e)
+
+    # v7.7 G/I: 检测 pending_confirm 里源文件被删的——标 confirmed=2 跳过
+    # 客户在待归档队列里删了源文件，这条记录无法操作了
+    try:
+        from app.core.db import get_conn, execute_with_retry
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        with get_conn() as conn:
+            # 找所有未处理的 pending_confirm，检查源文件还在不在
+            rows = conn.execute(
+                "SELECT id, file_path, file_name FROM pending_confirm WHERE project_id=? AND confirmed=0",
+                (project_id or "",),
+            ).fetchall()
+            orphaned = []
+            for r in rows:
+                cid = r[0]
+                fpath = r[1]
+                if not fpath or not Path(fpath).exists():
+                    orphaned.append(cid)
+            # 标 confirmed=2（跳过）+ 备注
+            for cid in orphaned:
+                execute_with_retry(
+                    "UPDATE pending_confirm SET confirmed=2, advisory_notes=? WHERE id=?",
+                    ("客户已删除源文件，无法归档", cid),
+                )
+            if orphaned:
+                logger.info("标记 %d 条待归档为孤儿（源文件已删）", len(orphaned))
+    except Exception as e:
+        logger.warning("orphaned pending_confirm check failed: %r", e)
 
     logger.info(
         "get_pending_files: total=%d, pending=%d, new=%d, changed=%d, skipped=%d, missing=%d (project=%s)",
