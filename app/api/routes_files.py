@@ -443,16 +443,27 @@ async def scan_folder_by_project(project_id: str, folder: Optional[str] = None) 
         if p.is_dir() and p != base:
             sub_files = [f for f in p.iterdir() if f.is_file() and f.suffix.lower() in allowed_ext]
             if sub_files:
-                # 检查目录是否 pending（目录内任一文件 pending 则整目录 pending）
+                # v7.7: 检查目录是否已归档——查目录名对应的 manifest 记录
+                # 不再逐文件查（key 对不上导致每次都当新目录）
                 from app.core.manifest import _rel_name, load_manifest
                 manifest = pending_result["manifest"]
-                dir_pending = False
-                for sf in sub_files:
-                    rn = _rel_name(sf, base)
-                    rec = manifest.get(rn)
-                    if not rec or rec.get("status") == "pending":
-                        dir_pending = True
-                        break
+                dir_rn = p.name  # 目录的 manifest key 是目录名
+                dir_rec = manifest.get(dir_rn) or manifest.get(str(p.relative_to(base)))
+                dir_pending = not dir_rec or dir_rec.get("status") == "pending"
+                # 也要检查 pending_confirm 是否已有（已归档过）
+                if not dir_pending:
+                    # 已 processed——检查 file_archive 是否有记录
+                    try:
+                        from app.core.db import get_conn
+                        with get_conn() as conn:
+                            ar = conn.execute(
+                                "SELECT id FROM file_archive WHERE project_id=? AND original_path=?",
+                                (project_id, str(p)),
+                            ).fetchone()
+                            if not ar:
+                                dir_pending = True  # processed 但没归档过——需要归档
+                    except:
+                        pass
                 if dir_pending:
                     directories.append({
                         "path": str(p.relative_to(base)),

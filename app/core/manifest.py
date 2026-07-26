@@ -68,12 +68,15 @@ def save_manifest(manifest: dict[str, dict], project_id: Optional[str] = None) -
 
 
 def _file_stat(path: Path) -> Optional[dict[str, Any]]:
-    """取文件 stat 信息（size + mtime），失败返回 None。"""
+    """取文件 stat 信息（size + mtime），失败返回 None。
+    
+    v7.7: mtime 用浮点数（st_mtime），不用 ISO 字符串——避免格式不一致导致比较失败。
+    """
     try:
         st = path.stat()
         return {
             "size": st.st_size,
-            "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+            "mtime": st.st_mtime,  # 浮点数，跟 manifest 存的格式一致
         }
     except OSError:
         return None
@@ -168,8 +171,16 @@ def should_skip(
         return False, "stat_failed", None
 
     # processed + size+mtime 没变 → 跳过
+    def _sm(a, b):
+        if a == b: return True
+        try:
+            from datetime import datetime
+            if isinstance(a, str): a = datetime.fromisoformat(a).timestamp()
+            if isinstance(b, str): b = datetime.fromisoformat(b).timestamp()
+            return abs(float(a) - float(b)) < 1.0
+        except: return False
     if (stat_info["size"] == record.get("size")
-            and stat_info["mtime"] == record.get("mtime")):
+            and _sm(stat_info["mtime"], record.get("mtime"))):
         return True, "unchanged", record
 
     # processed 但内容变了 → 不跳过（需要重新处理）
@@ -287,8 +298,20 @@ def get_pending_files(
                 pass
 
             stat_info = _file_stat(p)
+            def _same_mtime(a, b):
+                if a == b:
+                    return True
+                try:
+                    from datetime import datetime
+                    if isinstance(a, str):
+                        a = datetime.fromisoformat(a).timestamp()
+                    if isinstance(b, str):
+                        b = datetime.fromisoformat(b).timestamp()
+                    return abs(float(a) - float(b)) < 1.0
+                except Exception:
+                    return False
             sha_changed = not (stat_info and (stat_info["size"] == record.get("size")
-                              and stat_info["mtime"] == record.get("mtime")))
+                              and _same_mtime(stat_info["mtime"], record.get("mtime"))))
 
             if not has_pc:
                 # 还没跑过AI——需要处理（加到new_files让AI跑）
@@ -303,8 +326,22 @@ def get_pending_files(
 
         # processed → 检查 size+mtime
         stat_info = _file_stat(p)
+        # v7.7: mtime 比较兼容旧 ISO 字符串格式
+        def _same_mtime(a, b):
+            if a == b:
+                return True
+            # 一边 ISO 字符串，一边浮点数——转换比较
+            try:
+                from datetime import datetime
+                if isinstance(a, str):
+                    a = datetime.fromisoformat(a).timestamp()
+                if isinstance(b, str):
+                    b = datetime.fromisoformat(b).timestamp()
+                return abs(float(a) - float(b)) < 1.0  # 1秒内算没变
+            except Exception:
+                return False
         if stat_info and (stat_info["size"] == record.get("size")
-                          and stat_info["mtime"] == record.get("mtime")):
+                          and _same_mtime(stat_info["mtime"], record.get("mtime"))):
             skipped += 1
         else:
             changed_files.append(p)
