@@ -2060,9 +2060,9 @@ function pbcApp(){
 
     openExplorer(filePath){
       if(!filePath) return;
-      API.openFolder(this.currentProjectId).then(r=>{
-        if(!r.ok) this.pushToast('mid','打开失败', r.error||'');
-      }).catch(e=>this.pushToast('mid','打开失败', e.message));
+      API.openFilePath(this.currentProjectId, filePath)
+        .then(r=>{ if(!r.ok) this.pushToast('mid','打开失败', r.error||''); })
+        .catch(e=>this.pushToast('mid','打开失败', e.message));
     },
 
     /* =========================================================
@@ -2967,7 +2967,7 @@ function pbcApp(){
       const hm = this.heatmapData;
       if(!hm || !hm.entities || !hm.categories){
         // 从 pbcList 自己算
-        const overdue = this.pbcList.filter(i=>i.status==='未提供' && (i.overdue_days||0)>0);
+        const overdue = this.pbcList.filter(i=>(i.status_normalized||i.status)==='未提供' && (i.overdue_days||0)>0);
         if(!overdue.length) return '<div class="empty">'+
           '<div class="em"><span class="ico ico-lg"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg></span></div>'+
           '<div>暂无风险数据</div>'+
@@ -3377,6 +3377,7 @@ window.__openReclassify = function(itemId){
 };
 window.__heatDrill = function(cat, ent){
   const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.currentTab = 'overdue';
   app.filters.category = cat;
   app.filters.entity = ent;
 };

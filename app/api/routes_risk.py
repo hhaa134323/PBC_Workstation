@@ -162,7 +162,9 @@ def _dashboard_impl(project_id: Optional[str]) -> dict:
             except Exception:
                 overdue = 0
 
-        if overdue and overdue > 0:
+        # 只在未提供状态下才算超期（已提供/不适用/审核中不算）
+        status_norm = it.get("status_normalized") or ""
+        if overdue and overdue > 0 and status_norm not in ("已提供", "不适用", "已提供，审核中"):
             risk = it.get("risk_level") or compute_risk_level(overdue)
             entity = it.get("entity") or "(未归属)"
             category = it.get("category") or "(未分类)"
@@ -581,7 +583,9 @@ def _heatmap_impl(project_id: Optional[str]) -> dict:
         entities_set.add(entity)
         categories_set.add(category)
 
-        if overdue and overdue > 0:
+        # 只在未提供状态下才算超期（已提供/不适用/审核中不算）
+        status_norm = it.get("status_normalized") or ""
+        if overdue and overdue > 0 and status_norm not in ("已提供", "不适用", "已提供，审核中"):
             cell = cells_map[(entity, category)]
             cell["count"] += 1
             cell["max_overdue"] = max(cell["max_overdue"], overdue)

@@ -580,39 +580,44 @@ async def get_new_file_count_route(project_id: str) -> dict:
     
     manifest = load_manifest(project_id)
     
-    # 拿 pending_confirm 里已有的 file_path（已整理过的不数）
+    # 拿 pending_confirm 里已有的 file_path（已整理过的不数，含已确认和未确认）
     pending_paths = set()
     try:
         with get_conn() as conn:
             rows = conn.execute(
-                "SELECT file_path FROM pending_confirm WHERE project_id=? AND confirmed=0",
+                "SELECT file_path FROM pending_confirm WHERE project_id=?",
                 (project_id,),
             ).fetchall()
             for r in rows:
                 pending_paths.add(r[0] if isinstance(r, str) else r[0])
     except Exception:
         pass
-    
+
     # 遍历客户文件夹所有文件
     new_count = 0
     for p in client_folder.rglob("*"):
         if not p.is_file():
             continue
-        if p.name.startswith(".") or p.name in ("Thumbs.db", "desktop.ini"):
+        if p.name.startswith(".") or p.name.startswith("~$") or p.name in ("Thumbs.db", "desktop.ini"):
             continue
         rel = str(p.relative_to(client_folder)).replace("\\", "/")
         abs_path = str(p)
         rec = manifest.get(rel)
-        
-        # 情况1: manifest没记录 → 新文件
+
+        # 情况1: manifest没记录 + pending_confirm没有 → 新文件
         if not rec:
-            new_count += 1
+            if abs_path not in pending_paths:
+                new_count += 1
             continue
-        
+
         # 情况2: manifest记录了pending + pending_confirm没有对应记录 → 待扫描
         if rec.get("status") == STATUS_PENDING and abs_path not in pending_paths:
-            new_count += 1
-    
+            # 但要检查：如果是目录归档的子文件，pending_confirm 存的是目录路径
+            parent_dir = p.parent
+            parent_in_pending = str(parent_dir) in pending_paths
+            if not parent_in_pending:
+                new_count += 1
+
     return {"project_id": project_id, "new_file_count": new_count}
 
 
@@ -667,7 +672,7 @@ async def sync_changes_route(project_id: str) -> dict:
     for p in client_folder.rglob("*"):
         if not p.is_file():
             continue
-        if p.name.startswith(".") or p.name in ("Thumbs.db", "desktop.ini"):
+        if p.name.startswith(".") or p.name.startswith("~$") or p.name in ("Thumbs.db", "desktop.ini"):
             continue
         rel = str(p.relative_to(client_folder)).replace("\\", "/")
         abs_path = str(p)
@@ -712,7 +717,7 @@ async def sync_changes_route(project_id: str) -> dict:
     existing_dirs = set()
     for p in client_folder.rglob("*"):
         rel = str(p.relative_to(client_folder)).replace("\\", "/")
-        if p.is_file() and not p.name.startswith("."):
+        if p.is_file() and not p.name.startswith(".") and not p.name.startswith("~$"):
             existing_files.add(rel)
         elif p.is_dir():
             existing_dirs.add(rel)
@@ -817,14 +822,14 @@ async def get_paths_by_project(project_id: str) -> dict:
         "path": cf_str,
         "exists": cf.exists() if cf else False,
         "is_dir": cf.is_dir() if (cf and cf.exists()) else False,
-        "file_count": len([p for p in cf.rglob("*") if p.is_file()]) if (cf and cf.exists() and cf.is_dir()) else 0,
+        "file_count": len([p for p in cf.rglob("*") if p.is_file() and not p.name.startswith(".") and not p.name.startswith("~$") and p.name not in ("Thumbs.db", "desktop.ini")]) if (cf and cf.exists() and cf.is_dir()) else 0,
     }
     ar_info = {
         "path": ar_str,
         "exists": ar.exists() if ar else False,
         "is_dir": ar.is_dir() if (ar and ar.exists()) else False,
         "category_count": len([p for p in ar.iterdir() if p.is_dir()]) if (ar and ar.exists() and ar.is_dir()) else 0,
-        "file_count": len([p for p in ar.rglob("*") if p.is_file()]) if (ar and ar.exists() and ar.is_dir()) else 0,
+        "file_count": len([p for p in ar.rglob("*") if p.is_file() and not p.name.startswith(".") and not p.name.startswith("~$") and p.name not in ("Thumbs.db", "desktop.ini")]) if (ar and ar.exists() and ar.is_dir()) else 0,
     }
 
     return {
@@ -933,21 +938,30 @@ async def open_folder_path(project_id: str, body: dict) -> dict:
     if not p.exists():
         return {"ok": False, "error": f"路径不存在: {path_str}"}
     try:
-        if p.is_file() and select:
-            # 定位到文件并选中
-            if sys.platform == "win32":
-                # explorer /select,"D:\path\to\file.pdf"
-                # 用 subprocess 避免路径含空格/中文的问题
-                subprocess.Popen(["explorer", "/select,", str(p)])
-                return {"ok": True, "path": str(p), "action": "select"}
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", "-R", str(p)])
-                return {"ok": True, "path": str(p), "action": "select"}
+        if p.is_file():
+            if select:
+                # select=true：直接用默认程序打开文件（Excel打开xlsx、PDF阅读器打开pdf等）
+                if sys.platform == "win32":
+                    os.startfile(str(p))
+                    return {"ok": True, "path": str(p), "action": "open"}
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", str(p)])
+                    return {"ok": True, "path": str(p), "action": "open"}
+                else:
+                    subprocess.Popen(["xdg-open", str(p)])
+                    return {"ok": True, "path": str(p), "action": "open"}
             else:
-                # Linux 无统一 /select，回退到打开父目录
-                target = p.parent
-                subprocess.Popen(["xdg-open", str(target)])
-                return {"ok": True, "path": str(target), "action": "open_parent"}
+                # select=false：在文件管理器中定位（打开父目录）
+                if sys.platform == "win32":
+                    subprocess.Popen(["explorer", "/select,", str(p)])
+                    return {"ok": True, "path": str(p), "action": "select"}
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", "-R", str(p)])
+                    return {"ok": True, "path": str(p), "action": "select"}
+                else:
+                    target = p.parent
+                    subprocess.Popen(["xdg-open", str(target)])
+                    return {"ok": True, "path": str(target), "action": "open_parent"}
         else:
             # 目录或 select=false：直接打开（文件则打开父目录）
             target = p if p.is_dir() else p.parent
@@ -2220,7 +2234,8 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
     if not arc_result.get("ok"):
         raise HTTPException(status_code=500, detail=f"归档失败: {arc_result.get('error')}")
 
-    archived_path = arc_result.get("archived_path", "")
+    # archive_file 返回 archived_path，archive_directory 返回 archived_dir
+    archived_path = arc_result.get("archived_path") or arc_result.get("archived_dir", "")
 
     # 写 PBC Excel file_path
     try:
@@ -2356,7 +2371,8 @@ async def batch_confirm(project_id: str, body: BatchConfirmBody) -> dict:
                 errors.append(f"id={cid} 归档失败: {arc_result.get('error')}")
                 continue
 
-            archived_path = arc_result.get("archived_path", "")
+            # archive_file 返回 archived_path，archive_directory 返回 archived_dir
+            archived_path = arc_result.get("archived_path") or arc_result.get("archived_dir", "")
             # PBC Excel
             try:
                 pbc_items = read_pbc_list(project_id=project_id)

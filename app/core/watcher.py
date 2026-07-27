@@ -24,6 +24,19 @@ logger = logging.getLogger("pbc.watcher")
 # 允许监听的扩展名（与 routes_files 保持一致）
 _ALLOWED_EXT = {".pdf", ".xlsx", ".xlsm", ".csv", ".txt", ".md", ".json", ".xml"}
 
+# 应忽略的文件名模式（Excel 锁文件、系统文件、隐藏文件）
+_IGNORED_NAMES = {"Thumbs.db", "desktop.ini", ".DS_Store"}
+
+
+def _should_ignore(p: Path) -> bool:
+    """判断文件是否应被忽略（Excel 锁文件、系统文件、隐藏文件）。"""
+    name = p.name
+    if name.startswith(".") or name.startswith("~$"):
+        return True
+    if name in _IGNORED_NAMES:
+        return True
+    return False
+
 
 # 回调签名：on_new_file(path: Path, project_id: Optional[str] = None)
 # 为兼容旧的 watcher（只接 path），我们也支持 callback 只接受 path
@@ -46,6 +59,8 @@ class _Handler:  # pragma: no cover - watchdog 事件适配
             return
         p = Path(str(src))
         if p.suffix.lower() not in _ALLOWED_EXT:
+            return
+        if _should_ignore(p):
             return
         # 在后台线程触发，避免阻塞 observer
         t = threading.Thread(target=self._safe_callback, args=(p,), daemon=True)
@@ -172,6 +187,8 @@ class FolderWatcher:
         for p in self.folder.rglob("*"):
             if not p.is_file():
                 continue
+            if _should_ignore(p):
+                continue
             if p.suffix.lower() not in _ALLOWED_EXT:
                 continue
             count += 1
@@ -276,6 +293,8 @@ class FolderWatcher:
             return
         p = Path(str(src))
         if p.suffix.lower() not in _ALLOWED_EXT:
+            return
+        if _should_ignore(p):
             return
         t = threading.Thread(target=self._safe_trigger, args=(p,), daemon=True)
         t.start()

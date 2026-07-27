@@ -222,14 +222,15 @@ def _row_to_item(row_idx: int, ws) -> dict[str, Any]:
     # 如果有 expected_by 日期，且状态不是已提供/不适用，实时算超期天数
     eb = item.get("expected_by")
     if eb:
-        from datetime import date
+        from datetime import date, datetime, timedelta
         try:
-            if isinstance(eb, str):
-                from datetime import datetime
+            if isinstance(eb, date):
+                # _parse_date 已经转成 date 对象（最常见路径）
+                eb_date = eb
+            elif isinstance(eb, str):
                 eb_date = datetime.fromisoformat(eb).date() if 'T' in eb or '-' in eb else None
             elif isinstance(eb, (int, float)):
                 # Excel 日期序列号
-                from datetime import datetime, timedelta
                 base = datetime(1899, 12, 30)
                 eb_date = (base + timedelta(days=int(eb))).date()
             else:

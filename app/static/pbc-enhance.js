@@ -227,6 +227,7 @@
 
   var panel = null, listEl = null, searchEl = null, filterEl = null;
   var raw = [], openKey = '';
+  var currentTab = 'client'; // client=文件变更, auditor=操作日志
 
   function root(){
     var el = document.querySelector('[x-data]');
@@ -318,7 +319,6 @@
     panel.querySelector('[data-act="refresh"]').addEventListener('click', function(){ load(true); });
     listEl.addEventListener('click', onRowClick);
     // 子页签切换
-    var currentTab = 'client'; // client=文件变更, auditor=操作日志
     var tabBtns = panel.querySelectorAll('.pbcg-vh-tab');
     for(var ti = 0; ti < tabBtns.length; ti++){
       tabBtns[ti].addEventListener('click', function(){
@@ -341,9 +341,29 @@
     if(orgBtn){
       orgBtn.addEventListener('click', function(){
         var d = root();
-        if(d && typeof d.startScan === 'function' && !d.scan?.active && d.pendingCount > 0){
-          d.startScan();
-        }
+        if(!d || typeof d.startScan !== 'function') return;
+        // 可选链兼容：手动取值
+        var active = d.scan && d.scan.active;
+        if(active) return;
+        var pc = d.pendingCount || 0;
+        if(pc <= 0) return;
+        // 立即更新按钮状态，不等 reload
+        orgBtn.textContent = '整理中...';
+        orgBtn.disabled = true;
+        orgBtn.style.opacity = '0.6';
+        // 异步调用，不等它完成
+        Promise.resolve(d.startScan()).catch(function(){});
+        // 轮询按钮状态：scan.active 可能要等下一 tick 才变 true
+        var pollCount = 0;
+        var btnPoll = setInterval(function(){
+          var dd = root();
+          var act = dd && dd.scan && dd.scan.active;
+          if(act || pollCount > 10){
+            clearInterval(btnPoll);
+            load(true);
+          }
+          pollCount++;
+        }, 300);
       });
     }
     return panel;
