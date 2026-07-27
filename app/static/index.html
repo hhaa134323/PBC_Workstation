@@ -503,33 +503,6 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
      会把内联 display:flex 删掉。display 必须放在类里。 */
   .d-flex{display:flex}
   .d-iflex{display:inline-flex}
-
-  /* ===== 今日简报展开态大卡片（bc- = brief card）=====
-     注意：本区块所有条件显示都用 <template x-if> / <template x-for> 实现，
-     没有用 x-show，所以这里的 display:flex 是安全的。
-     若日后有人改回 x-show，display 必须留在类里，绝不能写成内联样式，
-     否则 Alpine 显示元素时会执行 removeProperty('display') 把它删掉。 */
-  .bc-fold{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;height:28px;padding:0 10px;border:none;border-radius:6px;background:hsl(var(--muted));font-size:12.5px;font-weight:600;color:hsl(var(--foreground));font-family:inherit;cursor:pointer}
-  .bc-fold:hover{background:hsl(240 12% 90%)}
-  .bc-body{padding:18px 22px;display:flex;flex-direction:column;gap:14px}
-  .bc-alert{background:hsl(350 80% 96%);border:1px solid hsl(350 60% 88%);border-left:3px solid var(--red);border-radius:8px;padding:12px 14px}
-  .bc-alert-r1{display:flex;align-items:center;gap:10px;margin-bottom:5px}
-  .bc-alert-chip{flex-shrink:0;background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:4px;white-space:nowrap;letter-spacing:.2px}
-  .bc-alert-fn{font-size:13px;font-weight:700;color:var(--red-deep);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .bc-alert-r2{font-size:12px;color:hsl(348 35% 42%);line-height:1.55}
-  .bc-grp{border:1px solid var(--border);border-radius:8px;overflow:hidden}
-  .bc-gh{padding:10px 14px;border-bottom:1px solid hsl(240 15% 93%);background:var(--soft);display:flex;align-items:center;gap:9px}
-  .bc-gt{font-size:13px;font-weight:700}
-  .bc-gc{font-size:12px;font-weight:700;background:hsl(240 15% 92%);padding:1px 7px;border-radius:4px;line-height:1.6}
-  .bc-gs{font-size:12px;color:var(--text2)}
-  .bc-row{display:flex;align-items:center;gap:9px;padding:8px 14px;border-bottom:1px solid hsl(240 15% 93%)}
-  .bc-rd{width:5px;height:5px;border-radius:99px;background:var(--orange);flex-shrink:0}
-  .bc-rp{font-size:12px;color:var(--text2);white-space:nowrap}
-  .bc-rn{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .bc-rt{margin-left:auto;flex-shrink:0;font-size:11px;color:var(--text3);white-space:nowrap}
-  .bc-gn{padding:9px 14px;text-align:center;font-size:12px;color:var(--text3);background:hsl(240 20% 98%)}
-  .bc-ft{padding:14px 22px;border-top:1px solid var(--border);background:var(--soft);display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--text2)}
-  .bc-go{margin-left:auto;flex-shrink:0;cursor:pointer;font-weight:600;color:var(--text);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1305,67 +1278,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
   <main class="wrap" x-show="currentProjectId">
     <div x-show="loading" style="text-align:center;padding:60px;color:var(--text3)"><span class="spin" style="width:20px;height:20px"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 加载中…</div>
 
-    <!-- 今日简报（Alpine 原生控制，不用 pbc-enhance.js） -->
-    <!-- 收起时：细条 -->
-    <div class="brief-bar" x-show="!loading && pbcList.length > 0 && briefFolded" @click="toggleBriefFold()">
+    <!-- 今日简报：横条入口，点跳文件变更面板 -->
+    <div class="brief-bar" x-show="!loading && pbcList.length > 0" @click="openChangePanel()">
       <span class="bb-dot" :style="'background:'+(briefHasDelta?'hsl(38 92% 50%)':'hsl(142 71% 45%)')"></span>
       <span class="bb-title">今日简报</span>
       <span class="bb-div"></span>
       <span class="bb-msg" x-text="briefHasDelta ? '文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
       <span class="bb-div" style="margin-left:auto;margin-right:16px"></span>
       <span class="bb-seen" x-show="briefSeenStr" x-text="'上次查看 '+briefSeenStr"></span>
-      <span class="bb-more">展开<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
-    </div>
-    <!-- 展开时：大卡片 -->
-    <div x-show="!loading && pbcList.length > 0 && !briefFolded" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
-      <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--soft)">
-        <span style="width:7px;height:7px;border-radius:99px;background:var(--red);flex-shrink:0"></span>
-        <b style="font-size:15px;letter-spacing:-.1px">今日简报</b>
-        <span style="font-size:12px;color:var(--text2)">自上次查看以来的变化</span>
-        <span style="font-size:12.5px;color:var(--text2);margin-left:auto;white-space:nowrap" x-text="'文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析'"></span>
-        <span style="width:1px;height:15px;background:hsl(var(--border));flex-shrink:0;margin:0 2px"></span>
-        <button class="bc-fold" @click="toggleBriefFold()">收起<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg></button>
-      </div>
-
-      <div class="bc-body">
-
-        <!-- 段 A · 异常（被删/被换、新跨红线）。用 template x-for，不产生 x-show -->
-        <template x-for="e in (briefingDelta.events||[]).filter(x => x.event_type !== 'file_added')" :key="'a-'+e.event_type+'-'+(e.file_name||e.item_id||'')+'-'+e.timestamp">
-          <div class="bc-alert">
-            <div class="bc-alert-r1">
-              <span class="bc-alert-chip" x-text="e.event_type==='file_deleted' ? '被删 / 被换' : '新跨红线'"></span>
-              <span class="bc-alert-fn" x-text="e.file_name || e.item_id || ''"></span>
-            </div>
-            <div class="bc-alert-r2" x-text="e.detail"></div>
-          </div>
-        </template>
-
-        <!-- 段 B · 新增文件聚合成一组。用 template x-if，不产生 x-show -->
-        <template x-if="(briefingDelta.events||[]).some(x => x.event_type === 'file_added')">
-          <div class="bc-grp">
-            <div class="bc-gh">
-              <span class="bc-gt">新增文件</span>
-              <span class="bc-gc" x-text="(briefingDelta.events||[]).filter(x => x.event_type === 'file_added').length"></span>
-              <span class="bc-gs">客户新放进来，还没分析归类</span>
-            </div>
-            <template x-for="e in (briefingDelta.events||[]).filter(x => x.event_type === 'file_added')" :key="'n-'+(e.file_name||'')+'-'+e.timestamp">
-              <div class="bc-row">
-                <span class="bc-rd"></span>
-                <span class="bc-rp" x-show="(e.file_name||'').indexOf('/') >= 0" x-text="(e.file_name||'').split('/').slice(0,-1).join(' / ')+' /'"></span>
-                <span class="bc-rn" x-text="(e.file_name||'').split('/').pop()"></span>
-                <span class="bc-rt">新增</span>
-              </div>
-            </template>
-            <div class="bc-gn">仅显示最近 8 条变动，完整记录见「文件变更」</div>
-          </div>
-        </template>
-
-      </div>
-
-      <div class="bc-ft">
-        <span x-text="'存量未提供 '+(briefingDelta.stock_total||0)+' 项 · 其中高风险 '+(briefingDelta.stock_high||0)+' 项'"></span>
-        <span class="bc-go" @click="currentTab='overdue'">去风险分析 →</span>
-      </div>
+      <span class="bb-more">去查看<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
     </div>
 
     <!-- Tab 1 待初检 -->
@@ -1706,8 +1627,7 @@ function pbcApp(){
     heatmapData: null,
     loading: false,
     briefing: null,
-    briefingDelta: null,  // 增量简报
-    briefFolded: true,     // 简报默认收起
+    briefingDelta: null,  // 增量简报（横条显示用）
     briefLastSeen: 0,      // 上次查看时间
     efficiencyCount: 0,
     currentFolderInfo: {path:'', count:0, exists:false},
@@ -1907,24 +1827,11 @@ function pbcApp(){
     async reloadBriefing(){
       try{
         var pid = this.currentProjectId || '';
-        // 读 localStorage 恢复折叠状态和上次查看时间
-        try{ this.briefFolded = localStorage.getItem('pbc_brief_folded_'+pid) !== '0'; }catch(e){ this.briefFolded = true; }
         try{ this.briefLastSeen = parseFloat(localStorage.getItem('pbc_brief_seen_'+pid) || '0'); }catch(e){ this.briefLastSeen = 0; }
-        // 加载存量（兼容）和增量（since=0 显示全部）
         this.briefing = await API.briefing(this.currentProjectId);
         this.briefingDelta = await API.get('/api/briefing/'+pid+'?since=0');
       }
       catch(e){ this.briefingDelta = null; }
-    },
-    toggleBriefFold(){
-      this.briefFolded = !this.briefFolded;
-      var pid = this.currentProjectId || '';
-      try{ localStorage.setItem('pbc_brief_folded_'+pid, this.briefFolded ? '1' : '0'); }catch(e){}
-      if(!this.briefFolded){
-        // 展开=已读，记录查看时间
-        this.briefLastSeen = Date.now() / 1000;
-        try{ localStorage.setItem('pbc_brief_seen_'+pid, String(this.briefLastSeen)); }catch(e){}
-      }
     },
     get briefHasDelta(){
       return this.briefingDelta && this.briefingDelta.has_delta;
@@ -1988,7 +1895,6 @@ function pbcApp(){
       this.heatmapData = null;
       this.briefing = null;
       this.briefingDelta = null;
-      this.briefFolded = true;
       this.fileZone.paths = null;  // 清旧路径
       this.tableState = {q:'', pageSize:50, page:1};  // v7.9: 切项目重置表格状态
       await this.reloadAll();
@@ -2509,7 +2415,6 @@ function pbcApp(){
         // 加载增量简报（since=0 显示全部增量）
         try {
           var pid = this.currentProjectId || '';
-          try{ this.briefFolded = localStorage.getItem('pbc_brief_folded_'+pid) !== '0'; }catch(e){ this.briefFolded = true; }
           try{ this.briefLastSeen = parseFloat(localStorage.getItem('pbc_brief_seen_'+pid) || '0'); }catch(e){ this.briefLastSeen = 0; }
           this.briefingDelta = await API.get('/api/briefing/'+pid+'?since=0').catch(()=>null);
         } catch(e) { this.briefingDelta = null; }
