@@ -467,6 +467,36 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
   .ai-field input[type=text],.ai-field input[type=number],.ai-field select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff}
   .ai-switch{display:flex;align-items:center;gap:8px;font-size:13px}
   .ai-test-ok{color:var(--green)}.ai-test-err{color:var(--red)}
+
+  /* 今日简报收起态细条：display 必须放在类里，
+     因为 Alpine x-show 显示时会执行 removeProperty('display')，
+     会把内联的 display:flex 一起删掉。切勿改回内联。 */
+  .brief-bar{
+    display:flex;
+    align-items:center;
+    gap:0;
+    height:50px;
+    padding:0 14px 0 16px;
+    margin-bottom:16px;
+    background:hsl(var(--card));
+    border:1px solid hsl(var(--border));
+    border-left:3px solid hsl(var(--ey-yellow));
+    border-radius:10px;
+    cursor:pointer;
+    transition:background .15s, box-shadow .15s;
+    box-shadow:0 1px 2px rgba(26,26,36,.06);
+  }
+  .brief-bar:hover{
+    background:hsl(54 100% 98%);
+    box-shadow:0 2px 6px rgba(26,26,36,.09);
+  }
+  .brief-bar .bb-dot{width:8px;height:8px;border-radius:99px;flex-shrink:0;margin-right:10px}
+  .brief-bar .bb-title{font-size:13px;font-weight:700;flex-shrink:0;letter-spacing:-.1px}
+  .brief-bar .bb-div{width:1px;height:15px;background:hsl(var(--border));flex-shrink:0;margin:0 16px}
+  .brief-bar .bb-msg{flex:1;min-width:0;font-size:13px;color:hsl(var(--foreground));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .brief-bar .bb-seen{flex-shrink:0;font-size:12px;color:hsl(var(--muted-foreground));white-space:nowrap}
+  .brief-bar .bb-more{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;height:28px;padding:0 10px;margin-left:14px;border-radius:6px;background:hsl(var(--muted));font-size:12.5px;font-weight:600;color:hsl(var(--foreground));white-space:nowrap}
+  .brief-bar:hover .bb-more{background:hsl(240 12% 90%)}
 </style>
 </head>
 <body>
@@ -1244,12 +1274,14 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 
     <!-- 今日简报（Alpine 原生控制，不用 pbc-enhance.js） -->
     <!-- 收起时：细条 -->
-    <div x-show="!loading && pbcList.length > 0 && briefFolded" @click="toggleBriefFold()" style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin-bottom:16px;background:hsl(var(--card));border:1px solid hsl(var(--border));border-left:3px solid hsl(var(--ey-yellow));border-radius:10px;cursor:pointer;transition:.15s;box-shadow:0 1px 2px rgba(26,26,36,.06)">
-      <span style="width:8px;height:8px;border-radius:99px;background:var(--green,#16a34a);flex-shrink:0"></span>
-      <span style="font-size:13px;font-weight:700;flex-shrink:0">今日简报</span>
-      <span style="font-size:12.5px;color:hsl(var(--muted-foreground));overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="briefHasDelta ? '文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
-      <span x-show="briefSeenStr" style="flex-shrink:0;font-size:11px;color:hsl(var(--muted-foreground));opacity:.7" x-text="'上次查看 '+briefSeenStr"></span>
-      <span style="margin-left:auto;flex-shrink:0;font-size:12px;font-weight:600;color:hsl(var(--muted-foreground))">展开</span>
+    <div class="brief-bar" x-show="!loading && pbcList.length > 0 && briefFolded" @click="toggleBriefFold()">
+      <span class="bb-dot" :style="'background:'+(briefHasDelta?'hsl(38 92% 50%)':'hsl(142 71% 45%)')"></span>
+      <span class="bb-title">今日简报</span>
+      <span class="bb-div"></span>
+      <span class="bb-msg" x-text="briefHasDelta ? '文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
+      <span class="bb-div" style="margin-left:auto;margin-right:16px"></span>
+      <span class="bb-seen" x-show="briefSeenStr" x-text="'上次查看 '+briefSeenStr"></span>
+      <span class="bb-more">展开<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
     </div>
     <!-- 展开时：大卡片 -->
     <div x-show="!loading && pbcList.length > 0 && !briefFolded" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
