@@ -497,13 +497,19 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
   .brief-bar .bb-seen{flex-shrink:0;font-size:12px;color:hsl(var(--muted-foreground));white-space:nowrap}
   .brief-bar .bb-more{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;height:28px;padding:0 10px;margin-left:14px;border-radius:6px;background:hsl(var(--muted));font-size:12.5px;font-weight:600;color:hsl(var(--foreground));white-space:nowrap}
   .brief-bar:hover .bb-more{background:hsl(240 12% 90%)}
+
+  /* x-show 安全布局工具类。
+     Alpine x-show 显示元素时执行 removeProperty('display')，
+     会把内联 display:flex 删掉。display 必须放在类里。 */
+  .d-flex{display:flex}
+  .d-iflex{display:inline-flex}
 </style>
 </head>
 <body>
 <div x-data="pbcApp()" x-init="init()" x-cloak>
 
   <!-- 消息中心面板 -->
-  <div x-show="messageCenter.show" x-transition.origin.top.right style="position:fixed;top:64px;right:16px;z-index:70;width:400px;max-width:calc(100vw - 32px);max-height:520px;overflow:hidden;display:flex;flex-direction:column;background:hsl(var(--popover));border:1px solid hsl(var(--border));border-radius:var(--r-lg);box-shadow:var(--shadow-lg)">
+  <div class="d-flex" x-show="messageCenter.show" x-transition.origin.top.right style="position:fixed;top:64px;right:16px;z-index:70;width:400px;max-width:calc(100vw - 32px);max-height:520px;overflow:hidden;flex-direction:column;background:hsl(var(--popover));border:1px solid hsl(var(--border));border-radius:var(--r-lg);box-shadow:var(--shadow-lg)">
     <!-- 头部 -->
     <div style="padding:16px 20px;border-bottom:1px solid hsl(var(--border));display:flex;align-items:center;gap:10px;background:hsl(var(--soft))">
       <span class="ico ico-sm" style="color:hsl(var(--primary))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
@@ -534,7 +540,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       <template x-for="m in messageCenterFiltered" :key="m.id">
         <div :style="m.unread?'background:hsl(54 100% 50% / 0.06)':''" style="border-bottom:1px solid hsl(var(--border))">
           <!-- 合并摘要卡片 -->
-          <div x-show="m.collapsed" style="padding:12px 20px;cursor:pointer;transition:background .12s;display:flex;align-items:flex-start;gap:10px"
+          <div class="d-flex" x-show="m.collapsed" style="padding:12px 20px;cursor:pointer;transition:background .12s;align-items:flex-start;gap:10px"
             @click="m.collapsed=false"
             @mouseenter="$el.style.background='hsl(var(--accent))'" @mouseleave="$el.style.background=m.unread?'hsl(54 100% 50% / 0.06)':''">
             <span style="width:8px;height:8px;border-radius:99px;margin-top:5px;flex-shrink:0" :style="'background:'+(m.priority==='high'?'hsl(var(--destructive))':m.priority==='mid'?'hsl(38 92% 50%)':'hsl(142 35% 65%)')"></span>
@@ -568,7 +574,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
             </div>
           </template>
           <!-- 单条卡片（非合并） -->
-          <div x-show="!m.collapsed && !m.items" style="padding:12px 20px;cursor:pointer;transition:background .12s;display:flex;align-items:flex-start;gap:10px"
+          <div class="d-flex" x-show="!m.collapsed && !m.items" style="padding:12px 20px;cursor:pointer;transition:background .12s;align-items:flex-start;gap:10px"
             @click="m.unread=false; messageCenter.unread=Math.max(0,messageCenter.unread-1); saveMessages(); if(m.action){ messageCenter.show=false; if(m.action==='goto_triage') currentTab='triage'; if(m.action==='goto_files') currentTab='files'; }"
             @mouseenter="$el.style.background='hsl(var(--accent))'" @mouseleave="$el.style.background=m.unread?'hsl(54 100% 50% / 0.06)':''">
             <span style="width:8px;height:8px;border-radius:99px;margin-top:5px;flex-shrink:0" :style="'background:'+(m.priority==='high'?'hsl(var(--destructive))':m.priority==='mid'?'hsl(38 92% 50%)':'hsl(142 35% 65%)')"></span>
@@ -591,7 +597,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 
   <!-- 文件变更面板（source control 时间线，右侧全高滑出） -->
   <div x-show="changePanel.show" x-transition.opacity @click.self="changePanel.show=false" style="position:fixed;inset:0;z-index:70;background:hsl(var(--ey-confident-black) / 0.28)">
-    <div x-show="changePanel.show" x-transition.origin.left style="position:absolute;top:0;left:0;bottom:0;width:400px;max-width:calc(100vw - 32px);background:hsl(var(--popover));border-right:1px solid hsl(var(--border));box-shadow:8px 0 30px -12px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div class="d-flex" x-show="changePanel.show" x-transition.origin.left style="position:absolute;top:0;left:0;bottom:0;width:400px;max-width:calc(100vw - 32px);background:hsl(var(--popover));border-right:1px solid hsl(var(--border));box-shadow:8px 0 30px -12px rgba(0,0,0,.25);flex-direction:column">
       <div style="padding:16px 20px;border-bottom:1px solid hsl(var(--border));display:flex;align-items:center;gap:10px;background:hsl(var(--soft))">
         <span class="ico ico-sm" style="color:hsl(var(--primary))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
         <div>
@@ -1233,7 +1239,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
     <div class="nav-top">
       <button class="btn btn-pri btn-xs" style="position:relative" @click="openChangePanel()">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>变更记录
-        <span x-show="changePanel.unread>0" style="position:absolute;top:-2px;right:-2px;background:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black));font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;display:flex;align-items:center;justify-content:center;padding:0 4px" x-text="changePanel.unread"></span>
+        <span class="d-flex" x-show="changePanel.unread>0" style="position:absolute;top:-2px;right:-2px;background:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black));font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;align-items:center;justify-content:center;padding:0 4px" x-text="changePanel.unread"></span>
       </button>
       <span class="nav-sep"></span>
       <div class="brand">
@@ -1344,18 +1350,18 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       </div>
 
       <div class="card card-pad" style="margin-bottom:16px">
-        <div x-show="fileZone.paths && fileZone.paths.client_folder && fileZone.paths.client_folder.exists" style="font-size:12px;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px;flex-wrap:wrap">
+        <div class="d-flex" x-show="fileZone.paths && fileZone.paths.client_folder && fileZone.paths.client_folder.exists" style="font-size:12px;color:var(--text2);margin-bottom:12px;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px;flex-wrap:wrap">
           <span style="color:var(--text3);white-space:nowrap">文件夹</span>
           <code style="font-size:12px;background:var(--bg);padding:2px 8px;border-radius:4px;border:1px solid var(--border);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="(fileZone.paths&&fileZone.paths.client_folder&&fileZone.paths.client_folder.path)||''" :title="(fileZone.paths&&fileZone.paths.client_folder&&fileZone.paths.client_folder.path)||''"></code>
           <span class="badge b-done" x-text="((fileZone.paths&&fileZone.paths.client_folder&&fileZone.paths.client_folder.file_count)||0) + ' 个文件'" style="white-space:nowrap"></span>
           <button class="btn btn-ghost btn-xs" style="margin-left:auto;white-space:nowrap" @click="openExplorer(fileZone.paths?.client_folder?.path)">打开文件夹</button>
           <button class="btn btn-ghost btn-xs" style="white-space:nowrap" @click="openFolderConfig()">更改</button>
         </div>
-        <div x-show="fileZone.paths && fileZone.paths.client_folder && fileZone.paths.client_folder.path && !fileZone.paths.client_folder.exists" style="font-size:12px;color:var(--orange);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--red-soft);padding:8px 12px;border-radius:8px">
+        <div class="d-flex" x-show="fileZone.paths && fileZone.paths.client_folder && fileZone.paths.client_folder.path && !fileZone.paths.client_folder.exists" style="font-size:12px;color:var(--orange);margin-bottom:12px;align-items:center;gap:8px;background:var(--red-soft);padding:8px 12px;border-radius:8px">
           <span>文件夹不存在：<code x-text="fileZone.paths?.client_folder?.path"></code></span>
           <button class="btn btn-ghost btn-xs" style="margin-left:auto" @click="openFolderConfig()">重新配置</button>
         </div>
-        <div x-show="!fileZone.paths || !fileZone.paths.client_folder || !fileZone.paths.client_folder.path" style="font-size:12px;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px">
+        <div class="d-flex" x-show="!fileZone.paths || !fileZone.paths.client_folder || !fileZone.paths.client_folder.path" style="font-size:12px;color:var(--text3);margin-bottom:12px;align-items:center;gap:8px;background:var(--soft);padding:8px 12px;border-radius:8px">
           尚未配置客户共享文件夹
           <button class="btn btn-soft btn-xs" style="margin-left:auto" @click="openFolderConfig()">配置文件夹</button>
         </div>
