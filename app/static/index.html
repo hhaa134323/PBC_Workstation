@@ -1283,7 +1283,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       <span class="bb-dot" :style="'background:'+(briefHasDelta?'hsl(38 92% 50%)':'hsl(142 71% 45%)')"></span>
       <span class="bb-title">今日简报</span>
       <span class="bb-div"></span>
-      <span class="bb-msg" x-text="briefHasDelta ? '文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
+      <span class="bb-msg" x-text="briefHasDelta ? (briefingDelta.delta_groups||[]).map(function(g){return g.count+' '+g.label}).join('，')+'，均待处理' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
       <span class="bb-div" style="margin-left:auto;margin-right:16px"></span>
       <span class="bb-seen" x-show="briefSeenStr" x-text="'上次查看 '+briefSeenStr"></span>
       <span class="bb-more">去查看<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
