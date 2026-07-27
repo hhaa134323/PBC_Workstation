@@ -168,15 +168,10 @@ with sync_playwright() as p:
     print("\n=== 场景3: 点整理显示整理中 ===")
     # 先确保变更记录面板已打开（pbcg-vh-organize 按钮在面板里）
     open_change_panel(page)
-    # 直接调 Alpine 的 startScan（更可靠，不依赖 DOM 按钮存在）
-    page.evaluate("""async () => {
-        const el = document.querySelector('[x-data="pbcApp()"]');
-        if (el && el._x_dataStack) {
-            const d = el._x_dataStack[0];
-            if (typeof d.startScan === 'function' && !d.scan?.active && d.pendingCount > 0) {
-                d.startScan();
-            }
-        }
+    # 点 pbc-enhance 面板里的 organize 按钮触发 startScan
+    page.evaluate("""() => {
+        var b = document.querySelector('.pbcg-vh-organize');
+        if(b) b.click();
     }""")
     time.sleep(2)
     btn3 = get_btn_state(page)
@@ -185,26 +180,19 @@ with sync_playwright() as p:
     
     # === 等整理完 ===
     print("\n=== 等待整理完成 ===")
-    for i in range(60):
-        time.sleep(3)
+    for i in range(40):
+        time.sleep(5)
         s = get_state(page)
-        if s and not s.get('scanActive'):
+        if i % 4 == 0:
+            print(f"  [{i*5}s] scanActive={s.get('scanActive') if s else 'null'}, pc={s.get('pc') if s else 'null'}")
+        if s and not s.get('scanActive') and i > 0:
             break
     print(f"  整理完: {s}")
-    
+
     # === 场景4: 整理完 → 按钮显示"请先处理待归档(N)" ===
     print("\n=== 场景4: 整理完显示请先处理待归档 ===")
-    # 扫描完成后多等几秒 + 强制 reloadAll 拉取 pending-confirm
-    time.sleep(5)
+    # 扫描完成后必须 reloadAll 拉取 pending-confirm 数据到 pendingArchive
     reload(page)
-    time.sleep(3)
-    # 再次 reloadAll 确保 pendingArchive 加载
-    page.evaluate("""async () => {
-        const el = document.querySelector('[x-data="pbcApp()"]');
-        if (el && el._x_dataStack) {
-            await el._x_dataStack[0].reloadAll();
-        }
-    }""")
     time.sleep(3)
     # 看按钮实际文本
     btn4_raw = page.evaluate("""() => { const b = document.querySelector('.pbcg-vh-organize'); return b ? {text: b.textContent, disabled: b.disabled, html: b.innerHTML.substring(0,100)} : null; }""")
