@@ -13,7 +13,68 @@
 
   var card = null;   // 今日简报大卡片
   var bar = null;    // 收起后的细摘要
-  var folded = false;
+  var folded = true; // 默认收起
+  var currentPid = ''; // 当前项目ID（用于 localStorage key）
+
+  /* ---------- localStorage 持久化（per project） ---------- */
+  function getPid() {
+    var el = document.querySelector('[x-data]');
+    if (el && el._x_dataStack && el._x_dataStack[0]) {
+      return el._x_dataStack[0].currentProjectId || '';
+    }
+    if (window.Alpine && window.Alpine.$data) {
+      try { return window.Alpine.$data(el).currentProjectId || ''; } catch (e) {}
+    }
+    return '';
+  }
+
+  function loadFoldState() {
+    var pid = getPid();
+    if (!pid) return true; // 默认收起
+    var key = 'pbc_brief_folded_' + pid;
+    try {
+      var v = localStorage.getItem(key);
+      return v === null ? true : v === '1'; // 默认收起
+    } catch (e) { return true; }
+  }
+
+  function saveFoldState(folded) {
+    var pid = getPid();
+    if (!pid) return;
+    var key = 'pbc_brief_folded_' + pid;
+    try { localStorage.setItem(key, folded ? '1' : '0'); } catch (e) {}
+  }
+
+  /* ---------- 上次查看时间（per project） ---------- */
+  function getLastSeen() {
+    var pid = getPid();
+    if (!pid) return 0;
+    try {
+      var v = localStorage.getItem('pbc_brief_seen_' + pid);
+      return v ? parseFloat(v) : 0;
+    } catch (e) { return 0; }
+  }
+
+  function saveLastSeen(ts) {
+    var pid = getPid();
+    if (!pid) return;
+    try { localStorage.setItem('pbc_brief_seen_' + pid, String(ts)); } catch (e) {}
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function root() {
+    var el = document.querySelector('[x-data]');
+    if (!el) return null;
+    if (el._x_dataStack && el._x_dataStack[0]) return el._x_dataStack[0];
+    if (window.Alpine && window.Alpine.$data) {
+      try { return window.Alpine.$data(el); } catch (e) {}
+    }
+    return null;
+  }
 
   /* ---------- 定位今日简报卡片 ---------- */
   function findCard() {
@@ -33,12 +94,29 @@
 
   /* ---------- 统计条数 ---------- */
   function counts() {
-    var items = card ? card.querySelectorAll('.brief-item') : [];
+    // 从 Alpine data 读 PBC 清单的真实未提供数（不数简报卡片里的条目）
+    var d = root();
+    var total = 0;
     var high = 0;
-    for (var i = 0; i < items.length; i++) {
-      if (items[i].classList.contains('high')) high++;
+    if (d && d.pbcList) {
+      for (var i = 0; i < d.pbcList.length; i++) {
+        var st = d.pbcList[i].status_normalized || d.pbcList[i].status || '';
+        if (st === '未提供') {
+          total++;
+          var od = d.pbcList[i].overdue_days || 0;
+          if (od > 30) high++;
+        }
+      }
     }
-    return { total: items.length, high: high };
+    // fallback: 如果拿不到 pbcList，数简报卡片
+    if (total === 0) {
+      var items = card ? card.querySelectorAll('.brief-item') : [];
+      for (var j = 0; j < items.length; j++) {
+        if (items[j].classList.contains('high')) high++;
+      }
+      total = items.length;
+    }
+    return { total: total, high: high };
   }
 
   /* ---------- 创建细摘要 ---------- */
@@ -55,13 +133,60 @@
     if (!bar) return;
     var c = counts();
     var calm = c.high === 0;
-    bar.innerHTML =
-      '<span class="pbcg-bb-dot' + (calm ? ' calm' : '') + '"></span>' +
-      '<span class="pbcg-bb-name">今日简报</span>' +
-      '<span class="pbcg-bb-txt">已识别 <b>' + c.total + '</b> 条风险信号' +
-        (c.high ? '，其中最高优 <b>' + c.high + '</b> 条' : '，暂无最高优') +
-      '</span>' +
-      '<span class="pbcg-bb-act">展开' + ICO_DOWN + '</span>';
+
+    // 检查是否有新变化（自上次查看以来）
+    var lastSeen = getLastSeen();
+    var now = Date.now() / 1000;
+    var hasNewChanges = false;
+    var newCount = 0;
+
+    // 从 Alpine data 拿 changePanel 数据判断是否有新变化
+    var d = root();
+    if (d && d.changePanel && d.changePanel.items) {
+      var items = d.changePanel.items;
+      for (var i = 0; i < items.length; i++) {
+        var ts = items[i].changed_at || '';
+        if (ts) {
+          var tsDate = new Date(String(ts).replace(' ', 'T'));
+          if (!isNaN(tsDate.getTime())) {
+            var tsSec = tsDate.getTime() / 1000;
+            if (tsSec > lastSeen) {
+              hasNewChanges = true;
+              newCount++;
+            }
+          }
+        }
+      }
+    }
+
+    // 上次查看时间格式化
+    var seenStr = '';
+    if (lastSeen > 0) {
+      var diff = now - lastSeen;
+      if (diff < 3600) seenStr = Math.floor(diff / 60) + ' 分钟前';
+      else if (diff < 86400) seenStr = Math.floor(diff / 3600) + ' 小时前';
+      else seenStr = Math.floor(diff / 86400) + ' 天前';
+    }
+
+    if (hasNewChanges) {
+      // 有新变化：黄色边框 + 增量提示
+      bar.className = 'pbcg-brief-bar alert';
+      bar.innerHTML =
+        '<span class="pbcg-bb-dot"></span>' +
+        '<span class="pbcg-bb-name">今日简报</span>' +
+        '<span class="pbcg-bb-txt">新增 <b>' + newCount + '</b> 条变化，待查看</span>' +
+        (seenStr ? '<span class="pbcg-bb-meta">上次查看 ' + esc(seenStr) + '</span>' : '') +
+        '<span class="pbcg-bb-act">展开' + ICO_DOWN + '</span>';
+    } else {
+      // 无新变化：平时态
+      bar.className = 'pbcg-brief-bar';
+      bar.innerHTML =
+        '<span class="pbcg-bb-dot calm"></span>' +
+        '<span class="pbcg-bb-name">今日简报</span>' +
+        '<span class="pbcg-bb-txt">无新变化。存量未提供 <b>' + c.total + '</b> 项，详情看下方表格</span>' +
+        (seenStr ? '<span class="pbcg-bb-meta">上次查看 ' + esc(seenStr) + '</span>' : '') +
+        '<span class="pbcg-bb-act">展开' + ICO_DOWN + '</span>';
+    }
   }
 
   /* ---------- 展开卡片右上角的收起按钮 ---------- */
@@ -84,6 +209,7 @@
   function setFold(on) {
     if (!card) return;
     folded = on;
+    saveFoldState(folded);
     if (on) {
       card.classList.add('pbcg-brief-off');
       makeBar();
@@ -92,14 +218,40 @@
     } else {
       card.classList.remove('pbcg-brief-off');
       if (bar) bar.style.display = 'none';
+      // 展开时记录查看时间
+      saveLastSeen(Date.now() / 1000);
     }
   }
 
   /* ---------- 跟 Alpine 的显隐保持同步 ---------- */
   function sync() {
-    if (!card || !folded || !bar) return;
+    if (!card || !bar) return;
     paintBar();
-    bar.style.display = hasData() ? 'flex' : 'none';
+    // 检测是否有新变化→自动展开一次
+    if (folded && hasData()) {
+      var lastSeen = getLastSeen();
+      var d = root();
+      if (d && d.changePanel && d.changePanel.items) {
+        var hasNew = false;
+        var items = d.changePanel.items;
+        for (var i = 0; i < items.length; i++) {
+          var ts = items[i].changed_at || '';
+          if (ts) {
+            var tsDate = new Date(String(ts).replace(' ', 'T'));
+            if (!isNaN(tsDate.getTime()) && tsDate.getTime() / 1000 > lastSeen) {
+              hasNew = true;
+              break;
+            }
+          }
+        }
+        if (hasNew) {
+          // 有新变化→自动展开
+          setFold(false);
+          return;
+        }
+      }
+    }
+    bar.style.display = folded && hasData() ? 'flex' : 'none';
   }
 
   function watchCard() {
@@ -128,8 +280,26 @@
         card = found;
         addFoldBtn();
         makeBar();
+        // 读 localStorage 恢复折叠状态（默认收起）
+        folded = loadFoldState();
+        if (folded) {
+          setFold(true);
+        } else {
+          // 展开时记录查看时间
+          saveLastSeen(Date.now() / 1000);
+        }
         watchCard();
         watchTabs();
+        // 监听项目切换
+        var oldPid = '';
+        setInterval(function() {
+          var newPid = getPid();
+          if (newPid && newPid !== oldPid) {
+            oldPid = newPid;
+            folded = loadFoldState();
+            if (folded) setFold(true);
+          }
+        }, 1000);
       } else if (tries > 80) {
         clearInterval(timer);
       }

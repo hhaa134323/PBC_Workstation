@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PBC 工作站 · 两处细节</title>
+<style>
+:root{
+  --ey-yellow:#FFE600;
+  --ey-dark:#2E2E38;
+  --ey-grey:#747480;
+  --ey-grey2:#9B9BA5;
+  --ey-line:#E1E1E6;
+  --ey-soft:#F6F6FA;
+  --canvas:#FFFFFF;
+  --red-bg:#FFC7CE;
+  --red-fg:#B4123B;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--ey-soft);color:var(--ey-dark);
+  font-size:14px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.page{max-width:1000px;margin:0 auto;padding:40px 32px 56px}
+
+.head{border-left:4px solid var(--ey-yellow);padding-left:16px;margin-bottom:36px}
+.head h1{font-size:24px;font-weight:600;letter-spacing:-.01em}
+.head p{font-size:14px;color:var(--ey-grey);margin-top:8px}
+.tags{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.tag{font-size:12px;color:var(--ey-grey);background:var(--canvas);
+  border:1px solid var(--ey-line);border-radius:6px;padding:4px 10px}
+
+.block{margin-top:36px}
+.block-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.num{font-size:11px;font-weight:700;background:var(--ey-yellow);color:var(--ey-dark);
+  border-radius:4px;padding:2px 7px;letter-spacing:.04em}
+.block-h h2{font-size:17px;font-weight:600}
+.desc{font-size:13.5px;color:var(--ey-grey);margin-bottom:16px;max-width:760px}
+
+.panel{background:var(--canvas);border:1px solid var(--ey-line);border-radius:10px;overflow:hidden}
+.panel + .panel{margin-top:16px}
+.panel-h{display:flex;align-items:center;gap:8px;padding:10px 16px;
+  background:var(--ey-soft);border-bottom:1px solid var(--ey-line)}
+.dot{width:7px;height:7px;border-radius:99px;flex:none}
+.dot.b{background:var(--ey-grey2)}
+.dot.a{background:var(--ey-yellow)}
+.lbl{font-size:12.5px;font-weight:600}
+.note{margin-left:auto;font-size:12px;color:var(--ey-grey2)}
+.panel-body{padding:18px 16px}
+
+.tbrow{display:flex;align-items:center;gap:8px}
+.inp{border:1px solid var(--ey-line);border-radius:6px;padding:7px 10px;font-size:13px;
+  color:var(--ey-grey2);width:250px;flex:none;background:var(--canvas);white-space:nowrap}
+.sel{font-size:13px;border:1px solid var(--ey-line);border-radius:6px;padding:7px 10px;
+  background:var(--canvas);color:var(--ey-dark);display:inline-flex;align-items:center;
+  gap:16px;white-space:nowrap;flex:none}
+.sel .cv{opacity:.4;font-size:9px}
+.count{font-size:13px;color:var(--ey-grey);white-space:nowrap;flex:none}
+.btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;
+  border:1px solid var(--ey-line);border-radius:6px;padding:7px 12px;
+  background:var(--canvas);color:var(--ey-dark);white-space:nowrap;flex:none}
+.icobtn{display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border:1px solid var(--ey-line);border-radius:6px;
+  background:var(--canvas);color:var(--ey-grey);font-size:13px;flex:none}
+.gap{flex:1}
+.rowline{display:flex;justify-content:flex-end;padding:10px 0 0}
+.ghostzone{height:16px;background:repeating-linear-gradient(135deg,#FAFAFC,#FAFAFC 6px,#F2F2F6 6px,#F2F2F6 12px);
+  border-radius:4px;margin-top:8px;position:relative}
+.ghostzone span{position:absolute;right:8px;top:-2px;font-size:10.5px;color:var(--ey-grey2)}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;font-size:12px;color:var(--ey-grey);
+  padding:10px 12px;background:var(--ey-soft);border-bottom:1px solid var(--ey-line);white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #F0F0F4;white-space:nowrap}
+td.code{font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+  background:var(--red-bg);color:var(--red-fg);border-radius:5px;padding:3px 9px}
+.badge i{width:5px;height:5px;border-radius:99px;background:currentColor;display:block}
+.link{font-size:13px;color:var(--ey-dark)}
+
+/* 分页：现状 */
+.pgr-old{margin-top:14px;border:1px solid var(--ey-line);border-radius:8px;
+  background:var(--canvas);padding:10px 14px;display:flex;align-items:center;gap:10px}
+.pgr-new{border-top:1px solid var(--ey-line);padding:12px 16px;
+  display:flex;align-items:center;gap:10px;background:var(--canvas)}
+.pgtxt{font-size:12.5px;color:var(--ey-grey)}
+.pgbtn{font-size:12.5px;border:1px solid var(--ey-line);border-radius:6px;
+  padding:5px 11px;color:var(--ey-grey2);background:var(--canvas)}
+.pgbtn.flat{border:none;background:transparent;padding:5px 8px}
+.pgnum{font-size:12.5px;color:var(--ey-dark);font-weight:600;padding:0 6px}
+
+.tblwrap{border:1px solid var(--ey-line);border-radius:10px;overflow:hidden;background:var(--canvas)}
+.tblwrap.flush table td:last-child,.tblwrap.flush table th:last-child{text-align:right}
+
+.callout{margin-top:14px;background:var(--ey-soft);border:1px solid var(--ey-line);
+  border-left:3px solid var(--ey-yellow);border-radius:8px;padding:12px 16px;
+  font-size:13px;color:var(--ey-grey)}
+.callout b{color:var(--ey-dark)}
+.foot{margin-top:40px;background:var(--canvas);border:1px solid var(--ey-line);
+  border-left:3px solid var(--ey-dark);border-radius:8px;padding:16px 18px;
+  font-size:13px;color:var(--ey-grey)}
+.foot b{color:var(--ey-dark)}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="head">
+    <h1>两处细节</h1>
+    <p>只改这两条，别的不动。都是纯 CSS 和 DOM 位置，不碰任何 JS 逻辑。</p>
+    <div class="tags">
+      <span class="tag">基线 9a8b6c6</span>
+      <span class="tag">shadcn/ui + EY 品牌色</span>
+      <span class="tag">不涉及 JS</span>
+    </div>
+  </div>
+
+  <!-- 01 -->
+  <div class="block">
+    <div class="block-h"><span class="num">01</span><h2>「列设置」回到搜索框那一行</h2></div>
+    <p class="desc">现在它自己占了第二行最右，左边一整条是空的。这一行只为了放一个按钮，白吃约 44px 垂直空间。搜索行右边其实还剩很多位置。</p>
+
+    <div class="panel">
+      <div class="panel-h"><span class="dot b"></span><span class="lbl">现状</span><span class="note">两行</span></div>
+      <div class="panel-body">
+        <div class="tbrow">
+          <span class="inp">搜索文件名/编号/分类/实体...</span>
+          <span class="sel">全部实体<span class="cv">&#9660;</span></span>
+          <span class="sel">全部分类<span class="cv">&#9660;</span></span>
+          <span class="sel">全部风险<span class="cv">&#9660;</span></span>
+          <span class="gap"></span>
+          <span class="count">共 8 项</span>
+        </div>
+        <div class="rowline"><span class="btn">&#8801; 列设置</span></div>
+        <div class="ghostzone"><span>这一整行只为一个按钮存在</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><span class="dot a"></span><span class="lbl">建议</span><span class="note">一行</span></div>
+      <div class="panel-body">
+        <div class="tbrow">
+          <span class="inp">搜索文件名/编号/分类/实体...</span>
+          <span class="sel">全部实体<span class="cv">&#9660;</span></span>
+          <span class="sel">全部分类<span class="cv">&#9660;</span></span>
+          <span class="sel">全部风险<span class="cv">&#9660;</span></span>
+          <span class="gap"></span>
+          <span class="count">共 8 项</span>
+          <span class="icobtn">&#8801;</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">「列设置」四个字收成一个图标，挪到「共 8 项」右边。<b>省下一整行</b>，表格往上提约 44px。图标带 tooltip 写「列设置」，不丢可发现性。</div>
+  </div>
+
+  <!-- 02 -->
+  <div class="block">
+    <div class="block-h"><span class="num">02</span><h2>分页条不该自己套一个框</h2></div>
+    <p class="desc">现在分页条是一张独立卡片，跟上面的表格卡之间还有一道缝。它明明是表格的一部分，视觉上却被切成了两块，多出来的那圈边框就是你说的「莫名其妙一圈线」。</p>
+
+    <div class="panel">
+      <div class="panel-h"><span class="dot b"></span><span class="lbl">现状</span><span class="note">两张卡，四条多余边框</span></div>
+      <div class="panel-body">
+        <div class="tblwrap">
+          <table>
+            <tr><th>二级分类</th><th>一级分类</th><th>资料名称</th><th>状态</th><th>操作</th></tr>
+            <tr><td class="code">销-2</td><td>收入</td><td>收入明细账</td><td><span class="badge"><i></i>未提供</span></td><td><span class="btn">文件详情</span></td></tr>
+            <tr><td class="code">穿-2</td><td>穿行测试</td><td>采购付款穿行测试</td><td><span class="badge"><i></i>未提供</span></td><td><span class="btn">文件详情</span></td></tr>
+          </table>
+        </div>
+        <div class="pgr-old">
+          <span class="pgtxt">显示 1-8, 共 8 项</span>
+          <span class="gap"></span>
+          <span class="pgbtn">上一页</span>
+          <span class="pgnum">1 / 1</span>
+          <span class="pgbtn">下一页</span>
+          <span class="pgbtn">50 条/页 &#9660;</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><span class="dot a"></span><span class="lbl">建议</span><span class="note">一张卡，分页是表格的页脚</span></div>
+      <div class="panel-body">
+        <div class="tblwrap">
+          <table>
+            <tr><th>二级分类</th><th>一级分类</th><th>资料名称</th><th>状态</th><th>操作</th></tr>
+            <tr><td class="code">销-2</td><td>收入</td><td>收入明细账</td><td><span class="badge"><i></i>未提供</span></td><td><span class="btn">文件详情</span></td></tr>
+            <tr><td class="code">穿-2</td><td>穿行测试</td><td>采购付款穿行测试</td><td><span class="badge"><i></i>未提供</span></td><td><span class="btn">文件详情</span></td></tr>
+          </table>
+          <div class="pgr-new">
+            <span class="pgtxt">显示 1-8, 共 8 项</span>
+            <span class="gap"></span>
+            <span class="pgbtn flat">上一页</span>
+            <span class="pgnum">1 / 1</span>
+            <span class="pgbtn flat">下一页</span>
+            <span class="pgbtn">50 条/页 &#9660;</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">分页条搬进表格卡片里面，去掉自己那圈 border、圆角和外边距，只留<b>一条顶部横线</b>跟表格分隔。顺带把只有一页时的「上一页/下一页」去掉边框改成纯文字，因为它们此刻是禁用态，画成按钮反而像能点。</div>
+  </div>
+
+  <div class="foot">
+    <b>落地成本</b>：01 是把「列设置」那个 div 挪进上面一行的 flex 容器，删掉它原来那行的包裹 div。02 是把分页 div 挪进表格卡片的闭合标签之前，改三条 CSS。<b>两条都不动 Alpine 数据和事件绑定</b>，按钮该绑什么还绑什么。你点头我就写成 spec 推分支。
+  </div>
+
+</div>
+</body>
+</html>
