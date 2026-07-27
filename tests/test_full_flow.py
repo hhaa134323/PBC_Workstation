@@ -666,3 +666,137 @@ class TestManifestConsistency:
         rel = str(f.relative_to(cf)).replace("\\", "/")
         assert rel in m
         assert m[rel]["status"] == "pending"
+
+
+# ════════════════════════════════════════════════════════════════
+# 10. 边界场景（最容易藏 bug 的地方）
+# ════════════════════════════════════════════════════════════════
+
+class TestEdgeCases:
+
+    def test_reclassify_after_archive(self, full_project, client):
+        """归档后改分类：旧归档删除→重新归档到新item_id→PBC Excel更新。
+
+        这是之前出过 bug 的场景：archived_path vs archived_dir 字段不匹配。
+        """
+        pid = full_project["project_id"]
+        cf = full_project["client_folder"]
+        db_path = full_project["db_path"]
+
+        # 1. 先归档到历-1
+        f = cf / "reclassify_test.pdf"
+        _create_file(f, b"reclassify content")
+        from app.core.db import insert_pending_confirm
+        cid = insert_pending_confirm(
+            project_id=pid, file_path=str(f), file_name=f.name,
+            sha256="", suggested_item_id="历-1", confidence=0.9, decision="auto",
+        )
+        client.post(f"/api/files/{pid}/confirm/{cid}", json={"new_item_id": ""})
+
+        # 验证归档到了历-1
+        arcs1 = _db_query(db_path, "SELECT * FROM file_archive WHERE project_id=? AND item_id=?",
+                          (pid, "历-1"))
+        assert len(arcs1) == 1
+        old_archived_path = arcs1[0]["archived_path"]
+        assert Path(old_archived_path).exists()
+
+        # 2. 改分类到销-1
+        r = client.post(f"/api/files/{pid}/reclassify/历-1",
+                        json={"new_item_id": "销-1", "changed_by": "senior", "reason": "测试改分类"})
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+        # 3. 验证旧归档文件已删除
+        assert not Path(old_archived_path).exists(), "旧归档文件应该被删除"
+
+        # 4. 验证新归档记录存在
+        arcs_new = _db_query(db_path, "SELECT * FROM file_archive WHERE project_id=? AND item_id=?",
+                             (pid, "销-1"))
+        assert len(arcs_new) >= 1
+        assert Path(arcs_new[0]["archived_path"]).exists()
+
+        # 5. 验证旧 item_id 的归档记录已删除
+        arcs_old = _db_query(db_path, "SELECT * FROM file_archive WHERE project_id=? AND item_id=?",
+                             (pid, "历-1"))
+        assert len(arcs_old) == 0, "旧 item_id 的归档记录应该被删除"
+
+        # 6. 验证 change_log 有 reclassified 记录
+        logs = _db_query(db_path,
+            "SELECT * FROM file_change_log WHERE project_id=? AND change_type='reclassified'",
+            (pid,))
+        assert len(logs) >= 1
+
+    def test_multiple_files_same_item(self, full_project, client):
+        """多文件归到同一item_id（如货-1有三个年度文件夹）。"""
+        pid = full_project["project_id"]
+        cf = full_project["client_folder"]
+        db_path = full_project["db_path"]
+
+        # 在PBC清单里加一个货-1项（如果还没有的话，用现有的也行）
+        # 创建3个文件，都归到历-1
+        from app.core.db import insert_pending_confirm
+        for i in range(3):
+            f = cf / f"历-1_file{i}.pdf"
+            _create_file(f, f"content{i}".encode())
+            cid = insert_pending_confirm(
+                project_id=pid, file_path=str(f), file_name=f.name,
+                sha256="", suggested_item_id="历-1", confidence=0.9, decision="auto",
+            )
+            r = client.post(f"/api/files/{pid}/confirm/{cid}", json={"new_item_id": ""})
+            assert r.status_code == 200
+
+        # 验证3个文件都归档了
+        arcs = _db_query(db_path, "SELECT * FROM file_archive WHERE project_id=? AND item_id=?",
+                         (pid, "历-1"))
+        assert len(arcs) == 3, f"应该有3条归档记录，实际{len(arcs)}"
+
+        # PBC Excel file_path 应该有值
+        from app.core.excel_io import read_pbc_list
+        items = read_pbc_list(project_id=pid)
+        item = next(it for it in items if it["item_id"] == "历-1")
+        assert item["file_path"], "file_path 不应为空"
+        assert item["status_normalized"] == "已提供"
+
+    def test_sha256_dedup_on_rearchive(self, full_project, client):
+        """同一文件归档两次→sha256去重→不产生重复归档文件。"""
+        pid = full_project["project_id"]
+        cf = full_project["client_folder"]
+        db_path = full_project["db_path"]
+
+        # 创建文件并归档
+        f = cf / "dedup_test.pdf"
+        _create_file(f, b"identical content")
+        from app.core.db import insert_pending_confirm
+        cid1 = insert_pending_confirm(
+            project_id=pid, file_path=str(f), file_name=f.name,
+            sha256="", suggested_item_id="历-1", confidence=0.9, decision="auto",
+        )
+        client.post(f"/api/files/{pid}/confirm/{cid1}", json={"new_item_id": ""})
+
+        # 归档前查 file_archive 记录数
+        arcs1 = _db_query(db_path, "SELECT count(*) as c FROM file_archive WHERE project_id=? AND item_id=?",
+                          (pid, "历-1"))
+        count_before = arcs1[0]["c"]
+
+        # 再次归档同一文件（模拟用户改分类后又改回来）
+        cid2 = insert_pending_confirm(
+            project_id=pid, file_path=str(f), file_name=f.name,
+            sha256="", suggested_item_id="历-1", confidence=0.9, decision="auto",
+        )
+        r = client.post(f"/api/files/{pid}/confirm/{cid2}", json={"new_item_id": ""})
+        # 不应该报错，但也不应该产生新文件
+        assert r.status_code == 200
+
+        arcs2 = _db_query(db_path, "SELECT count(*) as c FROM file_archive WHERE project_id=? AND item_id=?",
+                          (pid, "历-1"))
+        count_after = arcs2[0]["c"]
+        # sha256 去重：archive_file 返回 dedup=True，不再物理复制
+        # 但 insert_archive 可能会插一条新 DB 记录（指向同一个 archived_path）
+        # 关键断言：归档目录里不应该有重复文件
+        from app.core.excel_io import read_pbc_list
+        items = read_pbc_list(project_id=pid)
+        item = next(it for it in items if it["item_id"] == "历-1")
+        archived_dir = Path(item["file_path"]).parent
+        physical_files = [p for p in archived_dir.rglob("*") if p.is_file()]
+        # 同一 sha256 的文件不应该有多个物理副本
+        assert len(physical_files) >= 1

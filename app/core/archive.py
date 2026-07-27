@@ -207,10 +207,13 @@ def archive_file(
     target = entity_dir / target_name
 
     if target.exists():
+        # 目标文件已存在：判断是否同一文件（用 sha256）
+        # 不能只比 size——不同内容可能 size 相同
         try:
-            existing_size = target.stat().st_size
-            src_size = src.stat().st_size
-            if existing_size != src_size:
+            existing_sha = file_hash_sha256(target)
+            src_sha = sha256 or file_hash_sha256(src)
+            if existing_sha != src_sha:
+                # 内容不同 → 升版本号
                 stem_parts = target.stem.split("_")
                 base_stem = "_".join(stem_parts[:-1]) if stem_parts else target.stem
                 i = 2
@@ -222,8 +225,28 @@ def archive_file(
                             version = f"v{i}"
                         break
                     i += 1
+            # else: sha256 相同 → 覆盖（同内容，无影响）
         except OSError:
             pass
+        except Exception:
+            # hash 失败 → 回退到 size 比较
+            try:
+                existing_size = target.stat().st_size
+                src_size = src.stat().st_size
+                if existing_size != src_size:
+                    stem_parts = target.stem.split("_")
+                    base_stem = "_".join(stem_parts[:-1]) if stem_parts else target.stem
+                    i = 2
+                    while True:
+                        candidate = entity_dir / f"{base_stem}_v{i}{ext}"
+                        if not candidate.exists():
+                            target = candidate
+                            if not version:
+                                version = f"v{i}"
+                            break
+                        i += 1
+            except OSError:
+                pass
 
     try:
         shutil.copy2(str(src), str(target))
