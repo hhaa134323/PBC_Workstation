@@ -366,6 +366,15 @@ class TestScanAndArchive:
             "SELECT * FROM file_change_log WHERE project_id=? AND change_type='archived'", (pid,))
         assert any("历-1" in str(l.get("item_id", "")) or f.name in l["file_name"] for l in logs)
 
+        # 验证5: manifest 标记为 processed（之前出过bug）
+        from app.core.manifest import load_manifest
+        m = load_manifest(pid)
+        rel = str(f.relative_to(cf)).replace("\\", "/")
+        if rel in m:
+            assert m[rel]["status"] == "processed", \
+                f"manifest status 应为 processed，实际为 {m[rel]['status']}"
+            assert m[rel].get("item_id") == "历-1"
+
     def test_confirm_directory_archive(self, full_project, client):
         """目录归档完整流程：创建目录→pending_confirm→确认归档→验证副作用。"""
         pid = full_project["project_id"]
@@ -406,6 +415,16 @@ class TestScanAndArchive:
         arcs = _db_query(db_path, "SELECT * FROM file_archive WHERE project_id=? AND item_id=?", (pid, "穿-1"))
         assert len(arcs) >= 1
         assert arcs[0]["is_directory"] == 1
+
+        # 验证4: manifest 目录内子文件标 processed
+        from app.core.manifest import load_manifest
+        m = load_manifest(pid)
+        for sub in d.rglob("*"):
+            if sub.is_file():
+                srel = str(sub.relative_to(cf)).replace("\\", "/")
+                if srel in m:
+                    assert m[srel]["status"] == "processed", \
+                        f"目录归档后子文件 {srel} manifest 应为 processed，实际为 {m[srel]['status']}"
 
 
 # ════════════════════════════════════════════════════════════════
