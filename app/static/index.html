@@ -1244,47 +1244,39 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 
     <!-- 今日简报（Alpine 原生控制，不用 pbc-enhance.js） -->
     <!-- 收起时：细条 -->
-    <div x-show="!loading && pbcList.length > 0 && briefFolded" @click="toggleBriefFold()" style="display:flex;align-items:center;gap:0;height:50px;padding:0 14px 0 16px;margin-bottom:16px;background:hsl(var(--card));border:1px solid hsl(var(--border));border-left:3px solid hsl(var(--ey-yellow));border-radius:10px;cursor:pointer;transition:.15s;box-shadow:0 1px 2px rgba(26,26,36,.06)">
-      <span :style="'width:8px;height:8px;border-radius:99px;flex-shrink:0;margin-right:10px;background:'+(briefHasDelta?'hsl(38 92% 50%)':'hsl(142 71% 45%)')"></span>
-      <span style="font-size:13px;font-weight:700;flex-shrink:0;letter-spacing:-.1px">今日简报</span>
-      <span style="width:1px;height:15px;background:hsl(var(--border));flex-shrink:0;margin:0 16px"></span>
-      <span style="flex:1;min-width:0;font-size:13px;color:hsl(var(--foreground));overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="briefHasDelta ? '文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
-      <span style="width:1px;height:15px;background:hsl(var(--border));flex-shrink:0;margin-left:auto;margin-right:16px"></span>
-      <span x-show="briefSeenStr" style="flex-shrink:0;font-size:12px;color:hsl(var(--muted-foreground));white-space:nowrap" x-text="'上次查看 '+briefSeenStr"></span>
-      <span style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0;height:28px;padding:0 10px;margin-left:14px;border-radius:6px;background:hsl(var(--muted));font-size:12.5px;font-weight:600;color:hsl(var(--foreground));white-space:nowrap">展开<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    <div x-show="!loading && pbcList.length > 0 && briefFolded" @click="toggleBriefFold()" style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin-bottom:16px;background:hsl(var(--card));border:1px solid hsl(var(--border));border-left:3px solid hsl(var(--ey-yellow));border-radius:10px;cursor:pointer;transition:.15s;box-shadow:0 1px 2px rgba(26,26,36,.06)">
+      <span style="width:8px;height:8px;border-radius:99px;background:var(--green,#16a34a);flex-shrink:0"></span>
+      <span style="font-size:13px;font-weight:700;flex-shrink:0">今日简报</span>
+      <span style="font-size:12.5px;color:hsl(var(--muted-foreground));overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="briefHasDelta ? '文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
+      <span x-show="briefSeenStr" style="flex-shrink:0;font-size:11px;color:hsl(var(--muted-foreground));opacity:.7" x-text="'上次查看 '+briefSeenStr"></span>
+      <span style="margin-left:auto;flex-shrink:0;font-size:12px;font-weight:600;color:hsl(var(--muted-foreground))">展开</span>
     </div>
     <!-- 展开时：大卡片 -->
     <div x-show="!loading && pbcList.length > 0 && !briefFolded" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
-      <div style="padding:14px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:#fff">
-        <span style="width:10px;height:10px;border-radius:99px;background:var(--red);flex-shrink:0"></span>
+      <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--soft)">
+        <span style="width:10px;height:10px;border-radius:99px;background:var(--red)"></span>
         <b style="font-size:16px">今日简报</b>
         <span style="font-size:13px;color:var(--text2)">自上次查看以来的变化</span>
-        <span style="font-size:12px;color:var(--text2);margin-left:auto" x-text="'上次查看 '+briefSeenStr"></span>
+        <span style="font-size:12px;color:var(--text2);margin-left:auto" x-text="'文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析'"></span>
         <button @click="toggleBriefFold()" style="flex-shrink:0;font-size:12px;border:1px solid hsl(var(--border));border-radius:6px;padding:4px 10px;color:hsl(var(--muted-foreground));background:hsl(var(--card));cursor:pointer">收起</button>
       </div>
-      <div>
-        <div style="padding:12px 16px;font-size:14px;border-bottom:1px solid var(--border)" x-text="'客户共享文件夹有 '+(briefingDelta.delta_count||0)+' 处变动，均未分析。'"></div>
-        <template x-for="g in (briefingDelta.delta_groups||[])" :key="g.label">
-          <div style="display:flex;align-items:flex-start;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border)">
-            <div style="flex:0 0 160px">
-              <div style="font-size:14px;font-weight:600" x-text="g.label+' '+g.count+' 份'"></div>
-              <div style="font-size:12px;color:var(--text3)" x-text="g.label==='新增文件'?'待你在文件变更里点分析':g.label==='被删或被换'?'已交的文件发生变动':'建议今天发催函'"></div>
-            </div>
+      <div style="padding:6px">
+        <template x-for="e in (briefingDelta.events||[])" :key="e.event_type+'-'+(e.file_name||e.item_id||'')+'-'+e.timestamp">
+          <div :class="'brief-item '+e.priority" style="display:flex;align-items:flex-start;gap:14px;padding:13px 16px;border-radius:8px;transition:.12s;border:1px solid transparent">
+            <span style="width:8px;height:8px;border-radius:99px;margin-top:7px;flex-shrink:0" :style="'background:'+(e.priority==='high'?'var(--red)':e.priority==='medium'?'var(--orange)':'var(--green)')"></span>
             <div style="flex:1;min-width:0">
-              <div style="font-size:13px;color:var(--text2);margin-bottom:6px" x-text="g.label==='新增文件'?'分析前不知道归到哪个分类。':g.label==='被删或被换'?'建议先看差异，确认是重传还是撤回。':''"></div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-                <template x-for="fn in g.files" :key="fn">
-                  <span style="font-size:11px;padding:2px 7px;border-radius:4px;border:1px solid" :style="g.label==='新增文件'?'background:#F0FAF3;border-color:#CBE9D5;color:#106B33':'background:#FDF3F4;border-color:#F2C2C8;color:#B4123B'" x-text="fn"></span>
-                </template>
-                <span x-show="g.rest>0" style="font-size:12px;color:var(--ey-grey,#747480);margin-left:4px" x-text="'其余 '+g.rest+' 份'"></span>
+              <div style="font-weight:600;font-size:14px" x-text="e.title"></div>
+              <div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.55" x-text="e.detail"></div>
+              <div style="font-size:12px;color:var(--text2);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap" x-show="e.file_name">
+                <span style="background:var(--soft);padding:2px 8px;border-radius:4px" x-text="e.file_name||''"></span>
+                <span style="background:#fff3cd;padding:2px 8px;border-radius:4px;color:#8a6d3b" x-text="e.event_type==='file_added'?'新增':e.event_type==='file_deleted'?'被删/被换':e.event_type==='new_overdue_threshold'?'新跨红线':''"></span>
               </div>
             </div>
-            <button @click="document.body.classList.add('pbcg-vh-open'); window.__pbcgChangePanel && window.__pbcgChangePanel.open()" style="flex:0 0 auto;font-size:12.5px;color:var(--ey-dark,#2E2E38);font-weight:600;border-bottom:2px solid hsl(var(--ey-yellow));padding-bottom:1px;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;cursor:pointer">去文件变更</button>
           </div>
         </template>
-        <div style="padding:10px 16px;font-size:12px;color:var(--text3);display:flex;align-items:center;gap:10px">
+        <div style="padding:10px 16px;background:var(--soft);border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;align-items:center;gap:10px">
           <span x-text="'存量未提供 '+(briefingDelta.stock_total||0)+' 项，其中高风险 '+(briefingDelta.stock_high||0)+' 项'"></span>
-          <button @click="currentTab='overdue'" style="margin-left:auto;font-size:12.5px;color:var(--ey-dark,#2E2E38);font-weight:600;border-bottom:2px solid hsl(var(--ey-yellow));padding-bottom:1px;background:none;border-top:none;border-left:none;border-right:none;cursor:pointer">去风险分析</button>
+          <span style="margin-left:auto;cursor:pointer;color:var(--text2)" @click="currentTab='overdue'">去风险分析 →</span>
         </div>
       </div>
     </div>
