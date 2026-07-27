@@ -1649,7 +1649,8 @@ function pbcApp(){
     filters: {entity:'', category:'', risk:''},
 
     /* v7.9: 表格分页+搜索状态 */
-    tableState: {q:'', pageSize:50, page:1},
+    tableState: {q:'', pageSize:50, page:1, _searchTick:0},
+    /* _searchTick 是搜索触发器：__tableSearch 递增它 → tableViewHtml 重渲染 → 表格刷新 */
 
     /* 列设置：按需显示列（每个 Tab 记住各自勾选） */
     colVisible: {},
@@ -1896,7 +1897,7 @@ function pbcApp(){
       this.briefing = null;
       this.briefingDelta = null;
       this.fileZone.paths = null;  // 清旧路径
-      this.tableState = {q:'', pageSize:50, page:1};  // v7.9: 切项目重置表格状态
+      this.tableState = {q:'', pageSize:50, page:1}; window._pbcSearchQ='';  // v7.9: 切项目重置表格状态
       await this.reloadAll();
       this.loadFileZone();  // v7.7: 切项目后立即加载文件区路径（triage tab 依赖）
       if(!silent) this.pushToast('low','已切换项目', p.name);
@@ -2479,7 +2480,7 @@ function pbcApp(){
     /* =========================================================
        Tab / 过滤
        ========================================================= */
-    switchTab(id){ this.currentTab = id; this.tableState.page=1; this.tableState.q=''; if(id==='files'||id==='triage') this.loadFileZone(); },
+    switchTab(id){ this.currentTab = id; this.tableState.page=1; this.tableState.q=''; window._pbcSearchQ=''; if(id==='files'||id==='triage') this.loadFileZone(); },
 
     stageOf(it){
       const st = it.status_normalized || it.status || '';
@@ -2709,7 +2710,7 @@ function pbcApp(){
     /* v7.9: 跨字段搜索 — 在 filteredItems 基础上按 q 过滤 */
     searchedItems(){
       const list = this.filteredItems();
-      const q = (this.tableState.q||'').trim().toLowerCase();
+      const q = (window._pbcSearchQ||this.tableState.q||'').trim().toLowerCase();
       if(!q) return list;
       return list.filter(it=>{
         // 跨字段：文件名/编号(item_id)/分类/实体/资料名称/描述
@@ -2859,7 +2860,7 @@ function pbcApp(){
         '<select onchange="window.__setFilter(\'entity\', this.value)">'+opt('','全部实体',f.entity)+entities.map(e=>opt(e,e,f.entity)).join('')+'</select>'+
         '<select onchange="window.__setFilter(\'category\', this.value)">'+opt('','全部分类',f.category)+cats.map(c=>opt(c,c,f.category)).join('')+'</select>'+
         '<select onchange="window.__setFilter(\'risk\', this.value)">'+opt('','全部风险',f.risk)+opt('high','高风险(>30天)',f.risk)+opt('mid','中风险(≤30天)',f.risk)+opt('low','未逾期',f.risk)+'</select>'+
-        '<span class="filter-info">共 '+this.searchedItems().length+' 项' + (this.tableState.q ? '（搜索：'+this.esc(this.tableState.q)+'）' : '') + '</span>'+
+        '<span class="filter-info">共 '+this.searchedItems().length+' 项' + ((window._pbcSearchQ||this.tableState.q) ? '（搜索：'+this.esc(window._pbcSearchQ||this.tableState.q)+'）' : '') + '</span>'+
         colBtn;
     },
 
@@ -2936,6 +2937,7 @@ function pbcApp(){
     },
 
     tableViewHtml(list){
+      this.tableState._searchTick; // 追踪搜索触发器，使输入时表格重渲染
       // v7.9: list 参数忽略，改用 paginatedItems()（当前页）
       const pageList = this.paginatedItems();
       const total = this.searchedItems().length;
@@ -2967,7 +2969,7 @@ function pbcApp(){
         return '<div class="card"><div class="empty">'+
           '<div class="em"><span class="ico ico-lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span></div>'+
           '<div>无匹配条目</div>'+
-          '<div style="font-size:12px;margin-top:6px;color:var(--text3)">共 '+total+' 项，搜索"'+this.esc(this.tableState.q||'')+'"无匹配，换个关键词试试</div>'+
+          '<div style="font-size:12px;margin-top:6px;color:var(--text3)">共 '+total+' 项，搜索"'+this.esc(window._pbcSearchQ||this.tableState.q||'')+'"无匹配，换个关键词试试</div>'+
         '</div></div>';
       }
       const cols = this.activeColumns();
@@ -2987,7 +2989,7 @@ function pbcApp(){
       const cp = this.tableCurrentPage;
       const start = total===0 ? 0 : (cp-1)*ps+1;
       const end = Math.min(cp*ps, total);
-      const q = this.tableState.q||'';
+      const q = window._pbcSearchQ||this.tableState.q||'';
       // 每页条数选择 20/50/100
       const sizeOpts = [20,50,100].map(n=>'<option value="'+n+'"'+(ps===n?' selected':'')+'>'+n+' 条/页</option>').join('');
       return '<div class="tbl-pagination" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid hsl(var(--border));font-size:12px;color:hsl(var(--muted-foreground))">'+
@@ -3401,10 +3403,12 @@ window.__tablePageSize = function(size){
   app.tableState.pageSize = size;
   app.tableState.page = 1;  // 切每页条数时重置到第一页
 };
+window._pbcSearchQ = '';  // 搜索框实时值，不放在 Alpine state 里避免重渲染丢焦点
 window.__tableSearch = function(q){
+  window._pbcSearchQ = q;
   const app = Alpine.$data(document.querySelector('[x-data]'));
-  app.tableState.q = q;
   app.tableState.page = 1;  // 搜索时重置到第一页
+  app.tableState._searchTick++;  // 触发表格重渲染
 };
 window.__changeStatus = function(itemId, status){
   const app = Alpine.$data(document.querySelector('[x-data]'));
