@@ -1244,7 +1244,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 
     <!-- 今日简报（Alpine 原生控制，不用 pbc-enhance.js） -->
     <!-- 收起时：细条 -->
-    <div x-show="!loading && briefingDelta && briefFolded" @click="toggleBriefFold()" style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin-bottom:16px;background:hsl(var(--card));border:1px solid hsl(var(--border));border-left:3px solid hsl(var(--ey-yellow));border-radius:10px;cursor:pointer;transition:.15s;box-shadow:0 1px 2px rgba(26,26,36,.06)">
+    <div x-show="!loading && pbcList.length > 0 && briefFolded" @click="toggleBriefFold()" style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin-bottom:16px;background:hsl(var(--card));border:1px solid hsl(var(--border));border-left:3px solid hsl(var(--ey-yellow));border-radius:10px;cursor:pointer;transition:.15s;box-shadow:0 1px 2px rgba(26,26,36,.06)">
       <span style="width:8px;height:8px;border-radius:99px;background:var(--green,#16a34a);flex-shrink:0"></span>
       <span style="font-size:13px;font-weight:700;flex-shrink:0">今日简报</span>
       <span style="font-size:12.5px;color:hsl(var(--muted-foreground));overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="briefHasDelta ? '文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
@@ -1252,7 +1252,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       <span style="margin-left:auto;flex-shrink:0;font-size:12px;font-weight:600;color:hsl(var(--muted-foreground))">展开</span>
     </div>
     <!-- 展开时：大卡片 -->
-    <div x-show="!loading && briefingDelta && !briefFolded" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
+    <div x-show="!loading && pbcList.length > 0 && !briefFolded" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
       <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--soft)">
         <span style="width:10px;height:10px;border-radius:99px;background:var(--red)"></span>
         <b style="font-size:16px">今日简报</b>
@@ -2419,6 +2419,13 @@ function pbcApp(){
         this.dashboard = dash;
         this.heatmapData = heat;
         this.briefing = brief;
+        // 加载增量简报（since=0 显示全部增量）
+        try {
+          var pid = this.currentProjectId || '';
+          try{ this.briefFolded = localStorage.getItem('pbc_brief_folded_'+pid) !== '0'; }catch(e){ this.briefFolded = true; }
+          try{ this.briefLastSeen = parseFloat(localStorage.getItem('pbc_brief_seen_'+pid) || '0'); }catch(e){ this.briefLastSeen = 0; }
+          this.briefingDelta = await API.get('/api/briefing/'+pid+'?since=0').catch(()=>null);
+        } catch(e) { this.briefingDelta = null; }
         // pendingCount = 新文件数（还没扫描的）；待归档数用按钮状态控制
         this.pendingCount = nfc?.new_file_count || 0;
         // v7.7: 待归档列表
