@@ -1242,32 +1242,42 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
   <main class="wrap" x-show="currentProjectId">
     <div x-show="loading" style="text-align:center;padding:60px;color:var(--text3)"><span class="spin" style="width:20px;height:20px"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 加载中…</div>
 
-    <!-- 今日简报首屏（L3 主动化产品） -->
-    <div x-show="!loading && briefing && (briefing.events||[]).length" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
+    <!-- 今日简报（Alpine 原生控制，不用 pbc-enhance.js） -->
+    <!-- 收起时：细条 -->
+    <div x-show="!loading && briefingDelta && briefFolded" @click="toggleBriefFold()" style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin-bottom:16px;background:hsl(var(--card));border:1px solid hsl(var(--border));border-left:3px solid hsl(var(--ey-yellow));border-radius:10px;cursor:pointer;transition:.15s;box-shadow:0 1px 2px rgba(26,26,36,.06)">
+      <span style="width:8px;height:8px;border-radius:99px;background:var(--green,#16a34a);flex-shrink:0"></span>
+      <span style="font-size:13px;font-weight:700;flex-shrink:0">今日简报</span>
+      <span style="font-size:12.5px;color:hsl(var(--muted-foreground));overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="briefHasDelta ? '文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收，详情看下方表格'"></span>
+      <span x-show="briefSeenStr" style="flex-shrink:0;font-size:11px;color:hsl(var(--muted-foreground));opacity:.7" x-text="'上次查看 '+briefSeenStr"></span>
+      <span style="margin-left:auto;flex-shrink:0;font-size:12px;font-weight:600;color:hsl(var(--muted-foreground))">展开</span>
+    </div>
+    <!-- 展开时：大卡片 -->
+    <div x-show="!loading && briefingDelta && !briefFolded" style="background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px">
       <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--soft)">
-        <span style="width:10px;height:10px;border-radius:99px;background:var(--red);animation:pulse 2s infinite"></span>
-        <style>@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,0.5)}70%{box-shadow:0 0 0 8px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}</style>
+        <span style="width:10px;height:10px;border-radius:99px;background:var(--red)"></span>
         <b style="font-size:16px">今日简报</b>
-        <span class="risk-fg-low" style="padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px"><span class="ico ico-sm"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7v8l10-12h-7V2z"/></svg></span>今天已自动处理 <span x-text="efficiencyCount"></span> 份文件</span>
-        <span style="font-size:12px;color:var(--text2);margin-left:auto">产品已主动识别 <b x-text="briefing?.summary?.total_events||0"></b> 条风险信号，最高优 <b x-text="briefing?.summary?.high_count||0"></b> 条</span>
+        <span style="font-size:13px;color:var(--text2)">自上次查看以来的变化</span>
+        <span style="font-size:12px;color:var(--text2);margin-left:auto" x-text="'文件夹 '+(briefingDelta.delta_count||0)+' 处变动待分析'"></span>
+        <button @click="toggleBriefFold()" style="flex-shrink:0;font-size:12px;border:1px solid hsl(var(--border));border-radius:6px;padding:4px 10px;color:hsl(var(--muted-foreground));background:hsl(var(--card));cursor:pointer">收起</button>
       </div>
       <div style="padding:6px">
-        <template x-for="e in briefing.events" :key="e.item_id+'-'+e.event_type">
-          <div :class="'brief-item '+e.priority" @click="jumpToBriefingItem(e)" style="display:flex;align-items:flex-start;gap:14px;padding:13px 16px;border-radius:8px;cursor:pointer;transition:.12s;border:1px solid transparent">
+        <template x-for="e in (briefingDelta.events||[])" :key="e.event_type+'-'+(e.file_name||e.item_id||'')+'-'+e.timestamp">
+          <div :class="'brief-item '+e.priority" style="display:flex;align-items:flex-start;gap:14px;padding:13px 16px;border-radius:8px;transition:.12s;border:1px solid transparent">
             <span style="width:8px;height:8px;border-radius:99px;margin-top:7px;flex-shrink:0" :style="'background:'+(e.priority==='high'?'var(--red)':e.priority==='medium'?'var(--orange)':'var(--green)')"></span>
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;font-size:14px" x-text="e.title"></div>
               <div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.55" x-text="e.detail"></div>
-              <div style="font-size:12px;color:var(--text2);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap">
-                <span style="background:var(--soft);padding:2px 8px;border-radius:4px" x-text="e.category"></span>
-                <span style="background:var(--soft);padding:2px 8px;border-radius:4px" x-text="e.entity"></span>
-                <span :class="'risk-fg-'+(e.ipo_inquiry_risk||'medium')" style="padding:2px 8px;border-radius:4px" x-text="'IPO '+(e.ipo_inquiry_risk==='high'?'高频':e.ipo_inquiry_risk==='medium'?'常规':'辅助')+'问询'"></span>
-                <span x-show="e.overdue_days" x-text="'逾期 '+e.overdue_days+' 天'"></span>
+              <div style="font-size:12px;color:var(--text2);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap" x-show="e.file_name">
+                <span style="background:var(--soft);padding:2px 8px;border-radius:4px" x-text="e.file_name||''"></span>
+                <span style="background:#fff3cd;padding:2px 8px;border-radius:4px;color:#8a6d3b" x-text="e.event_type==='file_added'?'新增':e.event_type==='file_deleted'?'被删/被换':e.event_type==='new_overdue_threshold'?'新跨红线':''"></span>
               </div>
             </div>
-            <span style="color:var(--text2);font-size:12px;align-self:center;white-space:nowrap">看风险信号 →</span>
           </div>
         </template>
+        <div style="padding:10px 16px;background:var(--soft);border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;align-items:center;gap:10px">
+          <span x-text="'存量未提供 '+(briefingDelta.stock_total||0)+' 项，其中高风险 '+(briefingDelta.stock_high||0)+' 项'"></span>
+          <span style="margin-left:auto;cursor:pointer;color:var(--text2)" @click="currentTab='overdue'">去风险分析 →</span>
+        </div>
       </div>
     </div>
 
@@ -1609,10 +1619,14 @@ function pbcApp(){
     heatmapData: null,
     loading: false,
     briefing: null,
+    briefingDelta: null,  // 增量简报
+    briefFolded: true,     // 简报默认收起
+    briefLastSeen: 0,      // 上次查看时间
     efficiencyCount: 0,
     currentFolderInfo: {path:'', count:0, exists:false},
     _briefingPollTimer: null,
     _briefingLastTs: Date.now() / 1000,  // v7.7: 初始化为当前时间，不拉历史事件
+    _briefLastSeen: 0,  // 上次查看简报的时间（从 localStorage 读）
 
     /* tab */
     tabs: [
@@ -1804,8 +1818,37 @@ function pbcApp(){
       setTimeout(tick, 3000);
     },
     async reloadBriefing(){
-      try{ this.briefing = await API.briefing(this.currentProjectId); }
-      catch(e){}
+      try{
+        var pid = this.currentProjectId || '';
+        // 读 localStorage 恢复折叠状态和上次查看时间
+        try{ this.briefFolded = localStorage.getItem('pbc_brief_folded_'+pid) !== '0'; }catch(e){ this.briefFolded = true; }
+        try{ this.briefLastSeen = parseFloat(localStorage.getItem('pbc_brief_seen_'+pid) || '0'); }catch(e){ this.briefLastSeen = 0; }
+        // 加载存量（兼容）和增量（since=0 显示全部）
+        this.briefing = await API.briefing(this.currentProjectId);
+        this.briefingDelta = await API.get('/api/briefing/'+pid+'?since=0');
+      }
+      catch(e){ this.briefingDelta = null; }
+    },
+    toggleBriefFold(){
+      this.briefFolded = !this.briefFolded;
+      var pid = this.currentProjectId || '';
+      try{ localStorage.setItem('pbc_brief_folded_'+pid, this.briefFolded ? '1' : '0'); }catch(e){}
+      if(!this.briefFolded){
+        // 展开=已读，记录查看时间
+        this.briefLastSeen = Date.now() / 1000;
+        try{ localStorage.setItem('pbc_brief_seen_'+pid, String(this.briefLastSeen)); }catch(e){}
+      }
+    },
+    get briefHasDelta(){
+      return this.briefingDelta && this.briefingDelta.has_delta;
+    },
+    get briefSeenStr(){
+      if(!this.briefLastSeen) return '';
+      var diff = Date.now()/1000 - this.briefLastSeen;
+      if(diff < 60) return '刚刚';
+      if(diff < 3600) return Math.floor(diff/60)+' 分钟前';
+      if(diff < 86400) return Math.floor(diff/3600)+' 小时前';
+      return Math.floor(diff/86400)+' 天前';
     },
     jumpToBriefingItem(e){
       const it = this.pbcList.find(x=>x.item_id===e.item_id);
@@ -1857,6 +1900,8 @@ function pbcApp(){
       this.dashboard = null;
       this.heatmapData = null;
       this.briefing = null;
+      this.briefingDelta = null;
+      this.briefFolded = true;
       this.fileZone.paths = null;  // 清旧路径
       this.tableState = {q:'', pageSize:50, page:1};  // v7.9: 切项目重置表格状态
       await this.reloadAll();

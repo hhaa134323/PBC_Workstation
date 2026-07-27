@@ -3,10 +3,13 @@
    独立文件，运行时挂钩接入现有 Alpine 应用，不改 index.html 逻辑
    ------------------------------------------------------------
    模块一：今日简报收起
-   打开先完整看一屏，点进任意页签自动收成一条细摘要，随时可以再点开
+   [已废弃] 折叠/展开已改为 index.html 里 Alpine 原生控制
    ============================================================ */
+/* eslint-disable */
 (function () {
   'use strict';
+  // 模块一已废弃，简报折叠由 index.html 的 Alpine x-show 控制
+  // 保留模块二（顶栏按钮等）的初始化逻辑
 
   var ICO_DOWN = '<svg viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg>';
   var ICO_UP   = '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
@@ -78,6 +81,10 @@
 
   /* ---------- 定位今日简报卡片 ---------- */
   function findCard() {
+    // 优先用固定 ID 找
+    var el = document.getElementById('briefing-card');
+    if (el) return el;
+    // fallback: 文本匹配
     var list = document.querySelectorAll('main.wrap > div');
     for (var i = 0; i < list.length; i++) {
       if ((list[i].textContent || '').indexOf('今日简报') >= 0) return list[i];
@@ -85,10 +92,13 @@
     return null;
   }
 
-  /* 卡片本身是否该显示（Alpine 在没数据时会把它 display:none） */
+  /* 卡片是否在 DOM 里存在（不管 display 状态） */
   function hasData() {
     if (!card) return false;
-    if (card.style.display === 'none') return false;
+    // 从 Alpine data 判断是否有数据要展示
+    var d = root();
+    if (d && d.briefingDelta && d.briefingDelta.has_delta) return true;
+    if (d && d.pbcList && d.pbcList.length > 0) return true;
     return card.querySelectorAll('.brief-item').length > 0;
   }
 
@@ -97,6 +107,7 @@
     // 从 Alpine data 读 PBC 清单的真实未提供数（不数简报卡片里的条目）
     var d = root();
     var total = 0;
+    var overdue = 0;
     var high = 0;
     if (d && d.pbcList) {
       for (var i = 0; i < d.pbcList.length; i++) {
@@ -104,7 +115,10 @@
         if (st === '未提供') {
           total++;
           var od = d.pbcList[i].overdue_days || 0;
-          if (od > 30) high++;
+          if (od > 0) {
+            overdue++;
+            if (od > 30) high++;
+          }
         }
       }
     }
@@ -115,8 +129,9 @@
         if (items[j].classList.contains('high')) high++;
       }
       total = items.length;
+      overdue = total;
     }
-    return { total: total, high: high };
+    return { total: total, overdue: overdue, high: high };
   }
 
   /* ---------- 创建细摘要 ---------- */
@@ -163,7 +178,8 @@
     var seenStr = '';
     if (lastSeen > 0) {
       var diff = now - lastSeen;
-      if (diff < 3600) seenStr = Math.floor(diff / 60) + ' 分钟前';
+      if (diff < 60) seenStr = '刚刚';
+      else if (diff < 3600) seenStr = Math.floor(diff / 60) + ' 分钟前';
       else if (diff < 86400) seenStr = Math.floor(diff / 3600) + ' 小时前';
       else seenStr = Math.floor(diff / 86400) + ' 天前';
     }
@@ -174,7 +190,7 @@
       bar.innerHTML =
         '<span class="pbcg-bb-dot"></span>' +
         '<span class="pbcg-bb-name">今日简报</span>' +
-        '<span class="pbcg-bb-txt">新增 <b>' + newCount + '</b> 条变化，待查看</span>' +
+        '<span class="pbcg-bb-txt">文件夹 <b>' + newCount + '</b> 处变动待分析，新跨逾期红线 <b>0</b> 条</span>' +
         (seenStr ? '<span class="pbcg-bb-meta">上次查看 ' + esc(seenStr) + '</span>' : '') +
         '<span class="pbcg-bb-act">展开' + ICO_DOWN + '</span>';
     } else {
@@ -183,7 +199,7 @@
       bar.innerHTML =
         '<span class="pbcg-bb-dot calm"></span>' +
         '<span class="pbcg-bb-name">今日简报</span>' +
-        '<span class="pbcg-bb-txt">无新变化。存量未提供 <b>' + c.total + '</b> 项，详情看下方表格</span>' +
+        '<span class="pbcg-bb-txt">无新变化。' + c.overdue + ' 项已超期待催收，详情看下方表格</span>' +
         (seenStr ? '<span class="pbcg-bb-meta">上次查看 ' + esc(seenStr) + '</span>' : '') +
         '<span class="pbcg-bb-act">展开' + ICO_DOWN + '</span>';
     }
@@ -211,15 +227,17 @@
     folded = on;
     saveFoldState(folded);
     if (on) {
+      // 收起：隐藏大卡片，显示细条
       card.classList.add('pbcg-brief-off');
       makeBar();
       paintBar();
-      bar.style.display = hasData() ? 'flex' : 'none';
+      var d = root();
+      var hasPbc = d && d.pbcList && d.pbcList.length > 0;
+      bar.style.display = hasPbc ? 'flex' : 'none';
     } else {
+      // 展开：移除隐藏，大卡片由 Alpine x-show 控制
       card.classList.remove('pbcg-brief-off');
       if (bar) bar.style.display = 'none';
-      // 展开时记录查看时间
-      saveLastSeen(Date.now() / 1000);
     }
   }
 
@@ -227,31 +245,14 @@
   function sync() {
     if (!card || !bar) return;
     paintBar();
-    // 检测是否有新变化→自动展开一次
-    if (folded && hasData()) {
-      var lastSeen = getLastSeen();
+    // 收起时只要有 PBC 数据就显示细条
+    if (folded) {
       var d = root();
-      if (d && d.changePanel && d.changePanel.items) {
-        var hasNew = false;
-        var items = d.changePanel.items;
-        for (var i = 0; i < items.length; i++) {
-          var ts = items[i].changed_at || '';
-          if (ts) {
-            var tsDate = new Date(String(ts).replace(' ', 'T'));
-            if (!isNaN(tsDate.getTime()) && tsDate.getTime() / 1000 > lastSeen) {
-              hasNew = true;
-              break;
-            }
-          }
-        }
-        if (hasNew) {
-          // 有新变化→自动展开
-          setFold(false);
-          return;
-        }
-      }
+      var hasPbc = d && d.pbcList && d.pbcList.length > 0;
+      bar.style.display = hasPbc ? 'flex' : 'none';
+    } else {
+      bar.style.display = 'none';
     }
-    bar.style.display = folded && hasData() ? 'flex' : 'none';
   }
 
   function watchCard() {
@@ -290,6 +291,8 @@
         }
         watchCard();
         watchTabs();
+        // 保底定时器：每2秒检查细条显示状态（MutationObserver 可能漏触发）
+        setInterval(function(){ sync(); }, 2000);
         // 监听项目切换
         var oldPid = '';
         setInterval(function() {

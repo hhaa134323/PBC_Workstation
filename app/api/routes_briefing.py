@@ -44,16 +44,25 @@ async def briefing_global() -> dict:
 
 
 @router.get("/{project_id}")
-async def briefing_by_project(project_id: str) -> dict:
-    """单项目今日简报。"""
+async def briefing_by_project(project_id: str, since: Optional[float] = None) -> dict:
+    """单项目今日简报。
+
+    参数:
+        since: Unix 时间戳，只返回此时间之后的增量事件。
+               不传时返回全量存量（兼容旧调用）。
+    """
     try:
-        return generate_daily_briefing(project_id=project_id)
+        return generate_daily_briefing(project_id=project_id, since=since)
     except Exception as e:
         logger.exception("briefing by project %s failed", project_id)
         return {
             "generated_at": "",
             "project_id": project_id,
             "events": [],
+            "delta_count": 0,
+            "has_delta": False,
+            "stock_total": 0,
+            "stock_high": 0,
             "summary": {
                 "high_count": 0,
                 "medium_count": 0,

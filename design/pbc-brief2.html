@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PBC 工作站 · 今日简报改法</title>
+<style>
+:root{
+  --ey-yellow:#FFE600;
+  --ey-dark:#2E2E38;
+  --ey-grey:#747480;
+  --ey-grey2:#9B9BA5;
+  --ey-line:#E1E1E6;
+  --ey-soft:#F6F6FA;
+  --canvas:#FFFFFF;
+  --red:#DC2626;
+  --red-bg:#FFC7CE;
+  --red-fg:#B4123B;
+  --green:#16A34A;
+  --green-bg:#C6EFCE;
+  --green-fg:#106B33;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--ey-soft);color:var(--ey-dark);font-size:14px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.page{max-width:1000px;margin:0 auto;padding:40px 32px 56px}
+.head{border-left:4px solid var(--ey-yellow);padding-left:16px;margin-bottom:32px}
+.head h1{font-size:24px;font-weight:600;letter-spacing:-.01em}
+.head p{font-size:14px;color:var(--ey-grey);margin-top:8px;max-width:780px}
+
+.block{margin-top:34px}
+.block-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.num{font-size:11px;font-weight:700;background:var(--ey-yellow);color:var(--ey-dark);
+  border-radius:4px;padding:2px 7px;letter-spacing:.04em}
+.num.grey{background:#DEDEE4;color:var(--ey-grey)}
+.block-h h2{font-size:17px;font-weight:600}
+.desc{font-size:13.5px;color:var(--ey-grey);margin-bottom:16px;max-width:800px}
+
+.panel{background:var(--canvas);border:1px solid var(--ey-line);border-radius:10px;overflow:hidden}
+.panel-h{display:flex;align-items:center;gap:8px;padding:10px 16px;
+  background:var(--ey-soft);border-bottom:1px solid var(--ey-line)}
+.dot{width:7px;height:7px;border-radius:99px;flex:none}
+.dot.b{background:var(--ey-grey2)}
+.dot.a{background:var(--ey-yellow)}
+.lbl{font-size:12.5px;font-weight:600}
+.note{margin-left:auto;font-size:12px;color:var(--ey-grey2)}
+.panel-body{padding:18px 16px;background:#FBFBFD}
+
+/* 今日简报 大卡片 */
+.brief{background:var(--canvas);border:1px solid var(--ey-line);border-radius:10px;overflow:hidden}
+.brief-h{display:flex;align-items:center;gap:9px;padding:12px 16px;border-bottom:1px solid var(--ey-line)}
+.bh-dot{width:9px;height:9px;border-radius:99px;background:var(--red);flex:none}
+.bh-name{font-size:14px;font-weight:700}
+.bh-sub{font-size:12.5px;color:var(--ey-grey)}
+.bh-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.bh-meta{font-size:12px;color:var(--ey-grey2)}
+.mini{font-size:12px;border:1px solid var(--ey-line);border-radius:6px;padding:4px 10px;color:var(--ey-grey);background:var(--canvas)}
+.bitem{padding:12px 16px;border-bottom:1px solid #F0F0F4}
+.bitem:last-child{border-bottom:none}
+.bi-t{font-size:13.5px;font-weight:600}
+.bi-d{font-size:12.5px;color:var(--ey-grey);margin-top:2px}
+.chips{display:flex;gap:6px;margin-top:8px;align-items:center}
+.chip{font-size:11.5px;color:var(--ey-grey);background:var(--ey-soft);
+  border:1px solid var(--ey-line);border-radius:5px;padding:2px 8px}
+.chip.hot{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+.chip.new{background:var(--ey-yellow);border-color:var(--ey-yellow);color:var(--ey-dark);font-weight:600}
+.chip.ok{background:var(--green-bg);border-color:var(--green-bg);color:var(--green-fg);font-weight:600}
+.fade{padding:10px 16px;text-align:center;font-size:12px;color:var(--ey-grey2);background:var(--ey-soft)}
+
+/* 收起后的细条 */
+.bar{display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--canvas);
+  border:1px solid var(--ey-line);border-left:3px solid var(--ey-grey2);border-radius:10px}
+.bar.alert{border-left-color:var(--ey-yellow)}
+.bar-dot{width:8px;height:8px;border-radius:99px;background:var(--green);flex:none}
+.bar.alert .bar-dot{background:var(--red)}
+.bar-name{font-size:13px;font-weight:700;flex:none}
+.bar-txt{font-size:13px;color:var(--ey-grey)}
+.bar-txt b{color:var(--ey-dark)}
+.bar-meta{margin-left:auto;font-size:12px;color:var(--ey-grey2);flex:none}
+.bar-act{font-size:12.5px;color:var(--ey-grey);flex:none}
+
+/* 下方表格占位 */
+.after{margin-top:16px}
+.ph-title{font-size:16px;font-weight:600}
+.ph-sub{font-size:12.5px;color:var(--ey-grey);margin-top:2px}
+.tblwrap{margin-top:12px;border:1px solid var(--ey-line);border-radius:10px;overflow:hidden;background:var(--canvas)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;font-size:12px;color:var(--ey-grey);
+  padding:10px 12px;background:var(--ey-soft);border-bottom:1px solid var(--ey-line);white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #F0F0F4;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td.code{font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+  background:var(--red-bg);color:var(--red-fg);border-radius:5px;padding:3px 9px}
+.badge i{width:5px;height:5px;border-radius:99px;background:currentColor;display:block}
+.gainbar{margin-top:10px;height:26px;border-radius:6px;
+  background:repeating-linear-gradient(135deg,#FFFBE0,#FFFBE0 7px,#FFF6C4 7px,#FFF6C4 14px);
+  border:1px dashed #E8D96A;display:flex;align-items:center;justify-content:center;
+  font-size:11.5px;color:#8A7A10}
+
+/* 折叠行 */
+.foldrow{display:flex;align-items:center;gap:8px;padding:11px 16px;background:var(--ey-soft);
+  border-top:1px solid var(--ey-line);font-size:12.5px;color:var(--ey-grey)}
+.foldrow .arr{margin-left:auto;color:var(--ey-grey2);font-size:12px}
+
+.callout{margin-top:14px;background:var(--ey-soft);border:1px solid var(--ey-line);
+  border-left:3px solid var(--ey-yellow);border-radius:8px;padding:12px 16px;
+  font-size:13px;color:var(--ey-grey)}
+.callout b{color:var(--ey-dark)}
+.callout.plain{border-left-color:var(--ey-grey2)}
+
+/* 对照表 */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.cmp{background:var(--canvas);border:1px solid var(--ey-line);border-radius:10px;padding:16px}
+.cmp h3{font-size:13.5px;font-weight:600;margin-bottom:4px}
+.cmp .sub{font-size:12px;color:var(--ey-grey2);margin-bottom:12px}
+.li{display:flex;gap:8px;font-size:13px;color:var(--ey-grey);padding:5px 0;align-items:flex-start}
+.li .m{color:var(--ey-dark);font-weight:700;flex:none;width:12px}
+
+.foot{margin-top:38px;background:var(--canvas);border:1px solid var(--ey-line);
+  border-left:3px solid var(--ey-dark);border-radius:8px;padding:16px 18px;
+  font-size:13px;color:var(--ey-grey)}
+.foot b{color:var(--ey-dark)}
+.foot .row{display:flex;gap:10px;padding:5px 0}
+.foot .k{flex:none;font-weight:700;color:var(--ey-dark);width:78px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="head">
+    <h1>今日简报：三张图看清楚</h1>
+    <p>第一张是现在。第二张是没新变化时应该长的样子（绝大多数时候）。第三张是真有新变化时才抬头的样子。</p>
+  </div>
+
+  <!-- A -->
+  <div class="block">
+    <div class="block-h"><span class="num grey">A</span><h2>现在：每次打开都摊一屏，而且内容每天一样</h2></div>
+    <p class="desc">里面 19 条就是 19 项未提供的存量。客户今天交不交东西，这 19 条都不变。所以你每次看完都只能点收起。</p>
+
+    <div class="panel">
+      <div class="panel-h"><span class="dot b"></span><span class="lbl">现状</span><span class="note">开屏就占掉0.8 屏</span></div>
+      <div class="panel-body">
+        <div class="brief">
+          <div class="brief-h">
+            <span class="bh-dot"></span>
+            <span class="bh-name">今日简报</span>
+            <span class="bh-sub">今天已自动处理 20 份文件</span>
+            <span class="bh-right">
+              <span class="bh-meta">已识别 19 条风险信号，最高优 7 条</span>
+              <span class="mini">&#9662; 收起</span>
+            </span>
+          </div>
+          <div class="bitem">
+            <div class="bi-t">货-3 未提供 42 天 影响 货币资金期末余额</div>
+            <div class="bi-d">缺此项将导致货币资金真实性证据缺失，属 IPO 资金真实性问询高频点。</div>
+            <div class="chips"><span class="chip">货币资金</span><span class="chip">集团合并</span><span class="chip hot">IPO 高频问询</span><span class="chip">逾期 42 天</span></div>
+          </div>
+          <div class="bitem">
+            <div class="bi-t">历-3 未提供 17 天 影响 公司主体资格</div>
+            <div class="bi-d">缺此项将导致公司主体资格与股权结构审计结论悬空。</div>
+            <div class="chips"><span class="chip">历史沿革</span><span class="chip">集团合并</span><span class="chip hot">IPO 高频问询</span><span class="chip">逾期 17 天</span></div>
+          </div>
+          <div class="bitem">
+            <div class="bi-t">历-4 未提供 17 天 影响 公司主体资格</div>
+            <div class="bi-d">缺此项将导致公司主体资格与股权结构审计结论悬空。</div>
+            <div class="chips"><span class="chip">历史沿革</span><span class="chip">集团合并</span><span class="chip hot">IPO 高频问询</span><span class="chip">逾期 17 天</span></div>
+          </div>
+          <div class="fade">…… 下面还有 16 条，得滴很久才能看到表格 ……</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout plain">另外一个你已经发现的事：收起之后<b>刷新就弹回来</b>。因为折叠状态只存在内存里，没写进浏览器，所以你每天都要重新点一次。</div>
+  </div>
+
+  <!-- B -->
+  <div class="block">
+    <div class="block-h"><span class="num">B</span><h2>建议一：没新变化时，就长这样</h2></div>
+    <p class="desc">默认就是这一条，而且这个状态会被记住，刷新不弹回。注意它写的不是「19 条风险信号」，而是「无新变化」——这句话本身就是你需要的信息。</p>
+
+    <div class="panel">
+      <div class="panel-h"><span class="dot a"></span><span class="lbl">建议 · 平时态</span><span class="note">占 48px，表格直接上浮</span></div>
+      <div class="panel-body">
+        <div class="bar">
+          <span class="bar-dot"></span>
+          <span class="bar-name">今日简报</span>
+          <span class="bar-txt">无新变化。存量未提供 <b>19</b> 项，详情看下方表格</span>
+          <span class="bar-meta">上次查看 昨天 18:20</span>
+          <span class="bar-act">展开 &#9662;</span>
+        </div>
+
+        <div class="after">
+          <div class="ph-title">待初检</div>
+          <div class="ph-sub">AI 已自动分类归档，待你确认。</div>
+          <div class="tblwrap">
+            <table>
+              <tr><th>二级分类</th><th>一级分类</th><th>资料名称</th><th>状态</th></tr>
+              <tr><td class="code">历-3</td><td>历史沿革</td><td>营业执照</td><td><span class="badge"><i></i>未提供</span></td></tr>
+              <tr><td class="code">历-4</td><td>历史沿革</td><td>高管名单</td><td><span class="badge"><i></i>未提供</span></td></tr>
+            </table>
+          </div>
+          <div class="gainbar">原来这一屏被简报卡占掉的空间，现在直接看到干活的表格</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="block">
+    <div class="block-h"><span class="num">C</span><h2>建议二：真有新变化时，自动抬一次头</h2></div>
+    <p class="desc">客户昨天下班后动了文件夹，或者有条目今天新跨过逾期红线，它才展开。内容只放「变了的」，存量 19 条折到底部一行。你看完一次就算已读，下次回到 B 的样子。<br><b style="color:#B4123B">前提修正：文件变动是自动监测的，AI 分析必须到「文件变更」里手动点才跑。</b>所以简报里只能写「监测到什么」，不能写分类、归档位置、置信度——那些东西在这个时间点压根没产生。</p>
+
+    <div class="panel">
+      <div class="panel-h"><span class="dot a"></span><span class="lbl">建议 · 有增量态</span><span class="note">3 条增量，不是 19 条存量</span></div>
+      <div class="panel-body">
+        <div class="bar alert" style="margin-bottom:12px">
+          <span class="bar-dot"></span>
+          <span class="bar-name">今日简报</span>
+          <span class="bar-txt">文件夹 <b>2</b> 处变动待分析，新跨逾期红线 <b>1</b> 条</span>
+          <span class="bar-meta">上次查看 昨天 18:20</span>
+          <span class="bar-act">收起 &#9652;</span>
+        </div>
+
+        <div class="brief">
+          <div class="brief-h">
+            <span class="bh-dot"></span>
+            <span class="bh-name">自昨天 18:20 以来的变化</span>
+            <span class="bh-right"><span class="mini">&#9652; 收起，不再提醒</span></span>
+          </div>
+          <div class="bitem">
+            <div class="bi-t">客户新放了 1 份文件 → 待你点分析</div>
+            <div class="bi-d">银行存款余额调节表.xlsx，昨天 21:04 出现在客户共享文件夹。还没分析，现在不知道它该归哪里。</div>
+            <div class="chips"><span class="chip new">新增</span><span class="chip">未分析</span><span class="chip">去文件变更里点分析</span></div>
+          </div>
+          <div class="bitem">
+            <div class="bi-t">已交的文件被换掉了 1 份 → 建议先看差异</div>
+            <div class="bi-d">销售台账.xlsx，昨天 22:41 被替换。你之前确认过旧版本，新版本同样还没分析。</div>
+            <div class="chips"><span class="chip hot">被删 / 被换</span><span class="chip">未分析</span><span class="chip">去文件变更里看差异</span></div>
+          </div>
+          <div class="bitem">
+            <div class="bi-t">存-5 今天刚跨过 30 天 → 建议今天发催函</div>
+            <div class="bi-d">存货跌价准备计算表，今天进入高风险区。只在跨红线那天提醒一次。</div>
+            <div class="chips"><span class="chip hot">新跨红线</span><span class="chip">存货</span><span class="chip">逾期 30 天</span></div>
+          </div>
+          <div class="foldrow">存量未提供 19 项，其中最高优 7 项。这部分每天不变，已折起<span class="arr">展开 &#9662;　去风险分析 &#8594;</span></div>
+        </div>
+
+        <div class="callout">关键区别：这三条都是<b>可以动作的</b>，而且动作全部指向别处——前两条跳「文件变更」去点分析，第三条去发催函。<b>简报自己不分析、不归档、不算置信度</b>，它只是个入口。而现在那 19 条看完之后你并不会多做什么事，因为它们昨天就在那里了。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 对照 -->
+  <div class="block">
+    <div class="block-h"><span class="num">D</span><h2>什么该进简报，什么不该</h2></div>
+    <div class="two">
+      <div class="cmp">
+        <h3>进简报</h3>
+        <div class="sub">有时效，错过就要重新对</div>
+        <div class="li"><span class="m">1</span><span>客户新放了什么文件，待你去点分析</span></div>
+        <div class="li"><span class="m">2</span><span>哪些条目今天刚跨过逾期红线，决定你今天发不发催函</span></div>
+        <div class="li"><span class="m">3</span><span>客户删掉或换掉了已交文件（这个最容易错过）</span></div>
+      </div>
+      <div class="cmp">
+        <h3>不进简报</h3>
+        <div class="sub">存量，今天不看明天也在</div>
+        <div class="li"><span class="m">1</span><span>总共还差多少项——顶栏进度条和「待初检 19」已经答过</span></div>
+        <div class="li"><span class="m">2</span><span>逾期排行榜——归「风险分析」tab，那里才是它的位置</span></div>
+        <div class="li"><span class="m">3</span><span>每条的影响说明——写一次就行，不必每天在首屏重读 19 遍</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="row"><span class="k">第一步</span><span>只做一件事：<b>把收起状态存起来</b>，刷新不弹回，默认收起。一个 localStorage 键，风险几乎为零，你今天就不用再点那下。</span></div>
+    <div class="row"><span class="k">第二步</span><span>再做 C 里的<b>增量判断</b>。这一步要读变更日志的时间戳，要动 JS，得按开发指南来，单独一批。</span></div>
+    <div class="row"><span class="k">不做的</span><span>不删简报卡，不改里面任何一条的文案和颜色。只改它<b>什么时候开</b>和<b>里面装存量还是装增量</b>。</span></div>
+  </div>
+
+</div>
+</body>
+</html>
