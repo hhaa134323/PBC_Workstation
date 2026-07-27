@@ -156,6 +156,12 @@ def generate_daily_briefing(
                     if ts_sec <= since:
                         continue
 
+                    # 只统计客户新增/删除（sync-changes 检测的），
+                    # 不统计 watchdog 启动扫描或审计员操作的
+                    changed_by = log.get("changed_by", "")
+                    if changed_by != "sync":
+                        continue
+
                     ct = log.get("change_type", "")
                     file_name = log.get("file_name", "")
                     if ct == "added":
@@ -255,10 +261,52 @@ def generate_daily_briefing(
     # 增量模式：只返回增量事件
     if since is not None:
         delta_events.sort(key=lambda e: -_PRIORITY.get(e.get("priority", "low"), 0))
+
+        # 按类型分组统计（前端展开态按类型一行一行渲染，不逐条）
+        delta_groups: dict[str, dict] = {}
+        for e in delta_events:
+            et = e.get("event_type", "other")
+            if et not in delta_groups:
+                delta_groups[et] = {"count": 0, "label": "", "files": [], "rest": 0}
+            delta_groups[et]["count"] += 1
+            fn = e.get("file_name", "")
+            if fn:
+                delta_groups[et]["files"].append(fn)
+
+        # 设置分组标签，最多3个文件名，其余数单独算
+        group_labels = {
+            "file_added": "新增文件",
+            "file_deleted": "被删或被换",
+            "new_overdue_threshold": "新跨逾期红线",
+        }
+        # 分组顺序固定：先新增，后删除，再红线
+        group_order = ["file_added", "file_deleted", "new_overdue_threshold"]
+        ordered_groups = []
+        for et in group_order:
+            if et not in delta_groups:
+                continue
+            v = delta_groups[et]
+            v["label"] = group_labels.get(et, et)
+            # 最多3个文件名，其余数 = 总数 - 已显示数
+            all_files = v["files"]
+            v["files"] = all_files[:3]
+            v["rest"] = len(all_files) - 3 if len(all_files) > 3 else 0
+            ordered_groups.append(v)
+        # 未在 order 里的类型追加到末尾
+        for et, v in delta_groups.items():
+            if et in group_order:
+                continue
+            v["label"] = group_labels.get(et, et)
+            all_files = v["files"]
+            v["files"] = all_files[:3]
+            v["rest"] = len(all_files) - 3 if len(all_files) > 3 else 0
+            ordered_groups.append(v)
+
         return {
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "project_id": project_id,
             "events": delta_events[:_MAX_BRIEFING_ITEMS],
+            "delta_groups": ordered_groups,
             "delta_count": len(delta_events),
             "has_delta": len(delta_events) > 0,
             "stock_total": stock_total,

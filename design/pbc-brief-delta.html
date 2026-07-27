@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<title>今日简报 增量态</title>
+<style>
+:root{
+ --ey-yellow:#FFE600; --ey-dark:#2E2E38; --ey-grey:#747480; --ey-grey2:#9B9BA5;
+ --ey-line:#E1E1E6; --ey-soft:#F6F6FA; --canvas:#FFFFFF;
+ --red:#DC2626; --red-fg:#B4123B; --red-line:#F2C2C8; --red-soft:#FDF3F4;
+ --amber:#D97706; --green:#16A34A; --green-fg:#106B33;
+ --r:0.375rem;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#F0F0F4;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--ey-dark);font-size:14px;line-height:1.6}
+.page{max-width:1080px;margin:0 auto;padding:40px 32px 56px}
+.hd{border-left:3px solid var(--ey-yellow);padding-left:14px;margin-bottom:36px}
+.hd h1{margin:0 0 6px;font-size:24px;font-weight:600;letter-spacing:-0.01em}
+.hd p{margin:0;color:var(--ey-grey);font-size:14px}
+.sec{margin-bottom:36px}
+.sec h2{margin:0 0 4px;font-size:18px;font-weight:600}
+.sec-d{margin:0 0 14px;color:var(--ey-grey);font-size:14px}
+.card{background:var(--canvas);border:1px solid var(--ey-line);border-radius:var(--r);overflow:hidden}
+.card-t{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--ey-line);font-size:12px;color:var(--ey-grey)}
+.pad{padding:16px}
+.mini{font-size:12px;color:var(--ey-grey)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ey-grey2);display:inline-block;margin-right:7px}
+.dot.r{background:var(--red)} .dot.g{background:var(--green)} .dot.y{background:var(--amber)}
+
+.mock{border:1px solid var(--ey-line);border-radius:var(--r);background:#fff}
+.mock-h{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--ey-line)}
+.mock-h .lft{display:flex;align-items:center;gap:10px;font-size:14px}
+.mock-h b{font-size:15px;font-weight:600}
+.bi{padding:11px 16px;border-bottom:1px solid #F2F2F6}
+.bi:last-of-type{border-bottom:1px solid var(--ey-line)}
+.bi .t{font-size:14px;font-weight:600}
+.bi .d{font-size:13px;color:var(--ey-grey);margin:3px 0 7px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--ey-soft);border:1px solid var(--ey-line);color:var(--ey-grey)}
+.chip.new{background:#F0FAF3;border-color:#CBE9D5;color:var(--green-fg)}
+.chip.del{background:var(--red-soft);border-color:var(--red-line);color:var(--red-fg)}
+.mock-f{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;font-size:12px;color:var(--ey-grey)}
+
+.notes{margin:0;padding:0;list-style:none}
+.notes li{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #F2F2F6;font-size:13.5px}
+.notes li:last-child{border-bottom:0}
+.notes .k{flex:0 0 96px;color:var(--ey-grey);font-size:12.5px}
+.notes em{font-style:normal;color:var(--red-fg);font-weight:600}
+.alert{margin-top:14px;border:1px solid var(--red-line);background:var(--red-soft);border-radius:var(--r);padding:11px 14px;font-size:13.5px;color:var(--red-fg)}
+.alert b{font-weight:600}
+
+.sumline{padding:12px 16px;border-bottom:1px solid var(--ey-line);font-size:14px}
+.sumline b{font-variant-numeric:tabular-nums;font-weight:600}
+.grow{display:flex;align-items:flex-start;gap:14px;padding:12px 16px;border-bottom:1px solid var(--ey-line)}
+.grow .lead{flex:0 0 190px}
+.grow .lead .n{font-size:14px;font-weight:600}
+.grow .lead .s{font-size:12px;color:var(--ey-grey)}
+.grow .body{flex:1;min-width:0}
+.grow .body .expl{font-size:13px;color:var(--ey-grey);margin-bottom:7px}
+.grow .act{flex:0 0 auto;font-size:12.5px;color:var(--ey-dark);font-weight:600;border-bottom:2px solid var(--ey-yellow);padding-bottom:1px;white-space:nowrap;text-decoration:none}
+.foot-l{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;font-size:12.5px;color:var(--ey-grey)}
+.foot-l a{color:var(--ey-dark);font-weight:600;text-decoration:none;border-bottom:2px solid var(--ey-yellow);padding-bottom:1px}
+
+.bar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#fff;border:1px solid var(--ey-line);border-left:3px solid var(--ey-yellow);border-radius:var(--r);font-size:13px}
+.bar .nm{font-weight:600}
+.bar .tx{color:var(--ey-grey);font-size:12.5px}
+.bar .rt{margin-left:auto;font-size:12px;color:var(--ey-grey)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.kv{display:flex;gap:10px;font-size:13px;padding:7px 0;border-bottom:1px solid #F2F2F6}
+.kv:last-child{border-bottom:0}
+.kv .k{flex:0 0 86px;color:var(--ey-grey);font-size:12.5px}
+.kv .warn{color:var(--red-fg)}
+.kv .ok{color:var(--green-fg)}
+.tail{background:#fff;border:1px solid var(--ey-line);border-left:3px solid var(--ey-yellow);border-radius:var(--r);padding:16px}
+</style></head><body>
+<div class="page">
+
+<div class="hd">
+  <h1>今日简报 增量态</h1>
+  <p>针对改完之后的版本。增量口径没问题，剩下三个排法上的问题。不新增控件，不新增接口。</p>
+</div>
+
+<div class="sec">
+  <h2>现状</h2>
+  <p class="sec-d">截图里的展开态。</p>
+  <div class="card">
+    <div class="card-t"><span><span class="dot r"></span>现状复刻</span><span>26 处变动，显示 3 条</span></div>
+    <div class="pad" style="background:var(--ey-soft)">
+      <div class="mock">
+        <div class="mock-h"><div class="lft"><span class="dot r"></span><b>今日简报</b><span class="mini">自上次查看以来的变化</span></div><span class="mini">文件夹 26 处变动待分析　收起</span></div>
+        <div class="bi"><div class="t">已交的文件被删或被换 → 建议先看差异</div><div class="d">盘点计划.pdf，从客户文件夹消失或被替换。去文件变更里看差异。</div><div class="chips"><span class="chip">盘点计划.pdf</span><span class="chip">被删/被换</span></div></div>
+        <div class="bi"><div class="t">客户新放了文件 → 待你点分析</div><div class="d">测试新增文件.pdf，出现在客户共享文件夹。还没分析，现在不知道它该归哪里。</div><div class="chips"><span class="chip">测试新增文件.pdf</span><span class="chip">新增</span></div></div>
+        <div class="bi"><div class="t">客户新放了文件 → 待你点分析</div><div class="d">DEF银行对账单.pdf，出现在客户共享文件夹。还没分析，现在不知道它该归哪里。</div><div class="chips"><span class="chip">DEF银行对账单.pdf</span><span class="chip">新增</span></div></div>
+        <div class="mock-f"><span>存量未提供 19 项，其中高风险 7 项</span><span>去风险分析 →</span></div>
+      </div>
+    </div>
+    <div class="pad">
+      <ul class="notes">
+        <li><span class="k">标题</span><span>两条新增的标题完全相同，描述也只差一个文件名。<em>26</em> 处变动全部渲染时，同一句话会出现二十多遍。</span></li>
+        <li><span class="k">标题写法</span><span>标题里带了箭头和建议，把事实和动作写在一行。名词短语做标题，动作放右侧，更接近现有卡片的写法。</span></li>
+        <li><span class="k">入口</span><span>去文件变更里看差异是一句描述文字，不可点。右下角只有去风险分析一个链接，没有去文件变更的链接。</span></li>
+        <li><span class="k">显示范围</span><span>卡片在风险分析页签下也在，内容完全一样。</span></li>
+      </ul>
+      <div class="alert"><b>26 和 3 对不上。</b>头部写着 26 处变动，卡片里只列了 3 条，中间差的 23 条既没说明也没入口。</div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <h2>建议</h2>
+  <p class="sec-d">按变动类型分组，一类一行。文件名用现有的 chip，右侧链接指向已有的文件变更面板。</p>
+  <div class="card">
+    <div class="card-t"><span><span class="dot y"></span>建议 · 展开态</span><span>约 260px</span></div>
+    <div class="mock-h"><div class="lft"><span class="dot y"></span><b>今日简报</b><span class="mini">自上次查看以来的变化</span></div><span class="mini">上次查看 2 小时前　收起</span></div>
+    <div class="sumline">客户共享文件夹有 <b>26</b> 处变动，均未分析。</div>
+
+    <div class="grow">
+      <div class="lead"><div class="n">新增文件 24 份</div><div class="s">待你在文件变更里点分析</div></div>
+      <div class="body">
+        <div class="expl">分析前不知道归到哪个分类。</div>
+        <div class="chips">
+          <span class="chip new">测试新增文件.pdf</span>
+          <span class="chip new">DEF银行对账单.pdf</span>
+          <span class="chip new">ABC集团章程_修订版.pdf</span>
+          <span class="mini">其余 21 份</span>
+        </div>
+      </div>
+      <a class="act" href="#">去文件变更</a>
+    </div>
+
+    <div class="grow">
+      <div class="lead"><div class="n">被删或被换 2 份</div><div class="s">已交的文件发生变动</div></div>
+      <div class="body">
+        <div class="expl">建议先看差异，确认是重传还是撤回。</div>
+        <div class="chips">
+          <span class="chip del">盘点计划.pdf</span>
+          <span class="chip del">存货盘点表_v2.xlsx</span>
+        </div>
+      </div>
+      <a class="act" href="#">去文件变更</a>
+    </div>
+
+    <div class="foot-l"><span>存量未提供 19 项，其中高风险 7 项</span><a href="#">去风险分析</a></div>
+  </div>
+
+  <p class="sec-d" style="margin:14px 0 8px">收起态的细条一并改成同一套口径。</p>
+  <div class="bar"><span class="dot y" style="margin:0"></span><span class="nm">今日简报</span><span class="tx">新增 24 份，被删或被换 2 份，均未分析</span><span class="rt">上次查看 2 小时前　展开</span></div>
+</div>
+
+<div class="sec">
+  <h2>放大到 260 处变动</h2>
+  <p class="sec-d">一次批量拷贝就能到这个量级。</p>
+  <div class="two">
+    <div class="card">
+      <div class="card-t"><span><span class="dot r"></span>现在的写法</span><span>260 处变动</span></div>
+      <div class="pad">
+        <div class="kv"><span class="k">卡片高度</span><span class="warn">随变动数增长</span></div>
+        <div class="kv"><span class="k">重复文案</span><span class="warn">客户新放了文件出现 250 遍</span></div>
+        <div class="kv"><span class="k">入口</span><span class="warn">只有底部一个去风险分析</span></div>
+        <div class="kv"><span class="k">当前做法</span><span class="warn">只列 3 条，剩下的不提</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-t"><span><span class="dot g"></span>改后的写法</span><span>260 处变动</span></div>
+      <div class="pad">
+        <div class="kv"><span class="k">卡片高度</span><span class="ok">固定，类型有几种就几行</span></div>
+        <div class="kv"><span class="k">重复文案</span><span class="ok">每类写一次</span></div>
+        <div class="kv"><span class="k">入口</span><span class="ok">每类一个去文件变更</span></div>
+        <div class="kv"><span class="k">当前做法</span><span class="ok">全量计数，不需要截断</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tail">
+  <div class="kv"><span class="k">改动</span><span>展开态从逐条渲染 events 改为按 change_type 分组。后端已有 delta_count，再加一个按类型的 counts。</span></div>
+  <div class="kv"><span class="k">文案</span><span>标题去掉箭头和建议，只留名词短语加数量。动作移到右侧链接。</span></div>
+  <div class="kv"><span class="k">入口</span><span>每组右侧加去文件变更，点击打开现有面板。不新增页面，不新增接口。</span></div>
+  <div class="kv"><span class="k">待确认</span><span>卡片是否只在待初检页签显示。现在风险分析页签下也会出现同一张卡片。</span></div>
+  <div class="kv"><span class="k">不改动</span><span>增量口径、折叠逻辑、卡片位置、配色。</span></div>
+</div>
+
+</div></body></html>

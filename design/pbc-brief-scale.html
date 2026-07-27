@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<title>今日简报 · 展开态</title>
+<style>
+:root{
+ --ey-yellow:#FFE600; --ey-dark:#2E2E38; --ey-grey:#747480; --ey-grey2:#9B9BA5;
+ --ey-line:#E1E1E6; --ey-soft:#F6F6FA; --canvas:#FFFFFF;
+ --red:#DC2626; --red-bg:#FFEAEC; --red-fg:#B4123B; --amber:#D97706; --green:#16A34A;
+ --r:8px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#F0F0F4;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--ey-dark);font-size:15px;line-height:1.55}
+.page{max-width:1080px;margin:0 auto;padding:40px 32px 56px}
+.hd{border-left:4px solid var(--ey-yellow);padding-left:14px;margin-bottom:32px}
+.hd h1{margin:0 0 6px;font-size:23px}
+.hd p{margin:0;color:var(--ey-grey);font-size:14px}
+.sec{margin-bottom:32px}
+.sec-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.tag{width:20px;height:20px;border-radius:5px;background:var(--ey-dark);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.tag.y{background:var(--ey-yellow);color:var(--ey-dark)}
+.sec-h h2{margin:0;font-size:17px}
+.sec-d{margin:0 0 14px;color:var(--ey-grey);font-size:14px}
+.sec-d b{color:var(--ey-dark)}
+.card{background:var(--canvas);border:1px solid var(--ey-line);border-radius:var(--r);overflow:hidden}
+.card-t{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--ey-soft);border-bottom:1px solid var(--ey-line);font-size:12px;color:var(--ey-grey)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ey-grey2);display:inline-block;margin-right:7px}
+.dot.r{background:var(--red)} .dot.g{background:var(--green)} .dot.y{background:var(--amber)}
+.pad{padding:16px}
+.mini{font-size:12px;color:var(--ey-grey)}
+
+/* 现有组件原样 */
+.mock{border:1px solid var(--ey-line);border-radius:var(--r);background:#fff}
+.mock-h{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--ey-line)}
+.mock-h .lft{display:flex;align-items:center;gap:10px;font-size:14px}
+.mock-h b{font-size:15px}
+.bi{padding:11px 16px;border-bottom:1px solid #F0F0F4;position:relative}
+.bi:last-child{border-bottom:0}
+.bi .t{font-size:14px;font-weight:600}
+.bi .d{font-size:12.5px;color:var(--ey-grey);margin:3px 0 7px}
+.bi .lnk{position:absolute;right:16px;top:12px;font-size:12px;color:var(--ey-grey)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--ey-soft);border:1px solid var(--ey-line);color:var(--ey-grey)}
+.chip.hot{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+
+.flag{margin-top:10px;display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--red-fg);background:var(--red-bg);border-left:3px solid var(--red);padding:8px 12px;border-radius:0 5px 5px 0}
+.flag .n{font-weight:700;flex:0 0 auto}
+
+/* 建议态：全部用现有元素 */
+.sumline{padding:12px 16px;border-bottom:1px solid var(--ey-line);font-size:13.5px}
+.sumline b{font-variant-numeric:tabular-nums}
+.sumline .big{color:var(--red);font-weight:700}
+.grp{padding:11px 16px;border-bottom:1px solid var(--ey-line)}
+.grp-l{font-size:11.5px;color:var(--ey-grey2);margin-bottom:7px}
+.fchip{font-size:12px;padding:3px 9px;border-radius:4px;background:var(--ey-soft);border:1px solid var(--ey-line);color:var(--ey-dark);cursor:default;white-space:nowrap;display:inline-block}
+.fchip .c{font-weight:700;font-variant-numeric:tabular-nums}
+.fchip .s{color:var(--ey-grey2);font-size:11px;margin-left:4px}
+.fchip.hot{border-color:var(--red);color:var(--red-fg);background:var(--red-bg)}
+
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+table.tbl th{text-align:left;font-size:11.5px;color:var(--ey-grey2);font-weight:500;padding:9px 16px;background:var(--ey-soft);border-bottom:1px solid var(--ey-line)}
+table.tbl td{padding:9px 16px;border-bottom:1px solid #F2F2F6}
+table.tbl tr:last-child td{border-bottom:0}
+.code{font-weight:700;font-size:13px}
+.ovd{font-variant-numeric:tabular-nums;font-weight:700;color:var(--red)}
+.ovd.mid{color:var(--amber)}
+.lnk2{font-size:12px;color:var(--ey-grey)}
+.foot-l{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--ey-soft);font-size:12.5px;color:var(--ey-grey)}
+.foot-l a{color:var(--ey-dark);font-weight:600;text-decoration:none}
+.note{background:#FFFDF0;border:1px dashed var(--ey-yellow);border-radius:5px;padding:8px 12px;font-size:12.5px;color:#6b5d00;margin-top:12px}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.kv{display:flex;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid #F2F2F6}
+.kv:last-child{border-bottom:0}
+.kv .k{flex:0 0 74px;color:var(--ey-grey);font-size:12.5px}
+.warn{color:var(--red-fg)}
+.tail{background:#fff;border-left:4px solid var(--ey-dark);border-radius:0 var(--r) var(--r) 0;padding:16px 20px}
+</style></head><body>
+<div class="page">
+
+<div class="hd">
+  <h1>展开之后，不该是 19 张一样的卡</h1>
+  <p>上一版我加了催函和催一下，那是新功能，删了。这一版<b>一个新按钮也没有</b>，只用现有的 chip、表格、「看风险信号 →」重新排一下。</p>
+</div>
+
+<!-- A -->
+<div class="sec">
+  <div class="sec-h"><div class="tag">A</div><h2>现在展开后：一条信息被拆成 19 遍说</h2></div>
+  <p class="sec-d">截图里前三条，看它们的差别在哪。</p>
+  <div class="card"><div class="card-t"><span><span class="dot"></span>现状复刻</span><span>19 条 × 约 80px ≈ 1520px，翻两屏半</span></div>
+  <div class="pad" style="background:var(--ey-soft)">
+    <div class="mock">
+      <div class="mock-h"><div class="lft"><span class="dot r"></span><b>今日简报</b><span class="mini">今天已自动处理 19 份文件</span></div><span class="mini">已识别 19 条风险信号，最高优 7 条　收起 ∧</span></div>
+      <div class="bi"><div class="t">历-3 未提供 17 天 → 影响 公司主体资格</div><div class="d">缺此项将导致公司主体资格与股权结构审计结论悬空。</div><div class="chips"><span class="chip">历史沿革</span><span class="chip">集团合并</span><span class="chip hot">IPO 高频问询</span><span class="chip">逾期 17 天</span></div><span class="lnk">看风险信号 →</span></div>
+      <div class="bi"><div class="t">历-4 未提供 17 天 → 影响 公司主体资格</div><div class="d">缺此项将导致公司主体资格与股权结构审计结论悬空。</div><div class="chips"><span class="chip">历史沿革</span><span class="chip">集团合并</span><span class="chip hot">IPO 高频问询</span><span class="chip">逾期 17 天</span></div><span class="lnk">看风险信号 →</span></div>
+      <div class="bi"><div class="t">历-1 未提供 12 天 → 影响 公司主体资格</div><div class="d">缺此项将导致公司主体资格与股权结构审计结论悬空。</div><div class="chips"><span class="chip">历史沿革</span><span class="chip">集团合并</span><span class="chip hot">IPO 高频问询</span><span class="chip">逾期 12 天</span></div><span class="lnk">看风险信号 →</span></div>
+    </div>
+    <div class="flag"><span class="n">1</span><span>那句影响说明是<b>分类的属性，不是条目的属性</b>。凡是历史沿革的项，这句话一模一样。写 19 遍，等于一遍都没写。</span></div>
+    <div class="flag"><span class="n">2</span><span>右边 19 个「看风险信号 →」，全部跳同一个地方。<b>19 个入口等于没有入口</b>。</span></div>
+    <div class="flag"><span class="n">3</span><span>顺序是乱的。截图里是 42 / 17 / 17 / 12 / 12 / 12 / 12 / <b>37</b>——逾期 37 天的财-3 排在最后一条，因为它先按优先级分档、档内才排天数，而财务报表不在高危字典里。<b>最该催的沉底了。</b></span></div>
+    <div class="flag"><span class="n">4</span><span>19 项时还能忍。<b>1000+ 文件、300 项未提供时，这个列表不可能被读完</b>，它会变成一个永远点收起的东西。</span></div>
+  </div></div>
+</div>
+
+<!-- B -->
+<div class="sec">
+  <div class="sec-h"><div class="tag y">B</div><h2>建议：同样的组件，换个排法</h2></div>
+  <p class="sec-d">下面这一屏里没有任何新东西：<b>chip 是现有的 chip</b>，<b>表格是待初检那张表</b>，<b>右边链接是现有的看风险信号</b>。只是把重复的影响说明从 19 遍压成 1 遍，把名单从 19 行压成 5 行。</p>
+  <div class="card"><div class="card-t"><span><span class="dot y"></span>建议 · 展开态</span><span>约 330px，一屏内看完</span></div>
+
+    <div class="sumline">未提供 <b class="big">19</b> 项，最久 <b>42</b> 天，涉及 <b>4</b> 个实体，其中 <b>7</b> 项属 IPO 高频问询。</div>
+
+    <div class="grp">
+      <div class="grp-l">按实体（点一下筛下面的表，就是现有的实体筛选器）</div>
+      <div class="chips">
+        <span class="fchip hot">集团合并 <span class="c">13</span><span class="s">最久 42 天</span></span>
+        <span class="fchip">ABC子公司 <span class="c">3</span><span class="s">最久 12 天</span></span>
+        <span class="fchip">DEF子公司 <span class="c">2</span><span class="s">最久 12 天</span></span>
+        <span class="fchip">未指定 <span class="c">1</span></span>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-l">按分类（影响说明挂在这里，一个分类只写一次）</div>
+      <div class="chips">
+        <span class="fchip hot">历史沿革 <span class="c">6</span><span class="s">影响 公司主体资格</span></span>
+        <span class="fchip hot">货币资金 <span class="c">3</span><span class="s">影响 货币资金期末余额</span></span>
+        <span class="fchip">财务报表 <span class="c">4</span><span class="s">影响 相关审计结论</span></span>
+        <span class="fchip">存货 <span class="c">3</span></span>
+        <span class="fchip">其他 <span class="c">3</span></span>
+      </div>
+    </div>
+
+    <table class="tbl">
+      <tr><th style="width:66px">编号</th><th>资料名称</th><th style="width:106px">实体</th><th style="width:80px">逾期</th><th style="width:118px"></th></tr>
+      <tr><td class="code">货-3</td><td>货币资金期末余额表</td><td class="mini">集团合并</td><td class="ovd">42 天</td><td class="lnk2">看风险信号 →</td></tr>
+      <tr><td class="code">财-3</td><td>合并财务报表底稿</td><td class="mini">集团合并</td><td class="ovd">37 天</td><td class="lnk2">看风险信号 →</td></tr>
+      <tr><td class="code">历-3</td><td>营业执照</td><td class="mini">集团合并</td><td class="ovd mid">17 天</td><td class="lnk2">看风险信号 →</td></tr>
+      <tr><td class="code">历-4</td><td>高管名单</td><td class="mini">集团合并</td><td class="ovd mid">17 天</td><td class="lnk2">看风险信号 →</td></tr>
+      <tr><td class="code">历-1</td><td>公司设立批复</td><td class="mini">集团合并</td><td class="ovd mid">12 天</td><td class="lnk2">看风险信号 →</td></tr>
+    </table>
+    <div class="foot-l"><span>只列逾期最久的 5 项，纯按天数排，不再先分优先级档</span><a>看全部 19 项 →</a></div>
+  </div>
+  <div class="note">三个交互全部是现成的：chip 点击 <b>= 筛选下面的表</b>；看风险信号 <b>= 现有链接</b>；看全部 <b>= 滚到表格</b>。没有新接口，没有新页面。</div>
+</div>
+
+<!-- C -->
+<div class="sec">
+  <div class="sec-h"><div class="tag">C</div><h2>为什么非改不可：放到 1000+ 文件</h2></div>
+  <p class="sec-d">名单式的版式，条数一涨就崩。摘要式的版式，<b>只有数字变大，高度一点不变</b>。</p>
+  <div class="two">
+    <div class="card"><div class="card-t"><span><span class="dot r"></span>现在的写法</span><span>340 项未提供时</span></div>
+      <div class="pad">
+        <div class="kv"><span class="k">卡片高度</span><span class="warn">340 × 80px ≈ 27200px，约 30 屏</span></div>
+        <div class="kv"><span class="k">重复文案</span><span class="warn">影响说明只有 7 种，被印 340 遍</span></div>
+        <div class="kv"><span class="k">入口</span><span class="warn">340 个「看风险信号 →」</span></div>
+        <div class="kv"><span class="k">实际行为</span><span class="warn">审计员永久点收起</span></div>
+        <div class="kv"><span class="k">后端</span><span class="warn">靠 _MAX_BRIEFING_ITEMS = 8 硬截断遮住，截断本身就是承认列不下</span></div>
+      </div>
+    </div>
+    <div class="card"><div class="card-t"><span><span class="dot g"></span>改后的写法</span><span>340 项未提供时</span></div>
+      <div class="pad">
+        <div class="kv"><span class="k">卡片高度</span><span><b>还是约 330px</b></span></div>
+        <div class="kv"><span class="k">重复文案</span><span>每种影响说明只出现 1 次</span></div>
+        <div class="kv"><span class="k">入口</span><span>chip 筛选 + 1 个看全部</span></div>
+        <div class="kv"><span class="k">实际行为</span><span>一眼看完，有需要才往下翻</span></div>
+        <div class="kv"><span class="k">后端</span><span>不需要截断，返回 counts 就行，反而更省</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px"><div class="card-t"><span><span class="dot y"></span>340 项时它长这样</span><span>跟上面那张一样高</span></div>
+    <div class="sumline">未提供 <b class="big">340</b> 项，最久 <b>96</b> 天，涉及 <b>12</b> 个实体，其中 <b>88</b> 项属 IPO 高频问询。</div>
+    <div class="grp">
+      <div class="grp-l">按实体</div>
+      <div class="chips">
+        <span class="fchip hot">集团合并 <span class="c">78</span><span class="s">最久 96 天</span></span>
+        <span class="fchip hot">ABC子公司 <span class="c">64</span><span class="s">最久 71 天</span></span>
+        <span class="fchip">DEF子公司 <span class="c">41</span></span>
+        <span class="fchip">GHI子公司 <span class="c">38</span></span>
+        <span class="fchip">JKL子公司 <span class="c">29</span></span>
+        <span class="fchip">MNO子公司 <span class="c">22</span></span>
+        <span class="fchip">其余 6 个实体 <span class="c">68</span></span>
+      </div>
+    </div>
+    <table class="tbl">
+      <tr><th style="width:66px">编号</th><th>资料名称</th><th style="width:106px">实体</th><th style="width:80px">逾期</th><th style="width:118px"></th></tr>
+      <tr><td class="code">历-7</td><td>历次股权转让协议</td><td class="mini">ABC子公司</td><td class="ovd">96 天</td><td class="lnk2">看风险信号 →</td></tr>
+      <tr><td class="code">往-2</td><td>关联方往来明细</td><td class="mini">集团合并</td><td class="ovd">91 天</td><td class="lnk2">看风险信号 →</td></tr>
+      <tr><td class="code">税-4</td><td>近三年纳税申报表</td><td class="mini">GHI子公司</td><td class="ovd">84 天</td><td class="lnk2">看风险信号 →</td></tr>
+    </table>
+    <div class="foot-l"><span>只列逾期最久的 5 项</span><a>看全部 340 项 →</a></div>
+  </div>
+</div>
+
+<div class="tail">
+  <div class="kv"><span class="k" style="flex:0 0 78px;font-weight:600;color:var(--ey-dark)">改什么</span><span>展开态从「循环渲染 events」换成「一行汇总 + 两排 chip + 5 行表」。后端已有 <b>summary.high_count / total_events</b>，再加两个 group by 的 counts 就够。</span></div>
+  <div class="kv"><span class="k" style="flex:0 0 78px;font-weight:600;color:var(--ey-dark)">顺便修</span><span>排序改成<b>纯按逾期天数倒序</b>，不然 37 天的项永远排在 12 天后面。</span></div>
+  <div class="kv"><span class="k" style="flex:0 0 78px;font-weight:600;color:var(--ey-dark)">不新增</span><span>不加按钮、不加接口、不加页面。所有点击都落到现有的筛选和现有的链接上。</span></div>
+  <div class="kv"><span class="k" style="flex:0 0 78px;font-weight:600;color:var(--ey-dark)">不动的</span><span>折叠逻辑、增量判断、卡片位置、配色全不动。</span></div>
+</div>
+
+</div></body></html>

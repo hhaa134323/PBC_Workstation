@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<title>待归档</title>
+<style>
+:root{
+ --ey-yellow:#FFE600; --ey-dark:#2E2E38; --ey-grey:#747480; --ey-grey2:#9B9BA5;
+ --ey-line:#E1E1E6; --ey-soft:#F6F6FA; --canvas:#FFFFFF;
+ --red:#DC2626; --red-fg:#B4123B; --red-line:#F2C2C8; --red-soft:#FDF3F4;
+ --amber:#D97706; --amber-line:#F0D9A8; --amber-soft:#FDF8EE;
+ --green:#16A34A; --green-fg:#106B33; --green-line:#CBE9D5; --green-soft:#F0FAF3;
+ --r:0.375rem;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#F0F0F4;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--ey-dark);font-size:14px;line-height:1.6}
+.page{max-width:1080px;margin:0 auto;padding:40px 32px 56px}
+.hd{border-left:3px solid var(--ey-yellow);padding-left:14px;margin-bottom:36px}
+.hd h1{margin:0 0 6px;font-size:24px;font-weight:600;letter-spacing:-0.01em}
+.hd p{margin:0;color:var(--ey-grey);font-size:14px}
+.sec{margin-bottom:36px}
+.sec h2{margin:0 0 4px;font-size:18px;font-weight:600}
+.sec-d{margin:0 0 14px;color:var(--ey-grey);font-size:14px}
+.card{background:var(--canvas);border:1px solid var(--ey-line);border-radius:var(--r);overflow:hidden}
+.card-t{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--ey-line);font-size:12px;color:var(--ey-grey)}
+.pad{padding:16px}
+.mini{font-size:12px;color:var(--ey-grey)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ey-grey2);display:inline-block;margin-right:7px}
+.dot.r{background:var(--red)} .dot.g{background:var(--green)} .dot.y{background:var(--amber)}
+
+.mock{border:1px solid var(--ey-line);border-radius:var(--r);background:#fff;overflow:hidden}
+
+/* 现状复刻 */
+.old-h{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 16px}
+.old-h h3{margin:0 0 2px;font-size:18px;font-weight:600}
+.old-h p{margin:0;font-size:13px;color:var(--ey-grey)}
+.btn{font-size:12.5px;padding:5px 11px;border-radius:var(--r);border:1px solid var(--ey-line);background:#fff;color:var(--ey-dark);cursor:pointer;white-space:nowrap}
+.btn-pri{background:var(--ey-dark);color:var(--ey-yellow);border-color:var(--ey-dark);font-weight:600}
+.btn-soft{background:var(--ey-soft)}
+.btn-yellow{background:var(--ey-yellow);border-color:#E6CF00;color:var(--ey-dark);font-weight:600}
+.old-row{padding:12px 16px}
+.old-row .fn{font-size:14px;font-weight:600}
+.old-row .meta{font-size:12px;color:var(--ey-grey2);margin-top:2px}
+.old-row .acts{display:flex;gap:6px}
+.rowflex{display:flex;justify-content:space-between;align-items:center;gap:16px}
+
+/* 建议版 */
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--ey-line)}
+.hdr .l h3{margin:0;font-size:16px;font-weight:600}
+.hdr .l p{margin:2px 0 0;font-size:12.5px;color:var(--ey-grey)}
+.hdr .r{display:flex;gap:8px;align-items:center}
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl thead th{text-align:left;font-size:12px;font-weight:500;color:var(--ey-grey);padding:8px 12px;background:var(--ey-soft);border-bottom:1px solid var(--ey-line);white-space:nowrap}
+.tbl td{padding:11px 12px;border-bottom:1px solid #F2F2F6;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tr.low td{background:var(--red-soft)}
+.tbl tr.low td:first-child{box-shadow:inset 2px 0 0 var(--red)}
+.fn{font-weight:600;font-size:13.5px}
+.sub{font-size:12px;color:var(--ey-grey);margin-top:1px}
+.chip{display:inline-block;font-size:11px;padding:2px 7px;border-radius:4px;background:var(--ey-soft);border:1px solid var(--ey-line);color:var(--ey-grey);white-space:nowrap}
+.chip.code{font-weight:600;color:var(--ey-dark);background:#fff}
+.pct{font-variant-numeric:tabular-nums;font-weight:600;font-size:13.5px}
+.pct.lo{color:var(--red-fg)} .pct.mid{color:var(--amber)} .pct.hi{color:var(--green-fg)}
+.src{font-size:11.5px;color:var(--ey-grey);margin-top:1px}
+.acts{display:flex;gap:6px;justify-content:flex-end}
+.btn-xs{font-size:12px;padding:3px 9px;border-radius:var(--r);border:1px solid var(--ey-line);background:#fff;color:var(--ey-dark);cursor:pointer;white-space:nowrap}
+.btn-xs.main{background:var(--ey-soft);font-weight:600}
+.tfoot{display:flex;justify-content:space-between;align-items:center;padding:9px 16px;border-top:1px solid var(--ey-line);font-size:12px;color:var(--ey-grey)}
+
+.notes{margin:0;padding:0;list-style:none}
+.notes li{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #F2F2F6;font-size:13.5px}
+.notes li:last-child{border-bottom:0}
+.notes .k{flex:0 0 96px;color:var(--ey-grey);font-size:12.5px}
+.notes em{font-style:normal;color:var(--red-fg);font-weight:600}
+.alert{margin-top:14px;border:1px solid var(--red-line);background:var(--red-soft);border-radius:var(--r);padding:11px 14px;font-size:13.5px;color:var(--red-fg)}
+.alert b{font-weight:600}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.kv{display:flex;gap:10px;font-size:13px;padding:7px 0;border-bottom:1px solid #F2F2F6}
+.kv:last-child{border-bottom:0}
+.kv .k{flex:0 0 90px;color:var(--ey-grey);font-size:12.5px}
+.kv .warn{color:var(--red-fg)}
+.kv .ok{color:var(--green-fg)}
+.tail{background:#fff;border:1px solid var(--ey-line);border-left:3px solid var(--ey-yellow);border-radius:var(--r);padding:16px}
+</style></head><body>
+<div class="page">
+
+<div class="hd">
+  <h1>待归档</h1>
+  <p>这个页签只有一件事：判断 AI 提的归档位置对不对，对就确认。不新增功能，不改数据接口。</p>
+</div>
+
+<div class="sec">
+  <h2>现状</h2>
+  <p class="sec-d">截图里的样子。</p>
+  <div class="card">
+    <div class="card-t"><span><span class="dot r"></span>现状复刻</span><span>2 份待归档</span></div>
+    <div class="pad" style="background:var(--ey-soft)">
+      <div class="mock">
+        <div class="old-h">
+          <div><h3>待归档</h3><p>AI 预分析后的文件，确认后归档；低置信度已置顶标红。</p></div>
+          <button class="btn btn-pri">全部归档</button>
+        </div>
+        <div class="old-row rowflex">
+          <div><div class="fn">DEF银行对账单.pdf</div><div class="meta">归档到: 货币资金 / 货-2 银行对账单　置信度: 50%　suggest</div></div>
+          <div class="acts"><button class="btn">预览</button><button class="btn btn-yellow">确认归档</button><button class="btn">改分类</button></div>
+        </div>
+        <div class="old-row rowflex">
+          <div><div class="fn">ABC集团章程_修订版.pdf</div><div class="meta">归档到: 历史沿革 / 历-2 公司章程　置信度: 95%　llm</div></div>
+          <div class="acts"><button class="btn">预览</button><button class="btn btn-yellow">确认归档</button><button class="btn">改分类</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="pad">
+      <ul class="notes">
+        <li><span class="k">置信度</span><span>50% 和 95% 是同一种灰字。副标题写了<em>低置信度已置顶标红</em>，实际没有任何标红。</span></li>
+        <li><span class="k">归档路径</span><span>货币资金 / 货-2 银行对账单是这个页面唯一要判断的东西，现在是 12px 浅灰字，比文件名弱得多。</span></li>
+        <li><span class="k">来源标识</span><span>suggest 和 llm 是字段名，直接漏到了界面上。</span></li>
+        <li><span class="k">按钮</span><span>每行都有一个黄底确认归档。两行还好，四十行就是四十块黄色。</span></li>
+        <li><span class="k">行容器</span><span>行没有卡片也没有分隔线，浮在灰底上，也没有表头说明各列是什么。</span></li>
+      </ul>
+      <div class="alert"><b>全部归档没有写份数。</b>这是一个不可逆的批量动作，按钮上看不出一次会归多少份，也看不出里面含不含 50% 的那一份。</div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <h2>建议</h2>
+  <p class="sec-d">改成带表头的表格，归档路径和置信度各占一列。低置信度的行用浅红底加左侧红条，兼容已有的置顶规则。</p>
+  <div class="card">
+    <div class="card-t"><span><span class="dot y"></span>建议版</span><span>列：文件 / 归档到 / 置信度 / 操作</span></div>
+    <div class="hdr">
+      <div class="l"><h3>待归档</h3><p>AI 已给出归档位置，确认后写入清单。置信度低于 60% 的已置顶。</p></div>
+      <div class="r"><button class="btn btn-soft">全部预览</button><button class="btn btn-pri">全部归档 2 份</button></div>
+    </div>
+    <table class="tbl">
+      <thead><tr><th style="width:34%">文件</th><th style="width:30%">归档到</th><th style="width:14%">置信度</th><th style="width:22%;text-align:right">操作</th></tr></thead>
+      <tbody>
+        <tr class="low">
+          <td><div class="fn">DEF银行对账单.pdf</div><div class="sub">2.4 MB　今天 14:12 新增</div></td>
+          <td><span class="chip code">货-2</span> 银行对账单<div class="sub">货币资金 · ABC子公司</div></td>
+          <td><span class="pct lo">50%</span><div class="src">规则匹配</div></td>
+          <td><div class="acts"><button class="btn-xs">预览</button><button class="btn-xs">改分类</button><button class="btn-xs main">确认归档</button></div></td>
+        </tr>
+        <tr>
+          <td><div class="fn">ABC集团章程_修订版.pdf</div><div class="sub">860 KB　今天 09:31 新增</div></td>
+          <td><span class="chip code">历-2</span> 公司章程<div class="sub">历史沿革 · 集团合并</div></td>
+          <td><span class="pct hi">95%</span><div class="src">AI 判断</div></td>
+          <td><div class="acts"><button class="btn-xs">预览</button><button class="btn-xs">改分类</button><button class="btn-xs main">确认归档</button></div></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="tfoot"><span>共 2 份，其中 1 份置信度低于 60%</span><span>确认后写入 PBC 清单，可在变更记录里回溯</span></div>
+  </div>
+
+  <div class="two" style="margin-top:16px">
+    <div class="card">
+      <div class="card-t"><span><span class="dot y"></span>置信度分档</span><span>只用已有令牌</span></div>
+      <div class="pad">
+        <div class="kv"><span class="k"><span class="pct lo">低于 60%</span></span><span>行置顶，浅红底加左侧 2px 红条，百分比红字</span></div>
+        <div class="kv"><span class="k"><span class="pct mid">60 到 89%</span></span><span>普通行，百分比琥珀色</span></div>
+        <div class="kv"><span class="k"><span class="pct hi">90% 及以上</span></span><span>普通行，百分比绿字</span></div>
+        <div class="kv"><span class="k">排序</span><span>置信度升序，最需要人看的在最上面</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-t"><span><span class="dot y"></span>文案替换</span><span>不露字段名</span></div>
+      <div class="pad">
+        <div class="kv"><span class="k">suggest</span><span>规则匹配</span></div>
+        <div class="kv"><span class="k">llm</span><span>AI 判断</span></div>
+        <div class="kv"><span class="k">归档到:</span><span>变成表头，行内不再重复这三个字</span></div>
+        <div class="kv"><span class="k">置信度:</span><span>同上，行内只留数字</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sec">
+  <h2>放大到 40 份</h2>
+  <p class="sec-d">客户一次批量上传后就是这个量级。</p>
+  <div class="two">
+    <div class="card">
+      <div class="card-t"><span><span class="dot r"></span>现在的写法</span><span>40 份待归档</span></div>
+      <div class="pad">
+        <div class="kv"><span class="k">扫视</span><span class="warn">要逐行读灰字才知道归到哪</span></div>
+        <div class="kv"><span class="k">低置信度</span><span class="warn">看不出来，需要逐个比百分比</span></div>
+        <div class="kv"><span class="k">按钮</span><span class="warn">40 块黄底按钮，主次全失</span></div>
+        <div class="kv"><span class="k">批量</span><span class="warn">全部归档不知道含不含低置信度项</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-t"><span><span class="dot g"></span>改后的写法</span><span>40 份待归档</span></div>
+      <div class="pad">
+        <div class="kv"><span class="k">扫视</span><span class="ok">归档到独立成列，编号 chip 对齐</span></div>
+        <div class="kv"><span class="k">低置信度</span><span class="ok">红底置顶，一眼看完要看几行</span></div>
+        <div class="kv"><span class="k">按钮</span><span class="ok">行内全部轻量，黄色只给头部批量</span></div>
+        <div class="kv"><span class="k">批量</span><span class="ok">按钮写份数，底部标明低置信度几份</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tail">
+  <div class="kv"><span class="k">改动</span><span>行改成表格，四列固定：文件 / 归档到 / 置信度 / 操作。复用待初检那张表的 .tbl 样式。</span></div>
+  <div class="kv"><span class="k">颜色</span><span>只在置信度和低置信度行上用色，红琥珀绿三档，均为现有令牌。</span></div>
+  <div class="kv"><span class="k">按钮</span><span>行内三个都用 .btn-xs，确认归档用浅灰底加粗。黄底只留给头部的全部归档。</span></div>
+  <div class="kv"><span class="k">文案</span><span>suggest 改规则匹配，llm 改 AI 判断。全部归档后面带份数。</span></div>
+  <div class="kv"><span class="k">不新增</span><span>不加筛选器、不加批量勾选、不加分页。预览和改分类沙盒里不可点。</span></div>
+  <div class="kv"><span class="k">待确认</span><span>文件大小和新增时间这两个字段现在有没有。没有就去掉副行。</span></div>
+</div>
+
+</div></body></html>

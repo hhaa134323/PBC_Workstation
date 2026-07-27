@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>今日简报细条 · 方案对比</title>
+<style>
+:root{
+  --ey-yellow:#FFE600;
+  --off-white:#F6F6FA;
+  --gray02:#C4C4CD;
+  --gray01:#747480;
+  --off-black:#2E2E38;
+  --confident-black:#1A1A24;
+  --border:#E3E3E9;
+  --red:#DC2626;
+  --red-soft:#FCE9E7;
+  --green:#16A34A;
+  --green-soft:#E8F1EC;
+  --amber:#D97706;
+  --amber-soft:#FBEBDE;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px 32px 56px;
+  background:var(--off-white);
+  font-family:"Noto Sans SC","Segoe UI",system-ui,-apple-system,sans-serif;
+  color:var(--confident-black);
+}
+.wrap{max-width:1040px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.2px}
+.sub{font-size:14px;color:var(--gray01);margin:0 0 40px}
+.sec{margin-bottom:44px}
+.sec-hd{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.sec-tag{font-size:12px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:5px;background:var(--off-black);color:var(--ey-yellow)}
+.sec-tag.now{background:var(--red-soft);color:#9B1C1C}
+.sec-t{font-size:16px;font-weight:700}
+.sec-d{font-size:13px;color:var(--gray01);margin:0 0 14px;line-height:1.6}
+
+/* ===== shared bar shell ===== */
+.bar{
+  background:#fff;
+  border-radius:8px;
+  box-shadow:inset 0 0 0 1px var(--border);
+  display:flex;align-items:center;
+  padding:0 16px;
+  height:52px;
+  gap:16px;
+}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.red{background:var(--red)}
+.spacer{flex:1}
+svg{display:block}
+
+/* ===== CURRENT ===== */
+.cur{
+  background:#fff;border-radius:6px;border:1px solid var(--border);
+  border-left:3px solid var(--ey-yellow);
+  display:flex;align-items:center;gap:14px;padding:13px 16px;font-size:13px;
+}
+.cur b{font-size:13px;font-weight:700}
+.cur .m{color:var(--confident-black)}
+.cur .t{color:var(--gray01);font-size:12px}
+.cur .x{color:var(--gray01);font-size:12px;text-decoration:none}
+
+/* ===== A ===== */
+.a-title{font-size:13.5px;font-weight:700;letter-spacing:-.1px}
+.pills{display:flex;align-items:center;gap:7px}
+.pill{
+  display:inline-flex;align-items:center;gap:5px;
+  height:24px;padding:0 9px;border-radius:6px;
+  font-size:12.5px;font-weight:600;line-height:1;
+  background:var(--off-white);color:var(--off-black);
+  box-shadow:inset 0 0 0 1px var(--border);
+}
+.pill .n{font-variant-numeric:tabular-nums;font-weight:700}
+.pill.risk{background:var(--red-soft);color:#9B1C1C;box-shadow:inset 0 0 0 1px #F5C6C2}
+.pill.risk .n{color:#9B1C1C}
+.meta{font-size:12px;color:var(--gray01);white-space:nowrap}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  height:30px;padding:0 12px;border-radius:7px;border:none;cursor:pointer;
+  font-size:12.5px;font-weight:600;font-family:inherit;
+}
+.btn-primary{background:var(--off-black);color:var(--ey-yellow)}
+.btn-ghost{background:transparent;color:var(--off-black);box-shadow:inset 0 0 0 1px var(--border)}
+.icobtn{
+  width:28px;height:28px;border-radius:7px;border:none;background:transparent;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--gray01);
+  box-shadow:inset 0 0 0 1px var(--border);
+}
+.vdiv{width:1px;height:18px;background:var(--border);flex:none}
+
+/* ===== B ===== */
+.b-line{font-size:13.5px;line-height:1.4}
+.b-line .k{font-weight:700;font-variant-numeric:tabular-nums}
+.b-line .risk{color:var(--red);font-weight:700}
+.b-lab{
+  font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--gray01);
+  text-transform:uppercase;white-space:nowrap;
+}
+.b-link{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:12.5px;font-weight:600;color:var(--off-black);text-decoration:none;
+  border-bottom:2px solid var(--ey-yellow);padding-bottom:1px;
+}
+
+/* ===== C ===== */
+.c-bar{
+  background:#fff;border-radius:8px;box-shadow:inset 0 0 0 1px var(--border);
+  overflow:hidden;display:flex;align-items:stretch;height:56px;
+}
+.c-rail{width:4px;background:var(--ey-yellow);flex:none}
+.c-body{flex:1;display:flex;align-items:center;gap:18px;padding:0 16px}
+.stat{display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .v{font-size:15px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+.stat .v.risk{color:var(--red)}
+.stat .l{font-size:11px;color:var(--gray01);line-height:1;white-space:nowrap}
+.prog{width:120px}
+.prog .track{height:5px;border-radius:3px;background:var(--off-white);box-shadow:inset 0 0 0 1px var(--border);overflow:hidden;display:flex}
+.prog .seg-g{background:var(--green)}
+.prog .seg-a{background:var(--amber)}
+.prog .cap{font-size:11px;color:var(--gray01);margin-top:5px;line-height:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>今日简报 · 收起态细条</h1>
+  <p class="sub">同一份数据，四种呈现。宽度 1008px，对齐主界面卡片宽度。</p>
+
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-tag now">现状</span><span class="sec-t">当前实现</span></div>
+    <p class="sec-d">问题：三段文字同权重，读不出轻重；「均未分析」是状态不是结论；「展开」是裸文字，不像可点；左侧黄竖条唯一的装饰，反而显得单薄；整条没有任何行动出口。</p>
+    <div class="cur">
+      <b>今日简报</b>
+      <span class="m">新增文件 18 份，被删或被换 1 份，均未分析</span>
+      <span class="t">上次查看 1 分钟前</span>
+      <span class="spacer"></span>
+      <a class="x" href="#">展开</a>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-tag">方案 A</span><span class="sec-t">状态条 + 数字胶囊</span></div>
+    <p class="sec-d">借鉴 GitHub PR checks 汇总条。数字从句子里抽出来做成胶囊，扫一眼就能数；风险那颗用红底单独拎出；右侧给一个实心主行动，展开降级为图标。</p>
+    <div class="bar">
+      <span class="dot red"></span>
+      <span class="a-title">今日简报</span>
+      <div class="pills">
+        <span class="pill"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#747480" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span class="n">18</span> 新增</span>
+        <span class="pill"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#747480" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg><span class="n">1</span> 被换</span>
+        <span class="pill risk"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9B1C1C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.3 3.7-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.3l-8-14a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="n">7</span> 高风险</span>
+      </div>
+      <span class="spacer"></span>
+      <span class="meta">上次查看 1 分钟前</span>
+      <span class="vdiv"></span>
+      <button class="btn btn-primary">去文件变更
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFE600" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </button>
+      <button class="icobtn" title="展开">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#747480" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-tag">方案 B</span><span class="sec-t">一句话结论 + 弱化外壳</span></div>
+    <p class="sec-d">借鉴 Linear inbox 摘要行。不做胶囊、不做色块，只靠字重和一处红色分层次；标签缩成小号大写字，把视觉重量全让给中间那句结论。最克制，最不抢下方表格。</p>
+    <div class="bar">
+      <span class="b-lab">今日简报</span>
+      <span class="vdiv"></span>
+      <span class="b-line">客户共享文件夹有 <span class="k">19</span> 处变动，其中 <span class="risk">7 项高风险</span>，均未分析</span>
+      <span class="spacer"></span>
+      <span class="meta">1 分钟前</span>
+      <a class="b-link" href="#">查看变更
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2E2E38" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      </a>
+      <button class="icobtn" title="展开">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#747480" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-tag">方案 C</span><span class="sec-t">指标条 + 进度计量</span></div>
+    <p class="sec-d">借鉴 Vercel 部署状态条。数字上、标签下的双行指标组，顺手把顶栏那个 0%（0/19）总体进度挪进来，让这条同时回答「变了什么」和「还差多少」。信息密度最高。</p>
+    <div class="c-bar">
+      <span class="c-rail"></span>
+      <div class="c-body">
+        <div class="stat"><span class="v">今日简报</span><span class="l">自上次查看 1 分钟前</span></div>
+        <span class="vdiv"></span>
+        <div class="stat"><span class="v">18</span><span class="l">新增文件</span></div>
+        <div class="stat"><span class="v">1</span><span class="l">被删或被换</span></div>
+        <div class="stat"><span class="v risk">7</span><span class="l">高风险未提供</span></div>
+        <span class="spacer"></span>
+        <div class="prog">
+          <div class="track">
+            <span class="seg-g" style="width:0%"></span>
+            <span class="seg-a" style="width:0%"></span>
+          </div>
+          <div class="cap">总体进度 0 / 19</div>
+        </div>
+        <span class="vdiv"></span>
+        <button class="btn btn-ghost">去文件变更
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2E2E38" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <button class="icobtn" title="展开">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#747480" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
