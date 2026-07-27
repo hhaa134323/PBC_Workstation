@@ -15,7 +15,7 @@
 import sys, time, json, urllib.request, sqlite3
 sys.path.insert(0, r'D:\AgentProjects\IpoPBC\0')
 
-BASE = 'http://127.0.0.1:8111'
+BASE = 'http://127.0.0.1:8000'
 DB = r'D:\AgentProjects\IpoPBC\0\data\pbc_workstation.db'
 
 PASS = 0
@@ -107,7 +107,7 @@ with sync_playwright() as p:
         const el = document.querySelector('[x-data="pbcApp()"]');
         if (el && el._x_dataStack) {{
             const d = el._x_dataStack[0];
-            const r = await fetch('/api/projects/list');
+            const r = await fetch('/api/projects/list?active_only=false');
             const data = await r.json();
             const proj = data.projects.find(p => p.project_id === '{target_pid}');
             if (proj) await d.switchProject(proj, true);
