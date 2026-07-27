@@ -241,9 +241,11 @@ with sync_playwright() as p:
             const btns = review.querySelectorAll('button');
             const texts = [];
             for (const b of btns) texts.push((b.textContent||'').trim());
+            // v7.10: 预览按钮改为眼睛图标（title="预览原文件"）
+            const hasPreviewIcon = !!review.querySelector('button[title="预览原文件"]');
             return {
                 found: true,
-                hasPreview: texts.some(t => t.includes('预览')),
+                hasPreview: hasPreviewIcon,
                 hasConfirm: texts.some(t => t.includes('确认归档')),
                 hasReclassify: texts.some(t => t.includes('改分类')),
                 texts: texts.slice(0, 10)
@@ -255,19 +257,15 @@ with sync_playwright() as p:
         check("7.3 待归档有确认归档按钮", btn_check.get('hasConfirm'), f"btns={btn_check.get('texts')}")
         check("7.4 待归档有改分类按钮", btn_check.get('hasReclassify'), f"btns={btn_check.get('texts')}")
 
-        # 检查"归档到:"文本
+        # v7.10: 检查 archive-to 路径（货币资金 / 货-1 银行流水 / 文件名）
         archive_to_text = page.evaluate("""() => {
             const review = document.querySelector('[x-show*="review"]');
             if (!review) return '';
-            const spans = review.querySelectorAll('span');
-            for (const s of spans) {
-                const t = (s.textContent||'').trim();
-                if (t.includes('归档到')) return t;
-            }
-            return '';
+            const at = review.querySelector('.archive-to');
+            return at ? (at.textContent||'').trim() : '';
         }""")
         print(f"  归档到文本: {archive_to_text}")
-        check("7.5 显示'归档到:'前缀", '归档到' in archive_to_text, f"text={archive_to_text}")
+        check("7.5 显示归档路径(archive-to)", 'archive-to' in (page.evaluate("() => { const r = document.querySelector('[x-show*=\\\"review\\\"]'); return r && r.querySelector('.archive-to') ? 'archive-to' : ''; }") or ''), f"text={archive_to_text}")
     else:
         check("7.1 待归档显示完整名称", False, "待归档无条目")
         check("7.2 待归档有预览按钮", False, "待归档无条目")

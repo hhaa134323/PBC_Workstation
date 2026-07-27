@@ -60,6 +60,7 @@ async def briefing_by_project(project_id: str, since: Optional[float] = None) ->
             "project_id": project_id,
             "events": [],
             "delta_count": 0,
+            "delta_groups": [],
             "has_delta": False,
             "stock_total": 0,
             "stock_high": 0,

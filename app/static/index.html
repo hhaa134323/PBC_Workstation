@@ -246,6 +246,21 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 .tbl tr.lowconf{background:hsl(0 86% 99%)}
 .tbl tr.lowconf:hover{background:hsl(0 86% 97%)}
 .code{font-weight:600;font-size:14px}
+/* v7.10 待归档表格化样式 */
+.archive-to{font-size:13px;line-height:1.5;color:hsl(var(--muted-foreground));display:flex;align-items:center;flex-wrap:wrap;gap:0}
+.archive-to .cat{color:hsl(var(--muted-foreground));font-weight:500}
+.archive-to .sep{color:hsl(var(--text3,var(--muted-foreground)));margin:0 5px;opacity:.7}
+.archive-to .code{color:hsl(var(--foreground));font-weight:600;font-size:13px}
+.archive-to .doc{color:hsl(var(--muted-foreground))}
+.archive-to .src{color:hsl(var(--foreground));font-weight:500;margin-left:4px}
+.file-name{font-size:13.5px;font-weight:500;color:hsl(var(--foreground));line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.file-sub{font-size:11.5px;color:hsl(var(--muted-foreground));margin-top:3px}
+.conflict-inline{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:hsl(0 80% 35%)}
+.conflict-inline svg{flex-shrink:0}
+.empty-note{font-size:12px;color:hsl(var(--text3,var(--muted-foreground)));opacity:.6}
+.btn-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:transparent;color:hsl(var(--muted-foreground));border:1px solid transparent;cursor:pointer;transition:.15s;padding:0;flex-shrink:0}
+.btn-icon:hover{background:hsl(var(--accent));color:hsl(var(--foreground));border-color:hsl(var(--border))}
+.row-acts{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
 .badge{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:4px;font-size:12px;font-weight:600;border:1px solid transparent;line-height:1.4}
 .b-none{background:var(--st-none-bg);color:var(--st-none-fg);border-color:var(--st-none-bd)}
 .b-review{background:var(--st-review-bg);color:var(--st-review-fg);border-color:var(--st-review-bd)}
@@ -364,7 +379,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
 /* ---------- tooltip ---------- */
 .tip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:99px;background:hsl(var(--muted));color:hsl(var(--muted-foreground));font-size:12px;font-weight:700;cursor:help;vertical-align:middle}
 .tip:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
-.tip .tip-box{display:none;position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:hsl(var(--popover));color:hsl(var(--popover-foreground));border:1px solid hsl(var(--border));padding:8px 12px;border-radius:var(--r);font-size:12px;line-height:1.6;width:220px;z-index:50;font-weight:400;box-shadow:var(--shadow-lg);text-align:left;white-space:pre-line}
+.tip .tip-box{display:none;position:absolute;top:20px;left:50%;transform:translateX(-50%);background:hsl(var(--popover));color:hsl(var(--popover-foreground));border:1px solid hsl(var(--border));padding:8px 12px;border-radius:var(--r);font-size:12px;line-height:1.6;width:220px;z-index:50;font-weight:400;box-shadow:var(--shadow-lg);text-align:left;white-space:pre-line}
 .tip:hover .tip-box{display:block}
 
 /* ---------- status select ---------- */
@@ -1362,50 +1377,14 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
     <!-- Tab 2 待复核 -->
     <div x-show="!loading && currentTab==='review'">
       <div class="page-head">
-        <div><h1>待归档</h1><div class="desc">AI 预分析后的文件，确认后归档；低置信度已置顶标红。</div></div>
-        <button class="btn btn-pri btn-xs" x-show="pendingArchive.items.length>0" @click="batchArchiveAll()">全部归档</button>
+        <div><h1>待归档</h1><div class="desc">客户提交的文件经 AI 预分析后在此确认归档；低置信度已置顶标红，需人工复核。</div></div>
       </div>
-      <!-- 待归档列表 -->
-      <template x-if="pendingArchive.items.length===0">
-        <div style="padding:40px;text-align:center;color:var(--text3);font-size:14px">暂无待归档文件。扫描文件后，AI 预分析结果会显示在这里。</div>
-      </template>
-      <template x-for="(item, idx) in pendingArchive.items" :key="item.id">
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
-          <!-- 置信度圆点 -->
-          <div style="width:8px;height:8px;border-radius:99px;flex-shrink:0" :style="'background:'+(item.confidence>0.7?'#22c55e':item.confidence>0.3?'#f59e0b':'#ef4444')"></div>
-          <!-- 文件信息 -->
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:500;color:var(--text)" x-text="item.file_name"></div>
-            <div style="font-size:12px;color:var(--text3);display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
-              <template x-if="item.suggested_item_id">
-                <span x-text="'归档到: ' + (item.category||'') + ' / ' + (item.suggested_item_id||'') + (item.doc_name ? ' ' + item.doc_name : '')"></span>
-              </template>
-              <template x-if="!item.suggested_item_id">
-                <span style="padding:1px 6px;border-radius:3px;background:#fef2f2;color:#dc2626;font-weight:600">⚠ 待手动分类</span>
-              </template>
-              <template x-if="item.decision==='walkthrough'">
-                <span style="padding:1px 6px;border-radius:3px;background:var(--bg2);color:var(--text3)">整目录归档</span>
-              </template>
-              <template x-if="item.decision!=='walkthrough' && item.suggested_item_id">
-                <span x-text="'置信度: '+((item.confidence||0)*100).toFixed(0)+'%'"></span>
-              </template>
-              <template x-if="item.decision!=='walkthrough'">
-                <span x-show="item.decision" x-text="item.decision" style="padding:1px 6px;border-radius:3px;background:var(--bg2)"></span>
-              </template>
-            </div>
-            <!-- 编号矛盾高亮 -->
-            <div x-show="item.conflict_signal" style="margin-top:4px;padding:4px 8px;background:#fef9c3;border-radius:4px;font-size:12px;color:#7c5e00">
-              <span x-text="item.conflict_signal?.hint"></span>
-            </div>
-          </div>
-          <!-- 操作按钮 -->
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn btn-ghost btn-xs" @click="openExplorer(item.file_path)" title="预览原文件">预览</button>
-            <button class="btn btn-pri btn-xs" @click="confirmArchive(item.id,'')" :disabled="!item.suggested_item_id">确认归档</button>
-            <button class="btn btn-ghost btn-xs" @click="openReclassifyConfirm(item)">改分类</button>
-          </div>
-        </div>
-      </template>
+      <!-- v7.10 待归档表格化：复用 tableViewHtml（搜索/分页/列设置统一） -->
+      <div class="filters" style="gap:8px">
+        <input type="text" x-model.debounce="tableState.q" @input="tableState.page=1" placeholder="搜索文件名/编号/分类/实体…" style="flex:1;min-width:180px;max-width:280px;padding:5px 10px;font-size:12px;border:1px solid hsl(var(--border));border-radius:5px;background:hsl(var(--card));color:hsl(var(--foreground))" />
+        <div x-html="filtersBarHtml()" style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap"></div>
+      </div>
+      <div x-html="tableViewHtml(pendingArchiveItems())"></div>
     </div>
 
     <!-- Tab 3 风险分析（风险雷达） -->
@@ -2670,6 +2649,20 @@ function pbcApp(){
       this.reclassifyModal.allItems = (this.pbcList||[]).map(i=>({item_id:i.item_id, category:i.category||'', doc_name:i.doc_name||''}));
       this.reclassifyModal.filtered = this.reclassifyModal.allItems;
     },
+    /* v7.10: 待归档表格化的桥接方法（用 confirmId 找 pendingArchive item） */
+    previewReview(confirmId){
+      const it = (this.pendingArchive.items||[]).find(x=>x.id===confirmId);
+      if(it) this.openExplorer(it.file_path);
+    },
+    async confirmReview(confirmId){
+      const it = (this.pendingArchive.items||[]).find(x=>x.id===confirmId);
+      if(!it) return;
+      await this.confirmArchive(confirmId, '');
+    },
+    openReclassifyConfirmReview(confirmId){
+      const it = (this.pendingArchive.items||[]).find(x=>x.id===confirmId);
+      if(it) this.openReclassifyConfirm(it);
+    },
     changeLabel(t){
       return ({added:'新增', archived:'归档', reclassified:'改分类', approved:'复核通过', deleted:'删除', missing:'文件缺失'})[t] || t || '变更';
     },
@@ -2683,6 +2676,10 @@ function pbcApp(){
     },
 
     filteredItems(){
+      // v7.10: review tab 用 pendingArchive 数据（不再从 pbcList 派生）
+      if(this.currentTab==='review'){
+        return this.pendingArchiveItems();
+      }
       let list = this.pbcList.filter(it=>{
         const st = this.stageOf(it);
         if(this.currentTab==='triage'){
@@ -2710,8 +2707,24 @@ function pbcApp(){
           return true;
         });
       }
-      if(this.currentTab==='review') list = list.slice().sort((a,b)=>(a.confidence??1)-(b.confidence??1));
       if(this.currentTab==='overdue') list = list.slice().sort((a,b)=>(b.overdue_days||0)-(a.overdue_days||0));
+      return list;
+    },
+
+    /* v7.10: 待归档数据 — pendingArchive.items 适配 + 搜索过滤 */
+    pendingArchiveItems(){
+      let list = (this.pendingArchive && this.pendingArchive.items) ? this.pendingArchive.items.slice() : [];
+      const q = (this.tableState.q||'').toLowerCase().trim();
+      if(q){
+        list = list.filter(it=>{
+          return (it.file_name||'').toLowerCase().includes(q)
+              || (it.suggested_item_id||'').toLowerCase().includes(q)
+              || (it.category||'').toLowerCase().includes(q)
+              || (it.doc_name||'').toLowerCase().includes(q);
+        });
+      }
+      // 低置信度置顶（升序，confidence 小的在前）
+      list = list.sort((a,b)=>(a.confidence??1)-(b.confidence??1));
       return list;
     },
 
@@ -2760,11 +2773,21 @@ function pbcApp(){
         {k:'actions',label:'操作',lock:true},
       ];
     },
+    /* v7.10 待归档专属列：文件 / AI 归档建议 / 置信度 / 备注 / 操作 */
+    reviewColumns(){
+      return [
+        {k:'file',label:'文件'},
+        {k:'ai_suggest',label:'AI 归档建议'},
+        {k:'conf',label:'置信度'},
+        {k:'note',label:'备注'},
+        {k:'actions',label:'操作',lock:true},
+      ];
+    },
     defaultColsFor(tab){
       const base = ['code','category','docname','entity','status'];
       const map = {
         triage:  base.concat(['statusEdit','conf','actions']),
-        review:  base.concat(['statusEdit','conf','actions']),
+        review:  ['file','ai_suggest','conf','note','actions'],
         overdue: base.concat(['overdue','actions']),
         done:    base.concat(['filename','path','actions']),
       };
@@ -2797,6 +2820,10 @@ function pbcApp(){
       try { localStorage.setItem('pbc_col_visible', JSON.stringify(this.colVisible)); } catch(e) {}
     },
     activeColumns(){
+      // v7.10: review tab 用专属列集
+      if(this.currentTab === 'review'){
+        return this.reviewColumns();
+      }
       const cfg = this.colVisible[this.currentTab] || {};
       return this.allColumns().filter(c=>cfg[c.k]);
     },
@@ -2819,6 +2846,10 @@ function pbcApp(){
     colCell(it,k){
       const low = it.confidence!=null && it.confidence<0.7;
       switch(k){
+        // v7.10 待归档专属列
+        case 'file': return '<td><div class="file-name">'+this.esc(it.file_name||'—')+'</div>'+(it.decision==='walkthrough'?'<div class="file-sub">整目录归档</div>':'')+'</td>';
+        case 'ai_suggest': return '<td>'+this.aiSuggestCell(it)+'</td>';
+        case 'note': return '<td>'+this.reviewNoteCell(it)+'</td>';
         case 'code': return '<td class="code">'+this.esc(it.item_id)+'</td>';
         case 'category': return '<td>'+this.esc(it.category||'')+'</td>';
         case 'subject': return '<td>'+this.esc(it.subject||'')+'</td>';
@@ -2827,7 +2858,7 @@ function pbcApp(){
         case 'entity': return '<td>'+this.esc(it.entity||'')+'</td>';
         case 'status': return '<td>'+this.badgeHtml(it)+'</td>';
         case 'statusEdit': return '<td>'+this.statusOptions(it)+'</td>';
-        case 'conf': return '<td>'+this.confCell(it)+' '+this.confTip()+'</td>';
+        case 'conf': return '<td>'+this.confCell(it)+'</td>';
         case 'overdue': return '<td>'+this.overdueCell(it)+' '+this.overdueTip()+'</td>';
         case 'path': {
           if(!it.file_path) return '<td><span class="path" style="color:var(--text3)">未归档</span></td>';
@@ -2843,6 +2874,24 @@ function pbcApp(){
         case 'actions': return '<td>'+this.rowActions(it)+'</td>';
         default: return '';
       }
+    },
+    /* v7.10 待归档 AI 归档建议列：货币资金 / 货-1 银行流水 / 文件名 */
+    aiSuggestCell(it){
+      if(!it.suggested_item_id){
+        return '<span class="badge b-none">待手动分类</span>';
+      }
+      const cat = this.esc(it.category||'');
+      const code = this.esc(it.suggested_item_id||'');
+      const doc = this.esc(it.doc_name||'');
+      const fname = this.esc(it.file_name||'');
+      return '<div class="archive-to"><span class="cat">'+cat+'</span><span class="sep">/</span><span class="code">'+code+'</span> '+(doc?'<span class="doc">'+doc+'</span><span class="sep">/</span>':'')+'<span class="src">'+fname+'</span></div>';
+    },
+    /* v7.10 待归档 备注列：编号矛盾 / 空（整目录标签已在文件名列副标题显示，不重复） */
+    reviewNoteCell(it){
+      if(it.conflict_signal && it.conflict_signal.hint){
+        return '<div class="conflict-inline"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>'+this.esc(it.conflict_signal.hint)+'</span></div>';
+      }
+      return '<span class="empty-note">—</span>';
     },
     filtersBarHtml(){
       const f = this.filters;
@@ -2936,9 +2985,15 @@ function pbcApp(){
         acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__openResolve(\''+this.esc(it.item_id)+'\')">看影响分析</button>');
       }
       if(this.currentTab==='review'){
-        acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__openReclassify(\''+this.esc(it.item_id)+'\')">改分类</button>');
+        // v7.10 待归档：预览(眼睛图标) + 改分类 + 确认归档（全 ghost，无特权）
+        const id = this.esc(it.id||'');
+        const disabled = !it.suggested_item_id ? ' disabled' : '';
+        acts.push('<button class="btn btn-icon btn-xs" title="预览原文件" onclick="window.__previewReview(\''+id+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>');
+        acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__openReclassifyReview(\''+id+'\')">改分类</button>');
+        acts.push('<button class="btn btn-ghost btn-xs"'+disabled+' onclick="window.__confirmReview(\''+id+'\')">确认归档</button>');
+      } else {
+        acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__viewDetail(\''+this.esc(it.item_id)+'\')">文件详情</button>');
       }
-      acts.push('<button class="btn btn-ghost btn-xs" onclick="window.__viewDetail(\''+this.esc(it.item_id)+'\')">文件详情</button>');
       return '<div class="row-acts">'+acts.join('')+'</div>';
     },
 
@@ -2982,7 +3037,11 @@ function pbcApp(){
         const low = it.confidence!=null && it.confidence<0.7;
         return '<tr class="'+(low?'lowconf':'')+'">'+cols.map(c=>this.colCell(it,c.k)).join('')+'</tr>';
       }).join('');
-      const ths = cols.map(c=>'<th>'+this.esc(c.label)+'</th>').join('');
+      const ths = cols.map(c=>{
+        // v7.10: 置信度列头加 ? 提示（替代每行 tip）
+        if(c.k==='conf') return '<th>'+this.esc(c.label)+' '+this.confTip()+'</th>';
+        return '<th>'+this.esc(c.label)+'</th>';
+      }).join('');
       // v7.9: 分页控制条
       const pagination = this.tablePaginationHtml(total);
       return '<div class="card tbl-wrap"><table class="tbl"><thead><tr>'+ths+'</tr></thead><tbody>'+rows+'</tbody></table>'+pagination+'</div>';
@@ -3428,6 +3487,18 @@ window.__viewDetail = function(itemId){
 window.__openReclassify = function(itemId){
   const app = Alpine.$data(document.querySelector('[x-data]'));
   app.openReclassify(itemId);
+};
+window.__previewReview = function(confirmId){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.previewReview(confirmId);
+};
+window.__confirmReview = function(confirmId){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.confirmReview(confirmId);
+};
+window.__openReclassifyReview = function(confirmId){
+  const app = Alpine.$data(document.querySelector('[x-data]'));
+  app.openReclassifyConfirmReview(confirmId);
 };
 window.__heatDrill = function(cat, ent){
   const app = Alpine.$data(document.querySelector('[x-data]'));

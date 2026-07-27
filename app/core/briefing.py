@@ -255,11 +255,33 @@ def generate_daily_briefing(
     # 增量模式：只返回增量事件
     if since is not None:
         delta_events.sort(key=lambda e: -_PRIORITY.get(e.get("priority", "low"), 0))
+        # delta_groups: 按事件类型分组报数（在截断前统计全量）
+        _GROUP_LABELS = {
+            "file_added": "文件新增",
+            "file_deleted": "文件删除",
+            "new_overdue_threshold": "跨逾期红线",
+            "new_overdue": "新增逾期",
+            "high_risk_gap": "高风险缺料",
+            "file_resolved_risk": "风险已解除",
+        }
+        _group_counter: dict[str, int] = {}
+        for e in delta_events:
+            et = e.get("event_type", "")
+            _group_counter[et] = _group_counter.get(et, 0) + 1
+        delta_groups = [
+            {"type": et, "label": _GROUP_LABELS.get(et, et), "count": cnt}
+            for et, cnt in _group_counter.items()
+        ]
+        # 固定顺序：文件新增 → 文件删除 → 跨逾期红线 → 其他
+        _GROUP_ORDER = ["file_added", "file_deleted", "new_overdue_threshold",
+                        "new_overdue", "high_risk_gap", "file_resolved_risk"]
+        delta_groups.sort(key=lambda g: _GROUP_ORDER.index(g["type"]) if g["type"] in _GROUP_ORDER else 99)
         return {
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "project_id": project_id,
             "events": delta_events[:_MAX_BRIEFING_ITEMS],
             "delta_count": len(delta_events),
+            "delta_groups": delta_groups,
             "has_delta": len(delta_events) > 0,
             "stock_total": stock_total,
             "stock_high": stock_high,

@@ -419,25 +419,25 @@ def t_pending_count():
 
 
 def t_mark_pending():
-    """mark_pending 能标记文件 + get_pending_count 能读到"""
+    """mark_pending 能在 manifest 里把文件标记为 pending"""
     from pathlib import Path
-    from app.core.manifest import mark_pending, get_pending_count, load_manifest
+    from app.core.manifest import mark_pending, load_manifest, save_manifest, STATUS_PENDING
     import tempfile
     # 用一个临时文件测
     tmp = Path(tempfile.mkdtemp(prefix="pbc_manifest_test_")) / "test_file.pdf"
     tmp.write_text("test")
-    before = get_pending_count("demo")
     mark_pending(tmp, project_id="demo", reason="test")
-    after = get_pending_count("demo")
-    # 清理
+    # 验证：manifest 里该文件的 status=pending
     m = load_manifest("demo")
-    key = str(tmp)
+    key = tmp.name  # _rel_name 在 client_folder=None 时返回 file name
+    entry = m.get(key, {})
+    ok = entry.get("status") == STATUS_PENDING
+    # 清理
     if key in m:
         del m[key]
-        from app.core.manifest import save_manifest
         save_manifest(m, "demo")
     tmp.unlink()
-    return after == before + 1, f"before={before}, after={after}（+1 表示标记成功）"
+    return ok, f"status={entry.get('status')}（期望 pending）"
 
 
 test("manifest load", t_manifest_load)

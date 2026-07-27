@@ -339,7 +339,8 @@ with sync_playwright() as p:
                 check("6.1 select=true API 不报错", result.get('ok') is not None, f"result={result}")
                 # 注意：explorer 会真的打开文件夹，headless 下可能返回 ok
                 if result.get('ok'):
-                    check("6.2 返回 action=select", result.get('action') in ['select', 'open_parent'] or not result.get('action'),
+                    # select=true 现在行为：直接用默认程序打开文件（Excel/PDF），返回 action=open
+                    check("6.2 返回 action=open", result.get('action') == 'open' or result.get('action') in ['select', 'open_parent'] or not result.get('action'),
                           f"action={result.get('action')}")
             except Exception as e:
                 check("6.1 select=true API 不报错", False, f"exception={e}")
