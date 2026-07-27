@@ -725,6 +725,9 @@ async def sync_changes_route(project_id: str) -> dict:
     for rel, rec in manifest.items():
         if rel in existing_deleted:
             continue
+        # 跳过 Excel 锁文件和隐藏文件（不应出现在变更记录里）
+        if rel.startswith("~$") or rel.startswith(".") or "/~$" in rel or "/." in rel:
+            continue
         # 检查：manifest 的 key 在客户文件夹里存不存在
         # key 可能是文件路径（"目录/文件.xlsx"）或目录名（"2023年度"）
         if rel in existing_files:
