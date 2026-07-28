@@ -1164,7 +1164,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
           暂无归档文件。扫描新文件后会自动归档到此。
         </div>
         <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">
-          <span x-show="fileDetail.item?.confidence!=null">AI 置信度：<b :style="'color:'+(fileDetail.item.confidence<0.7?'var(--red)':fileDetail.item.confidence<0.85?'var(--orange)':'var(--green)')" x-text="(fileDetail.item.confidence||0).toFixed(2)"></b></span>
+          <span x-show="fileDetail.item?.confidence!=null">AI 置信度：<b :style="'color:'+((fileDetail.item?.confidence||0)<0.7?'var(--red)':fileDetail.item?.confidence<0.85?'var(--orange)':'var(--green)')" x-text="((fileDetail.item?.confidence)||0).toFixed(2)"></b></span>
           <span x-show="fileDetail.item?.confidence==null">此项目前未经过 AI 分类</span>
         </div>
       </div>
@@ -1251,7 +1251,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       <span class="bb-dot" :style="'background:'+(briefHasDelta?'hsl(38 92% 50%)':'hsl(142 71% 45%)')"></span>
       <span class="bb-title">今日简报</span>
       <span class="bb-div"></span>
-      <span class="bb-msg" x-text="briefHasDelta ? (briefingDelta.delta_groups||[]).map(function(g){return g.count+' '+g.label}).join('，')+'，均待处理' : '无新变化。'+(briefingDelta.stock_total||0)+' 项已超期待催收'"></span>
+      <span class="bb-msg" x-text="briefHasDelta ? (briefingDelta.delta_groups||[]).map(function(g){return g.count+' '+g.label}).join('，')+'，均待处理' : '无新变化。'+((briefingDelta&&briefingDelta.stock_total)||0)+' 项已超期待催收'"></span>
       <span class="bb-div" style="margin-left:auto;margin-right:16px"></span>
       <span class="bb-seen" x-show="briefSeenStr" x-text="'上次查看 '+briefSeenStr"></span>
       <span class="bb-more">去查看<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -2686,16 +2686,16 @@ function pbcApp(){
     },
     /* v7.10: 待归档表格化的桥接方法（用 confirmId 找 pendingArchive item） */
     previewReview(confirmId){
-      const it = (this.pendingArchive.items||[]).find(x=>x.id===confirmId);
+      const it = (this.pendingArchive.items||[]).find(x=>String(x.id)===String(confirmId));
       if(it) this.openExplorer(it.file_path);
     },
     async confirmReview(confirmId){
-      const it = (this.pendingArchive.items||[]).find(x=>x.id===confirmId);
+      const it = (this.pendingArchive.items||[]).find(x=>String(x.id)===String(confirmId));
       if(!it) return;
       await this.confirmArchive(confirmId, '');
     },
     openReclassifyConfirmReview(confirmId){
-      const it = (this.pendingArchive.items||[]).find(x=>x.id===confirmId);
+      const it = (this.pendingArchive.items||[]).find(x=>String(x.id)===String(confirmId));
       if(it) this.openReclassifyConfirm(it);
     },
     changeLabel(t){
