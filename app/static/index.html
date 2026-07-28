@@ -1532,7 +1532,11 @@ const API = {
   importPbcList(pid, file){
     const fd = new FormData();
     fd.append('file', file);
-    return fetch('/api/pbc/'+pid+'/import', {method:'POST', body: fd}).then(r=>r.json());
+    return fetch('/api/pbc/'+pid+'/import', {method:'POST', body: fd}).then(async r=>{
+      const txt = await r.text();
+      try { return JSON.parse(txt); }
+      catch(e){ return {ok:false, error: txt.slice(0,300)||('HTTP '+r.status)}; }
+    });
   },
   dragDrop(pid, files){
     const fd = new FormData();

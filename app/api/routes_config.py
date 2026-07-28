@@ -280,7 +280,8 @@ async def test_ai_connection(body: AITestBody = Body(default=AITestBody())) -> d
 
     api_key = body.api_key or bl.get("api_key") or ""
     base_url = body.base_url or bl.get("base_url") or "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model = body.model or "glm-5"
+    # v7.11: model 默认用配置文件里的，不写死 glm-5（百炼不认 glm-5）
+    model = body.model or bl.get("model") or raw.get("ai_models", {}).get("model_classification") or "qwen-plus"
 
     if not api_key:
         return {
