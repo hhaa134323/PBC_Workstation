@@ -518,6 +518,20 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
      会把内联 display:flex 删掉。display 必须放在类里。 */
   .d-flex{display:flex}
   .d-iflex{display:inline-flex}
+/* ---------- coach mark 引导 ---------- */
+.pbcg-coach{position:fixed;inset:0;z-index:9998;display:block}
+.pbcg-coach-hole{position:absolute;border-radius:10px;box-shadow:0 0 0 9999px rgba(18,18,24,.58);border:2px solid hsl(var(--ey-yellow));pointer-events:none;transition:all .22s ease}
+.pbcg-coach-tip{position:absolute;width:380px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 18px 44px rgba(0,0,0,.24);padding:18px 18px 14px;transition:all .22s ease}
+.pbcg-coach-tip .step{font-size:12px;color:var(--text3);letter-spacing:.4px;margin-bottom:6px;border:none}
+.pbcg-coach .pbcg-coach-tip .step::after{content:none;display:none}
+.pbcg-coach-tip .tt{font-size:16px;font-weight:700;color:var(--text);line-height:1.45;border:none}
+.pbcg-coach-tip .bd{font-size:13px;color:var(--text2);line-height:1.75;margin-top:8px;border:none}
+.pbcg-coach-ft{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
+.pbcg-coach-dots{display:flex;gap:6px}
+.pbcg-coach-dots i{width:22px;height:4px;border-radius:99px;background:var(--border2)}
+.pbcg-coach-dots i.on{background:hsl(var(--ey-yellow));width:30px}
+.pbcg-coach-acts{display:flex;gap:8px}
+.pbcg-coach-arrow{position:absolute;width:12px;height:12px;background:#fff;border-left:1px solid var(--border);border-top:1px solid var(--border);transform:rotate(45deg);top:-7px;left:var(--arrow-left,24px)}
 </style>
 </head>
 <body>
@@ -685,84 +699,23 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
     </template>
   </div>
 
-  <!-- 首启引导 -->
-  <div x-show="showOnboarding" class="overlay" style="display:none" :style="showOnboarding && 'display:flex'">
-    <div class="modal ob-modal">
-      <div class="modal-b" style="padding:34px 30px">
-        <div class="ob-steps">
-          <i :class="obStep>=1?'on':''"></i><i :class="obStep>=2?'on':''"></i><i :class="obStep>=3?'on':''"></i>
+
+  <!-- 引导 coach mark -->
+  <div class="pbcg-coach" x-show="coach.on" @click.self="coachEnd()">
+    <div class="pbcg-coach-hole" :style="coach.holeStyle"></div>
+      <div class="pbcg-coach-tip" :style="coach.tipStyle">
+        <div class="step" x-text="'第 '+(coach.i+1)+' 步，共 '+coachSteps.length+' 步'"></div>
+      <div class="tt" x-text="coachSteps[coach.i].title"></div>
+      <div class="bd" x-text="coachSteps[coach.i].body"></div>
+      <div class="pbcg-coach-ft">
+        <div class="pbcg-coach-dots">
+          <template x-for="(s,k) in coachSteps" :key="k"><i :class="k===coach.i?'on':''"></i></template>
         </div>
-
-        <template x-if="obStep===1">
-          <div>
-            <div class="ob-illus"><span class="ico ico-xl"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span></div>
-            <div class="ob-title">欢迎使用 PBC 管理工作站</div>
-            <div class="ob-desc">面向 IPO 审计场景，集中管理客户提供的 PBC 资料。<br>核心功能：</div>
-            <div class="note" style="text-align:left;margin-top:14px">
-              自动识别客户资料并分类归档<br>
-              三角色协作审阅工作流<br>
-              缺料风险雷达与替代程序建议<br>
-              双击即用，本地运行
-            </div>
-            <div class="ob-actions"><button class="btn btn-pri btn-lg" @click="obStep=2">开始</button></div>
-          </div>
-        </template>
-
-        <template x-if="obStep===2">
-          <div>
-            <div class="ob-title">选择一个项目开始</div>
-            <div class="ob-desc">推荐从空项目开始，完整走一遍主流程；也可以加载示例数据。</div>
-            <div class="ob-choose">
-              <div class="ob-card" @click="chooseDemoProject()">
-                <div class="t"><span class="ico ico-lg"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>进入空的示例项目</div>
-                <div class="d">进入空项目，自行导入 PBC 清单、配置客户文件夹、扫描文件，走一遍完整流程。</div>
-              </div>
-              <div class="ob-card" @click="obStep=3; obMode='create'">
-                <div class="t"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>创建新项目</div>
-                <div class="d">开始一个真实项目，先填项目名与客户名。</div>
-              </div>
-            </div>
-            <div style="margin-top:14px;padding:12px 14px;background:var(--soft);border:1px dashed var(--border2);border-radius:10px;text-align:center">
-              <div style="font-size:14px;color:var(--text);margin-bottom:8px">加载示例数据到新项目：</div>
-              <button class="btn btn-soft btn-lg" @click="loadDemoData()" :disabled="demoLoading">
-                <span x-show="!demoLoading" class="ico"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h7v8l10-12h-7V2z"/></svg></span>
-                <span x-show="!demoLoading">加载示例数据</span>
-                <span x-show="demoLoading"><span class="spin"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> 正在加载示例数据…</span>
-              </button>
-              <div style="font-size:12px;color:var(--text3);margin-top:6px">将复制 6 项 PBC 清单和 3 个模拟文件到新项目</div>
-            </div>
-            <div class="ob-actions"><button class="btn btn-soft" @click="obStep=1">上一步</button></div>
-          </div>
-        </template>
-
-        <template x-if="obStep===3 && obMode==='create'">
-          <div>
-            <div class="ob-title">创建新项目</div>
-            <div class="ob-desc">填写项目与客户名称即可开始。</div>
-            <div style="text-align:left;margin-top:14px">
-              <input class="ob-input" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px" placeholder="项目名称，例如：ABC集团 IPO 审计" x-model="newProj.name">
-              <input class="ob-input" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-top:10px" placeholder="客户名称，例如：ABC科技" x-model="newProj.client_name">
-            </div>
-            <div class="ob-actions">
-              <button class="btn btn-soft" @click="obStep=2">上一步</button>
-              <button class="btn btn-pri" @click="createProjectFromOnboarding()">创建并进入</button>
-            </div>
-          </div>
-        </template>
-
-        <template x-if="obStep===3 && obMode==='demo'">
-          <div>
-            <div class="ob-illus">✅</div>
-            <div class="ob-title">设置完成</div>
-            <div class="ob-desc">接下来你可以：</div>
-            <div class="note" style="text-align:left;margin-top:14px">
-              1. 点击“扫描新文件”体验 AI 自动分类<br>
-              2. 查看“待复核”队列<br>
-              3. 点击“超期未提供”看风险雷达与缺口汇报
-            </div>
-            <div class="ob-actions"><button class="btn btn-pri btn-lg" @click="finishOnboarding()">开始使用</button></div>
-          </div>
-        </template>
+        <div class="pbcg-coach-acts">
+          <button class="btn btn-ghost btn-xs" @click="coachEnd()">不用了</button>
+          <button class="btn btn-soft btn-xs" x-show="coach.i>0" @click="coachPrev()">上一步</button>
+          <button class="btn btn-pri btn-xs" @click="coachNext()" x-text="coach.i===coachSteps.length-1?'知道了':'下一步'"></button>
+        </div>
       </div>
     </div>
   </div>
@@ -1252,7 +1205,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
   <!-- 顶部导航 -->
   <header class="nav">
     <div class="nav-top">
-      <button class="btn btn-pri btn-xs" style="position:relative" @click="openChangePanel()">
+      <button id="pbcg-t-chg" class="btn btn-pri btn-xs" style="position:relative" @click="openChangePanel()">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>变更记录
         <span class="d-flex" x-show="changePanel.unread>0" style="position:absolute;top:-2px;right:-2px;background:hsl(var(--ey-yellow));color:hsl(var(--ey-off-black));font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:99px;align-items:center;justify-content:center;padding:0 4px" x-text="changePanel.unread"></span>
       </button>
@@ -1277,9 +1230,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
       <button class="btn btn-ghost btn-xs" @click="openFolderConfig()"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>设置</button>
       <button class="btn btn-ghost btn-xs" @click="openAiConfig()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg></span>AI 配置</button>
       <span class="nav-sep"></span>
-      <button class="btn btn-ghost btn-xs" @click="openProjectDrawer()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></span>项目</button>
+      <button id="pbcg-t-proj" class="btn btn-ghost btn-xs" @click="openProjectDrawer()"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></span>项目</button>
     </div>
-    <nav class="tabs">
+    <nav class="tabs" id="pbcg-t-tabs">
       <template x-for="t in tabs" :key="t.id">
         <button class="tab" :class="[currentTab===t.id && 'active', t.alert && tabCounts[t.id]>0 && 't-alert', _flashHighlight && t.id==='triage' && 'flash-highlight']" @click="switchTab(t.id)">
           <span class="txt" x-text="t.label"></span>
@@ -1693,6 +1646,18 @@ function pbcApp(){
     obStep: 1,
     obMode: 'demo',
     demoLoading: false,
+    /* 引导 coach mark */
+    coach: {on:false, i:0, holeStyle:'', tipStyle:''},
+    coachSteps: [
+      {sel:'#pbcg-t-proj', title:'先创建一个项目',
+       body:'所有资料都按项目隔离。点这里打开项目列表，再点新建项目，填项目名和客户名就能开始。每个项目独立管自己的 PBC 清单、客户文件夹和归档目录。'},
+      {sel:'#pbcg-t-chg', title:'变更记录',
+       body:'客户新交了什么、AI 归了哪些档、谁改了分类，都按时间记在这里。右上角有数字就是你还没看过的动静，点开是左侧一条时间线。'},
+      {sel:'#pbcg-t-tabs', title:'五个页签',
+       body:'待初检是还没交的清单项，超期的也在里头。待归档是客户交了、AI 预分析完、等你点确认才真正归档的文件。已完成是归好档的。风险分析单独把超期的挑出来，带催办和影响分析。文件区看原始文件夹和归档目录两边的实际文件。'},
+      {sel:'__tools', title:'右上角工具栏',
+       body:'刷新重新拉一次最新数据。导出清单把 PBC 清单连同状态导成 Excel，发客户或者放底稿。生成汇报出一份缺料汇报文本，可以直接粘到邮件。设置里填客户共享文件夹和归档根目录两个路径。AI 配置里填模型、密钥，以及高置信度文件是否自动归档。'}
+    ],
 
     /* 扫描进度 */
     scan: {active:false, step:-1, liveText:'', finished:false, summary:''},
@@ -1726,11 +1691,7 @@ function pbcApp(){
           }
         }
       }catch(e){}
-      // 首启检测
-      if(!localStorage.getItem('pbc_onboarded')){
-        this.showOnboarding = true;
-        this.obStep = 1;
-      }
+      // v7.11: 删掉旧首启弹窗，进应用后直接启动 coach mark 引导
       this.loadingProjects = true;
       await this.loadProjects();
       this.loadingProjects = false;
@@ -1742,10 +1703,12 @@ function pbcApp(){
         // P1-22: 上次访问的项目已被删除，fallback 到第一个项目时弹 toast
         if(lastPid && lastPid !== target.project_id){
           this.pushToast('mid','上次访问的项目已删除',
-            '已切换到“'+(target.name||target.project_id)+'”，可在“项目”中查看全部项目');
+            '已切换到'+(target.name||target.project_id)+'，可在项目里查看全部项目');
         }
-      } else if(!this.showOnboarding){
-        // P1-12: 没有项目且非首启，提示正在初始化
+        // 项目加载完后启动引导（只一次，pbc_coach_done 记忆）
+        this.$nextTick(()=>this.coachStart());
+      } else {
+        // P1-12: 没有项目，提示正在初始化
         this.pushToast('mid','正在初始化示例项目…','后端正在异步创建 demo 项目，请稍候刷新');
       }
       // 启动 briefing 事件轮询（watchdog 解除风险事件 → 主动推 toast）
@@ -2037,6 +2000,65 @@ function pbcApp(){
     finishOnboarding(){
       localStorage.setItem('pbc_onboarded','1');
       this.showOnboarding = false;
+      this.$nextTick(()=>this.coachStart());
+    },
+    /* coach mark 引导方法 */
+    coachRect(sel){
+      if(sel === '__tools'){
+        const all = Array.from(document.querySelectorAll('.nav-top .btn-ghost'));
+        const list = all.slice(0, 5);
+        if(!list.length) return null;
+        const rs = list.map(el=>el.getBoundingClientRect());
+        return {
+          left: Math.min(...rs.map(r=>r.left)),
+          top: Math.min(...rs.map(r=>r.top)),
+          right: Math.max(...rs.map(r=>r.right)),
+          bottom: Math.max(...rs.map(r=>r.bottom))
+        };
+      }
+      const el = document.querySelector(sel);
+      return el ? el.getBoundingClientRect() : null;
+    },
+    coachMeasure(){
+      const r = this.coachRect(this.coachSteps[this.coach.i].sel);
+      if(!r){ this.coachEnd(); return; }
+      const pad = 6;
+      const L = r.left - pad, T = r.top - pad;
+      const W = (r.right - r.left) + pad*2, H = (r.bottom - r.top) + pad*2;
+      this.coach.holeStyle = 'left:'+L+'px;top:'+T+'px;width:'+W+'px;height:'+H+'px';
+      const tipW = 380;
+      let tl = Math.min(Math.max(L, 16), window.innerWidth - tipW - 16);
+      // v7.11: 箭头 left 动态算——指向挖洞左边沿（挖洞 left - 气泡 left + 偏移）
+      const arrowL = Math.max(16, L - tl + 24);
+      this.coach.tipStyle = 'left:'+tl+'px;top:'+(T + H + 14)+'px;--arrow-left:'+arrowL+'px';
+    },
+    coachStart(){
+      if(localStorage.getItem('pbc_coach_done')) return;
+      this.coach.i = 0;
+      this.coach.on = true;
+      this.$nextTick(()=>{
+        this.coachMeasure();
+        this._coachResize = ()=>this.coachMeasure();
+        window.addEventListener('resize', this._coachResize);
+        window.addEventListener('scroll', this._coachResize, true);
+      });
+    },
+    coachNext(){
+      if(this.coach.i >= this.coachSteps.length - 1){ this.coachEnd(); return; }
+      this.coach.i++;
+      this.$nextTick(()=>this.coachMeasure());
+    },
+    coachPrev(){
+      if(this.coach.i > 0){ this.coach.i--; this.$nextTick(()=>this.coachMeasure()); }
+    },
+    coachEnd(){
+      this.coach.on = false;
+      localStorage.setItem('pbc_coach_done','1');
+      if(this._coachResize){
+        window.removeEventListener('resize', this._coachResize);
+        window.removeEventListener('scroll', this._coachResize, true);
+        this._coachResize = null;
+      }
     },
 
     /* =========================================================
