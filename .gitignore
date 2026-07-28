@@ -54,7 +54,9 @@ config/user_config.json
 config/*.local.json
 
 # ---- 测试 / 临时文件 ----
-.workbuddy/
+.workbuddy/*
+# 例外：项目记忆上传 GitHub，方便多设备同步
+!.workbuddy/memory/
 .scratch/
 *.log
 .col_picker_test.py.bak
