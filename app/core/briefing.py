@@ -137,6 +137,9 @@ def generate_daily_briefing(
         try:
             from app.core.db import get_change_log
             from datetime import datetime
+            # v7.10.2: since=0 表示首次打开，用"最近24小时"作基线，不拉全部历史
+            # 避免 change_log 积累 644 条导致简报显示"472文件新增"的虚高数字
+            real_since = since if since > 0 else (time.time() - 86400)
             for pid in project_ids:
                 if not pid:
                     continue
@@ -153,7 +156,7 @@ def generate_daily_briefing(
                         ts_sec = ts_dt.timestamp()
                     except Exception:
                         continue
-                    if ts_sec <= since:
+                    if ts_sec <= real_since:
                         continue
 
                     ct = log.get("change_type", "")

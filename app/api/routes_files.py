@@ -1250,6 +1250,20 @@ def _process_one_directory(
                         break
 
     # v7.7: HITL 预分析模式——整目录也进待确认
+    # v7.11: confidence 按匹配方式诚实显示（不再写死 0.0）
+    #   - 文件名精确匹配（目录名含 item_id）→ 1.0（规则匹配，确定性）
+    #   - AI 兜底匹配 → 用 AI 返回的 confidence
+    #   - 都没匹配 → 0.0（待人工）
+    # 注：decision 始终 walkthrough，HITL 模式下整目录归档一律人工确认
+    _dir_confidence = 0.0
+    if item_id:
+        if fname_matched:
+            _dir_confidence = 1.0
+        else:
+            try:
+                _dir_confidence = float(classify.get("confidence") or 0)
+            except Exception:
+                _dir_confidence = 0.5
     _hitl_on_dir = False
     try:
         from app.api.routes_config import _load_raw_config as _lrc
@@ -1267,7 +1281,7 @@ def _process_one_directory(
                 file_name=dir_path.name,
                 sha256="",
                 suggested_item_id=item_id or "",
-                confidence=0.0,
+                confidence=_dir_confidence,
                 decision="walkthrough",
             )
             result["pending_confirm"] = True
