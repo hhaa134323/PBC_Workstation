@@ -145,7 +145,7 @@ p{margin-bottom:14px;color:var(--text2)}
 
 <div class="shot">
   <img src="__IMG_auto_confirm__" alt="auto_confirm 默认关闭">
-  <div class="cap">auto_confirm 默认关闭，确保每条归档建议都经人工确认</div>
+  <div class="cap">AI 配置：auto_confirm 默认关闭，每条归档建议都经人工确认。置信度阈值滑块目前为参考值，后续会接入实际判定逻辑</div>
 </div>
 
 <h3>三、变更记录时间线</h3>
