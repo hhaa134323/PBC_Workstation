@@ -1,40 +1,46 @@
 # PBC 智能管理工作站
 
-> IPO 审计 PBC（Provided by Client，客户提供资料）智能管理工作站
-> 依据：AUD-SOP-PBC-01 V1.0 + 安永中国 AI 创新大赛
+> 审计项目 PBC（Provided by Client，客户提供资料）智能管理工作站
+> 依据：AUD-SOP-PBC-01 V1.0
 
 ## 简介
 
-按 SOP §5.5 实现 PBC 资料的接收、AI 智能分类、完整性检查、状态追踪及归档的全流程自动化。
+把 PBC 资料管理从手工台账变成自动流水线。客户照常往共享文件夹放文件，系统自动扫描匹配 PBC 清单项，给出归档建议，审计员确认后归档。缺料提前标红，归档命名按 SOP 规范，变更记录可追溯。
 
-**核心能力**：
-- 客户文件夹监听 → AI 自动分类 → 按 SOP §5.5 标准归档（`归档根目录/一级分类/编号_描述_期间_版本.ext`）
-- PBC 清单 Excel 自动回写状态 + 文件路径超链接
+**匹配逻辑（四层逐级降级）**：
+1. 文件名含 PBC 编号直接命中（如"历-1_股权架构图.pdf"→历-1）
+2. 打分模型按文件夹名/文件名/内容/期间四字段加权打分，高分自动匹配，中分给建议
+3. 低分项调 AI（百炼 LLM）兜底做语义匹配
+4. 以上结果都进待确认队列，审计员确认/改分类/跳过
+
+关掉 AI，前三层照样跑，大部分文件仍能自动匹配。
+
+**其他能力**：
 - 编号 + sha256 双锚定（改名不影响归属，内容变算新版本，删除标红）
-- 三角色协作工作台（Staff / Senior / Manager）
-- 缺料风险雷达（超 5 工作日触发 + AI 替代程序建议）
+- 整目录归档按资料名称合并（如 货-1_银行流水/2023年度/ + 2024年度/）
+- 变更记录时间线（文件变更 + 操作日志）
+- 缺料风险雷达（超期标红 + 影响分析）
+- 多项目隔离
 
 ## 技术栈
 
 - 后端：FastAPI + SQLite（WAL 模式）
 - 前端：单文件 Alpine.js SPA（shadcn/ui 设计系统 + EY 品牌色）
-- AI：百炼平台（GLM-5 / Qwen3-Plus / Qwen3-VL-Plus）
-- 打包：PyInstaller onedir
+- AI：阿里云百炼（Qwen3-Plus / GLM-5）
+- 打包：PyInstaller onedir（双击即用，数据存本地）
 
 ## 部署
 
-### 开发模式（推荐）
+### 开发模式
 
 ```bash
 # 1. 装依赖
 pip install -r requirements.txt
 
-# 2. 创建运行时目录 + 配置
-mkdir -p projects data config
-# 手动创建 config/api_config.json 填百炼 API Key：
+# 2. 配置 config/api_config.json
 # {
-#   "bailian": {"api_key": "sk-xxx", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
-#   "ai_models": {"model_classification": "glm-5", "model_vision": "qwen3-vl-plus", "model_reasoning": "glm-5"}
+#   "bailian": {"api_key": "sk-xxx", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus"},
+#   "ai_flags": {"confidence_threshold": 0.7, "filename_match_enabled": true, "auto_confirm_enabled": false, "hitl_mode": true}
 # }
 
 # 3. 启动
@@ -46,85 +52,73 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ### 打包 exe
 
 ```bash
-# 用 v6 的 spec 复制改名（v6 能打开的 spec 是好的）
-cp scripts/PBC-Agent-v6.spec scripts/PBC-Agent-v7-fixed.spec
-# spec 里 hiddenimports 加 v7 新增：app.api.routes_config / routes_projects / routes_briefing
-# spec 里 name 改 PBC-Agent-v7-fixed
+# 复制上一版能用的 spec 改名（不要用 CLI 直接打包）
+cp scripts/PBC-Agent-v10.spec scripts/PBC-Agent-v11.spec
+# spec 里 name 改 PBC-Agent-v11，hiddenimports 加新增模块
 
-cd scripts && python -m PyInstaller PBC-Agent-v7-fixed.spec --noconfirm \
-  --distpath=D:/AgentProjects/IpoPBC/0 --workpath=D:/AgentProjects/IpoPBC/0/build
+cd scripts && python -m PyInstaller PBC-Agent-v11.spec --noconfirm \
+  --distpath=../dist_v11 --workpath=../build_v11
+
+# PyInstaller COLLECT 阶段可能漏包，手动补齐：
+# cp -r venv/Lib/site-packages/{uvicorn,fastapi,...} dist_v11/PBC-Agent-v11/_internal/
 ```
 
-**打包教训**：不要用 `python -m PyInstaller app/main.py` CLI 直接打包（会重新生成 spec，路径处理不一致，exe 异常被 Windows 拦）。**永远复制上一版能用的 spec 改名 + 增量改 hidden-import**。
+**打包教训**：
+- spec 的 datas 用相对路径（`..\\config`），不要写死绝对路径指向暂存目录
+- 打包前验证 venv 有全部依赖：`python -c "import uvicorn, fastapi, openpyxl, pdfplumber, watchdog, httpx"`
+- 打包后验证产物包目录非空：`ls dist/PBC-Agent-v11/_internal/uvicorn/`
+- 前端 CDN 依赖（Alpine.js）要有本地 fallback
 
 ## 项目结构
 
 ```
 .
 ├── app/
-│   ├── api/           # FastAPI 路由
-│   │   ├── routes_pbc.py        # PBC 清单 + 模板下载 + 导入校验
-│   │   ├── routes_files.py     # 文件扫描 + 归档 + 路径透明化 6 个 API
-│   │   ├── routes_config.py    # AI 配置（GET/PUT/models/test + 测试数据包）
-│   │   ├── routes_projects.py  # 项目管理
-│   │   ├── routes_risk.py      # 风险雷达
-│   │   └── routes_briefing.py  # 一键汇报
-│   ├── core/          # 业务逻辑
-│   │   ├── archive.py          # §5.5 归档（编号_描述_期间_版本命名 + 整目录归档）
-│   │   ├── ai_client.py        # 百炼封装 + classify_file + 期间检查
-│   │   ├── db.py               # SQLite + 多项目 + file_archive 双锚
-│   │   ├── excel_io.py        # PBC 清单 15 列读写 + 状态机
-│   │   └── watcher.py          # watchdog 文件监听
-│   ├── static/index.html      # 单文件前端（Alpine.js SPA）
+│   ├── api/               # FastAPI 路由
+│   │   ├── routes_pbc.py          # PBC 清单 + 模板 + 导入校验
+│   │   ├── routes_files.py       # 文件扫描 + 归档 + HITL 确认 + 变更日志
+│   │   ├── routes_config.py      # AI 配置 + 测试连接
+│   │   ├── routes_projects.py    # 项目管理
+│   │   ├── routes_risk.py        # 风险雷达
+│   │   └── routes_briefing.py    # 一键汇报
+│   ├── core/              # 业务逻辑
+│   │   ├── archive.py            # 归档（SOP 命名 + 整目录 + 三级树）
+│   │   ├── ai_client.py         # 百炼封装 + classify_file
+│   │   ├── matcher.py           # 4 字段加权打分 + 三档决策
+│   │   ├── db.py                # SQLite + 多项目 + 双锚
+│   │   ├── excel_io.py          # PBC 清单读写 + 状态机
+│   │   ├── manifest.py          # 文件指纹 + pending/processed 状态机
+│   │   ├── briefing.py          # 简报引擎
+│   │   └── watcher.py           # watchdog 文件监听
+│   ├── static/
+│   │   ├── index.html           # 单文件前端（Alpine.js SPA）
+│   │   ├── pbc-enhance.js       # 运行时增强（顶栏 + 变更面板）
+│   │   └── js/alpine.min.js     # Alpine.js 本地 fallback
 │   └── main.py
 ├── scripts/
-│   ├── build_exe.py            # 打包脚本（含 monkey-patch，参考用）
-│   ├── generate_test_data.py   # 测试数据生成
-│   └── regression_v7.py        # v7 回归测试（16 项）
+│   ├── PBC-Agent-v10.spec       # 打包 spec（相对路径 datas）
+│   ├── test_accept_scan.py      # 验收测试（8 场景）
+│   └── test_ui_v10.py           # Playwright UI 测试
+├── config/
+│   └── api_config.json          # 百炼配置 + AI 开关
 ├── 文档/
-│   └── API契约_v7.md           # 给前端对接的接口契约
-├── interaction_test_v2.py      # Playwright 交互测试（70 项）
+│   └── PBC工作站说明材料_v2_preview.html  # 作品说明
 ├── requirements.txt
-└── .gitignore
+└── SPEC.md                      # 单一可信源
 ```
-
-## v7 新增接口（10 个）
-
-1. `GET /api/pbc/{pid}/download-template` — 15 列模板下载
-2. `POST /api/pbc/{pid}/import` — 加必填校验
-3. `GET /api/files/{pid}/paths` — 文件流向（客户文件夹 + 归档目录）
-4. `GET /api/files/{pid}/archive-tree` — 归档目录树（按一级分类）
-5. `POST /api/files/{pid}/config/archive-root` — 归档目录可配置
-6. `POST /api/files/{pid}/open-folder-path` — 打开任意路径
-7. `GET /api/files/{pid}/check-valid/{item_id}` — 文件失联检测（双锚）
-8. `POST /api/files/{pid}/relocate/{item_id}` — 重新定位失联文件
-9. `GET/PUT /api/config/ai` + `GET /models` + `POST /test` — AI 配置真后端
-10. `GET /api/config/test-data-package` — 测试数据包下载
 
 ## 测试
 
 ```bash
-# 回归测试（16 项）
-python scripts/regression_v7.py
+# 验收测试（8 场景：扫描→确认→重复→新增→删除→目录→匹配→去重）
+bash scripts/run_acceptance.sh
 
-# 交互测试（70 项，需 Playwright + Chromium）
-python interaction_test_v2.py
+# UI 测试（Playwright + 系统 Chrome）
+python scripts/test_ui_v10.py
 ```
 
 ## 安全
 
-- `config/api_config.json` 含 API Key，**已在 .gitignore 排除，不会上传**
-- `projects/`、`data/`、`demo_kit/` 运行时数据也排除
-- 所有打包产物（PBC-Agent-*/）排除
-
-## 协作
-
-```bash
-# 拉取最新
-git pull
-
-# 改完后提交
-git add .
-git commit -m "改动说明"
-git push
-```
+- `config/api_config.json` 含 API Key，已在 .gitignore 排除
+- `projects/`、`data/` 运行时数据排除
+- 所有打包产物（dist_*/、PBC-Agent-*/）排除
