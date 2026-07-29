@@ -310,8 +310,14 @@ async def test_ai_connection(body: AITestBody = Body(default=AITestBody())) -> d
     }
 
     try:
-        # 同步 httpx（短超时）
-        with httpx.Client(timeout=15.0) as client:
+        # v10: 30 秒超时（审计员网络可能走 VPN 较慢）
+        # v10: verify 显式指定 certifi CA 证书（PyInstaller 打包后 ssl 找不到证书链）
+        try:
+            from app.core.ai_client import _get_ca_bundle
+            ca = _get_ca_bundle()
+        except Exception:
+            ca = True
+        with httpx.Client(timeout=30.0, verify=ca) as client:
             r = client.post(
                 f"{base_url}/chat/completions",
                 headers=headers,
@@ -344,6 +350,8 @@ async def test_ai_connection(body: AITestBody = Body(default=AITestBody())) -> d
                 "hint": f"HTTP {r.status_code}，请检查 API Key 或 model id 是否正确",
             }
     except httpx.TimeoutException:
-        return {"ok": False, "error": "请求超时（15s）", "hint": "网络问题或 base_url 不可达"}
+        return {"ok": False, "error": "请求超时（30s）", "hint": "网络无法访问百炼 API，可能被公司防火墙拦截。AI 匹配不可用，但文件名匹配和打分模型仍能工作"}
+    except httpx.ConnectError as e:
+        return {"ok": False, "error": f"连接失败: {e}", "hint": "无法连接 dashscope.aliyuncs.com，可能被公司网络拦截。AI 匹配不可用，但文件名匹配和打分模型仍能工作"}
     except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}", "hint": "连接异常，请检查 base_url"}
+        return {"ok": False, "error": f"{type(e).__name__}: {e}", "hint": "连接异常，可能网络无法访问百炼 API。AI 匹配不可用，但文件名匹配和打分模型仍能工作"}

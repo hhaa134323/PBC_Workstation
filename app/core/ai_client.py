@@ -15,10 +15,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
+import sys
 import threading
 import time
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
@@ -28,6 +31,32 @@ from app.core.db import get_conn
 from app.utils.retry import retry
 
 logger = logging.getLogger("pbc.ai_client")
+
+
+def _get_ca_bundle():
+    """获取 CA 证书路径。
+
+    PyInstaller 打包后 Python ssl 模块可能找不到系统 CA 证书链，
+    显式用 certifi 的 cacert.pem 作为 verify 参数。
+    """
+    try:
+        import certifi
+        return certifi.where()
+    except Exception:
+        # 打包环境 certifi 可能不在默认搜索路径，尝试手动定位
+        try:
+            # PyInstaller 打包后 _MEIPASS 或 _internal 目录
+            base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent.parent.parent))
+            cacert = base / 'certifi' / 'cacert.pem'
+            if cacert.exists():
+                return str(cacert)
+            # 也可能是 _internal/certifi/cacert.pem
+            cacert2 = base / '_internal' / 'certifi' / 'cacert.pem'
+            if cacert2.exists():
+                return str(cacert2)
+        except Exception:
+            pass
+    return True  # 回退到默认行为
 
 # 模型默认值（v7.7: 可被 api_config.json 覆盖）
 MODEL_CLASSIFICATION = "qwen-plus"
@@ -125,7 +154,7 @@ class AIClient:
         if not self.api_key:
             return False, "API Key 为空"
         try:
-            with httpx.Client(timeout=self.timeout) as client:
+            with httpx.Client(timeout=self.timeout, verify=_get_ca_bundle()) as client:
                 resp = client.post(
                     f"{self.base_url}/chat/completions",
                     headers={
@@ -216,7 +245,7 @@ class AIClient:
         @retry(times=self.retry_count, timeout=self.timeout, delay=1.0)
         def _do_request() -> dict[str, Any]:
             # httpx 同步客户端（@retry 是同步装饰器，故不用 async）
-            with httpx.Client(timeout=self.timeout) as client:
+            with httpx.Client(timeout=self.timeout, verify=_get_ca_bundle()) as client:
                 body = {
                     "model": model,
                     "messages": messages,
