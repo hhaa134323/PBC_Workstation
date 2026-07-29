@@ -47,6 +47,10 @@ cd scripts && python -m PyInstaller PBC-Agent-v7-fixed.spec --noconfirm \
 4. **不要用 CLI 直接调 PyInstaller app/main.py**——它会重新生成 spec，路径处理和 build_exe.py 流程不一致，容易出 exe 异常
 5. **用户说"之前能打开现在不能"** → 100% 是新版 exe 有问题，**绝对不是**系统拦截策略（SmartScreen/EY/杀软）——别浪费时间让用户去关防护
 6. **听用户上下文**——"这是我自己电脑"已经排除了 EY 政策的可能性，不要继续猜测
+7. **spec datas 路径不能写死绝对路径指向 0 暂存目录**（v10 修复）
+   - 旧 v7-fixed.spec datas 写死 D:\\AgentProjects\\IpoPBC\\0\\config 等，0 目录不同步就打不出配置
+   - v10 改成相对路径 ..\\config（相对 spec 位置），不再依赖暂存目录
+   - 打包时 config/api_config.json 必须含 bailian.model 字段（v7.7 后代码只读这个）
 
 ## 架构
 - 前端：单文件 Alpine.js SPA（index.html 110KB+）

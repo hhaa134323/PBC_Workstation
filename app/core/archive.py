@@ -300,11 +300,16 @@ def archive_directory(
     archived_by: str = "ai-auto",
     project_id: Optional[str] = None,
     description: Optional[str] = None,
+    doc_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """v7: 整目录归档（穿行测试资料，SOP §5.5 Tips）。
 
-    把整个文件夹归档到 {archive_root}/{一级分类}/{编号}_{文件夹名}/，
-    保留内部结构。file_archive 记一条 is_directory=1 的索引。
+    把整个文件夹归档到 {archive_root}/{一级分类}/{编号}_{资料名称}/，
+    源文件夹名作为内部子目录保留。file_archive 记一条 is_directory=1 的索引。
+
+    v10: 子目录名用 doc_name（资料名称）而不是源文件夹名，
+    这样同 item 不同年份的目录会归到同一个文件夹下。
+    例：货币资金/货-1_银行流水/2023年度/  + 2024年度/
 
     AI 分类由调用方先做好（取文件夹内代表性文件合并文本送 AI）。
     本函数只负责物理拷贝 + 写索引。
@@ -318,32 +323,36 @@ def archive_directory(
         return {"ok": False, "error": "source dir not found", "source_dir": str(src)}
 
     category_dir_name = _sanitize(category or entity or "未分类")
-    # v7.2: 整目录归档也分两级——一级分类/二级分类(编号_文件夹名)/
+    # v10: 子目录名用 doc_name（资料名称），源文件夹名作为内部子目录保留
+    #   有 doc_name：货币资金/货-1_银行流水/2023年度/银行流水.xlsx
+    #   无 doc_name：回退到旧逻辑 货币资金/货-1_2023年度/银行流水.xlsx
     safe_item = _sanitize(item_id) if item_id else ""
     src_name = _sanitize(src.name)
-    if safe_item and not src_name.startswith(safe_item):
+    if doc_name:
+        safe_doc = _sanitize(doc_name)
+        sub_dir_name = f"{safe_item}_{safe_doc}" if safe_item else safe_doc
+    elif safe_item and not src_name.startswith(safe_item):
         sub_dir_name = f"{safe_item}_{src_name}"
     else:
         sub_dir_name = src_name
     base_dir = get_archive_root(project_id=project_id) / category_dir_name / sub_dir_name
 
-    # v7.7: 检查是否已归档过同一源目录（防止重复归档加 _v2）
-    # 注意：同 item 不同目录不能复用（如 货-1 2023年度 vs 2024年度）
-    # v7.8: 检查范围扩大——查所有项目，避免不同项目共用 archive_root 时产生 _v2 重复目录
+    # v10: 检查是否已归档过同一 item_id 的目录（同 item 不同年份合并到同一目录）
+    # v7.8: 也查同源目录是否已归档过（防止重复归档加 _v2）
     try:
         from app.core.db import get_conn
         with get_conn() as conn:
-            # 1. 先查当前项目是否已归档过同一源目录
+            # 1. 先查当前项目是否已归档过同一源目录（完全匹配）
             existing = conn.execute(
                 "SELECT id, archived_path, project_id FROM file_archive WHERE project_id=? AND item_id=? AND is_directory=1 AND original_path=?",
                 (project_id or "", item_id or "", str(src)),
             ).fetchone()
             if existing:
-                # 已归档过——复用旧目录，不加 _v2
+                # 已归档过同源目录——复用旧目录，不加 _v2
                 old_path = existing[1]
                 if old_path and Path(old_path).exists():
                     target_dir = Path(old_path)
-                    logger.info("archive_directory: 复用已有目录（同item）: %s", old_path)
+                    logger.info("archive_directory: 复用已有目录（同源）: %s", old_path)
                     # v7.7: 逐文件合并，同名加后缀
                     try:
                         for src_file in src.rglob("*"):
@@ -372,6 +381,49 @@ def archive_directory(
                         "file_count": file_count, "item_id": item_id or "",
                         "skipped": True, "reason": "already_archived_same_item",
                     }
+
+            # v10: 同 item_id + 同项目但不同源目录（如 2023年度 + 2024年度）
+            # 复用已有归档目录，源文件夹名作为子目录放进去
+            if doc_name and item_id and item_id != "UNCLASSIFIED":
+                existing_item = conn.execute(
+                    "SELECT id, archived_path FROM file_archive WHERE project_id=? AND item_id=? AND is_directory=1 AND original_path!=?",
+                    (project_id or "", item_id, str(src)),
+                ).fetchone()
+                if existing_item:
+                    old_path = existing_item[1]
+                    if old_path and Path(old_path).exists():
+                        target_dir = Path(old_path)
+                        # 源文件夹名作为子目录
+                        sub = target_dir / src_name
+                        sub.mkdir(parents=True, exist_ok=True)
+                        logger.info("archive_directory: 合并到已有目录 %s，子目录 %s", target_dir, src_name)
+                        try:
+                            for src_file in src.rglob("*"):
+                                if not src_file.is_file():
+                                    continue
+                                rel = src_file.relative_to(src)
+                                tf = sub / rel
+                                tf.parent.mkdir(parents=True, exist_ok=True)
+                                if tf.exists():
+                                    stem = tf.stem
+                                    suffix = tf.suffix
+                                    i = 2
+                                    while True:
+                                        cand = tf.parent / f"{stem}_v{i}{suffix}"
+                                        if not cand.exists():
+                                            tf = cand
+                                            break
+                                        i += 1
+                                shutil.copy2(str(src_file), str(tf))
+                        except Exception as e:
+                            return {"ok": False, "error": f"copytree(merge) failed: {e}", "source_dir": str(src)}
+                        file_count = sum(1 for p in target_dir.rglob("*") if p.is_file())
+                        total_size = sum(p.stat().st_size for p in target_dir.rglob("*") if p.is_file())
+                        return {
+                            "ok": True, "archived_dir": str(target_dir),
+                            "file_count": file_count, "item_id": item_id or "",
+                            "skipped": False, "reason": "merged_into_existing",
+                        }
             # 2. v7.8: 查别的项目是否用了同一个 archive_root 且已归档过同源目录
             # 这种情况说明不同项目误用了同一个 archive_root，应该加 _v2 隔离
             other_proj = conn.execute(
@@ -411,6 +463,14 @@ def archive_directory(
     
     target_dir.mkdir(parents=True, exist_ok=True)
 
+    # v10: 如果用了 doc_name 做子目录名，源文件夹名作为内部子目录保留
+    # 这样第一年归档时也有 2023年度/ 子目录，跟后续合并的年份结构一致
+    if doc_name and src_name and not src_name.startswith(safe_item):
+        copy_base = target_dir / src_name
+        copy_base.mkdir(parents=True, exist_ok=True)
+    else:
+        copy_base = target_dir
+
     # v7.7: 整目录拷贝——逐文件拷贝，同名文件加后缀避免覆盖
     try:
         for src_file in src.rglob("*"):
@@ -418,7 +478,7 @@ def archive_directory(
                 continue
             # 计算相对路径，保持目录结构
             rel = src_file.relative_to(src)
-            target_file = target_dir / rel
+            target_file = copy_base / rel
             # 确保父目录存在
             target_file.parent.mkdir(parents=True, exist_ok=True)
             # 同名文件加 _v2 _v3 后缀
@@ -541,24 +601,49 @@ def list_archive_tree(project_id: Optional[str] = None) -> list[dict[str, Any]]:
             if not sd.is_dir():
                 continue
             files: list[dict[str, Any]] = []
-            for f in sorted(sd.iterdir()):
-                if f.is_file():
+            nested_subdirs: list[dict[str, Any]] = []
+            # v10: 扫描子目录——直接文件放 files，子目录放 nested_subdirs
+            for item in sorted(sd.iterdir()):
+                if item.is_file():
                     try:
-                        st = f.stat()
+                        st = item.stat()
                     except OSError:
                         st = None
                     files.append({
-                        "name": f.name,
-                        "path": str(f),
+                        "name": item.name,
+                        "path": str(item),
                         "size": st.st_size if st else None,
                         "mtime": st.st_mtime if st else None,
                     })
-            category_count += len(files)
+                elif item.is_dir():
+                    # 子目录（如 2023年度/）——扫里面的文件
+                    sub_files: list[dict[str, Any]] = []
+                    for f in sorted(item.rglob("*")):
+                        if f.is_file():
+                            try:
+                                st = f.stat()
+                            except OSError:
+                                st = None
+                            sub_files.append({
+                                "name": f.name,
+                                "path": str(f),
+                                "size": st.st_size if st else None,
+                                "mtime": st.st_mtime if st else None,
+                            })
+                    nested_subdirs.append({
+                        "name": item.name,
+                        "path": str(item),
+                        "files": sub_files,
+                        "count": len(sub_files),
+                    })
+            total_count = len(files) + sum(s.get("count", 0) for s in nested_subdirs)
+            category_count += total_count
             subdirs.append({
                 "name": sd.name,
                 "path": str(sd),
                 "files": files,
-                "count": len(files),
+                "subdirs": nested_subdirs,
+                "count": total_count,
             })
         out.append({
             "category": p.name,

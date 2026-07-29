@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<link rel="stylesheet" href="/static/pbc-enhance.css">
-<script defer src="/static/pbc-enhance.js"></script>
+<link rel="stylesheet" href="/static/pbc-enhance.css?v=10b">
+<script defer src="/static/pbc-enhance.js?v=10b"></script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>IPO 审计 PBC 管理工作站</title>
@@ -36,7 +36,25 @@ if (!window.tailwind) {
   document.head.appendChild(link);
 }
 </script>
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+// P0-8b: Alpine CDN fallback。CDN 不可用时加载本地副本
+(function() {
+  var loaded = false;
+  function loadLocalAlpine() {
+    if (loaded) return; loaded = true;
+    var s = document.createElement('script');
+    s.src = '/static/js/alpine.min.js';
+    s.defer = true;
+    document.head.appendChild(s);
+    console.warn('[PBC] Alpine CDN 不可用，已加载本地副本');
+  }
+  // 3 秒后若 Alpine 仍未注入，加载本地
+  setTimeout(function() {
+    if (!window.Alpine) loadLocalAlpine();
+  }, 3000);
+})();
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" onerror="(function(){var s=document.createElement('script');s.src='/static/js/alpine.min.js';s.defer=true;document.head.appendChild(s);console.warn('[PBC] Alpine CDN onerror，已加载本地副本');})()"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1468,6 +1486,30 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:hsl(var(
                                 <span style="font-size:11px;color:var(--text3)" x-text="(((f.size||0)/1024)).toFixed(1)+' KB'"></span>
                               </div>
                             </template>
+                            <!-- v10: 嵌套子目录（如 2023年度/）可折叠 -->
+                            <template x-for="nsd in (sd.subdirs||[])" :key="nsd.path">
+                              <div style="margin-left:20px">
+                                <div class="fz-sub" style="font-size:12px;font-weight:500;color:hsl(var(--muted-foreground));padding:3px 0 2px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none" @click="toggleSub(nsd.path)">
+                                  <span class="ico ico-sm" style="opacity:.5;transition:transform .15s" :style="isSubExpanded(nsd.path)?'transform:rotate(0deg)':'transform:rotate(-90deg)'">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                                  </span>
+                                  <span class="ico ico-sm" style="opacity:.5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+                                  <span x-text="nsd.name"></span>
+                                  <span class="cnt" x-text="nsd.count" style="font-weight:400"></span>
+                                </div>
+                                <template x-if="isSubExpanded(nsd.path)">
+                                  <div>
+                                    <template x-for="f in (nsd.files||[])" :key="f.path">
+                                      <div class="fz-file" @click="openFilePath(f.path)" style="margin-left:28px" :title="'点击在文件夹中定位：'+f.path">
+                                        <span class="ico ico-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+                                        <span class="nm" x-text="f.name"></span>
+                                        <span style="font-size:11px;color:var(--text3)" x-text="(((f.size||0)/1024)).toFixed(1)+' KB'"></span>
+                                      </div>
+                                    </template>
+                                  </div>
+                                </template>
+                              </div>
+                            </template>
                           </div>
                         </template>
                       </div>
@@ -2142,13 +2184,13 @@ function pbcApp(){
     openArchivePath(path){
       if(!path) return;
       API.openFolderPath(this.currentProjectId, path)
-        .then(r=>{ if(!r.ok) this.pushToast('mid','打开失败', r.error||''); })
+        .then(r=>{ if(!r.ok) this.pushToast('mid','打开失败', (r.error||'')+(r.hint?('（'+r.hint+'）'):'')); })
         .catch(e=>this.pushToast('mid','打开失败', e.message));
     },
     openFilePath(path){
       if(!path) return;
       API.openFilePath(this.currentProjectId, path)
-        .then(r=>{ if(!r.ok) this.pushToast('mid','定位失败', r.error||''); })
+        .then(r=>{ if(!r.ok) this.pushToast('mid','定位失败', (r.error||'')+(r.hint?('（'+r.hint+'）'):'')); })
         .catch(e=>this.pushToast('mid','定位失败', e.message));
     },
     /* v7.8: 归档树折叠 */
@@ -2922,8 +2964,13 @@ function pbcApp(){
       const cat = this.esc(it.category||'');
       const code = this.esc(it.suggested_item_id||'');
       const doc = this.esc(it.doc_name||'');
+      // v10: 整目录归档显示 货-1_银行流水/2023年度/（源文件夹名作为子目录）
+      if(it.decision === 'walkthrough'){
+        const srcFolder = this.esc(it.file_name||'');
+        const dirName = code + (doc ? '_'+doc : '');
+        return '<div class="archive-to"><span class="cat">'+cat+'</span><span class="sep">/</span><span class="code">'+dirName+'</span><span class="sep">/</span><span class="src">'+srcFolder+'/</span></div>';
+      }
       // v7.11: 按 SOP §5.5 显示归档后的文件名（编号_资料名称_期间_版本.ext）
-      // 而不是源文件名（如"新建文档(1).pdf"）
       const archiveName = this.buildArchiveName(it);
       return '<div class="archive-to"><span class="cat">'+cat+'</span><span class="sep">/</span><span class="code">'+code+'</span> '+(doc?'<span class="doc">'+doc+'</span><span class="sep">/</span>':'')+'<span class="src">'+this.esc(archiveName)+'</span></div>';
     },
@@ -2938,7 +2985,9 @@ function pbcApp(){
       const parts = [];
       if(iid) parts.push(iid);
       if(doc) parts.push(doc);
-      if(period) parts.push(period);
+      // 整目录归档（walkthrough）不拼期间——期间已在子目录名里（如 2023年度/）
+      // 多年度 required_period（如 2023年度/2024年度/2025年度）也不拼进文件名
+      if(period && it.decision !== 'walkthrough' && !period.includes('/')) parts.push(period);
       if(parts.length===0) return it.file_name||'';
       parts.push('v1');
       return parts.join('_')+extStr;

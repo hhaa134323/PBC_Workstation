@@ -939,7 +939,12 @@ async def open_folder_path(project_id: str, body: dict) -> dict:
         return {"ok": False, "error": "path 不能为空"}
     p = Path(path_str)
     if not p.exists():
-        return {"ok": False, "error": f"路径不存在: {path_str}"}
+        # 友好提示：检查父目录在不在，判断是文件被删还是整个目录被移动
+        parent = p.parent
+        if parent.exists():
+            return {"ok": False, "error": f"文件不存在（可能已被删除或重命名）：{p.name}", "hint": "在文件夹中找找看是否被重命名了"}
+        # 父目录也不在 → 整个归档目录可能被移动了
+        return {"ok": False, "error": f"路径不存在：{path_str}", "hint": "归档文件夹可能已被移动到其他位置"}
     try:
         if p.is_file():
             if select:
@@ -1218,6 +1223,7 @@ def _process_one_directory(
     entity = None
     category = None
     description = None
+    doc_name = None
     required_period = None
     fname_matched = False
     client = _get_ai_client()
@@ -1232,6 +1238,7 @@ def _process_one_directory(
                 entity = it.get("entity")
                 category = it.get("category")
                 description = it.get("description")
+                doc_name = it.get("doc_name")
                 required_period = it.get("required_period")
                 fname_matched = True
                 break
@@ -1246,6 +1253,7 @@ def _process_one_directory(
                         entity = it.get("entity")
                         category = it.get("category")
                         description = it.get("description")
+                        doc_name = it.get("doc_name")
                         required_period = it.get("required_period")
                         break
 
@@ -1300,6 +1308,7 @@ def _process_one_directory(
             archived_by=source,
             project_id=project_id,
             description=description,
+            doc_name=doc_name,
         )
         if arc_result.get("ok"):
             result["archived"] = {
@@ -2231,6 +2240,7 @@ async def confirm_archive(project_id: str, confirm_id: int, body: ConfirmBody) -
                 archived_by="manual-confirm",
                 project_id=project_id,
                 description=pbc_item.get("doc_name"),
+                doc_name=pbc_item.get("doc_name"),
             )
         else:
             arc_result = archive_mod.archive_file(

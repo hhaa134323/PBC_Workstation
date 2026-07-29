@@ -284,7 +284,6 @@
         if(m.changed_by) det += '<div><dt>操作人</dt><dd>' + esc(m.changed_by) + '</dd></div>';
         det += '</dl>';
         if(m.reason) det += '<div class="why">' + esc(m.reason) + '</div>';
-        if(m.item_id) det += '<button class="pbcg-vh-go" data-go="' + esc(m.item_id) + '">在清单里看这一行' + SVG_GO + '</button>';
         det += '<div class="pbcg-vh-miss" hidden></div></div>';
 
         html +=
@@ -305,14 +304,8 @@
   }
 
   function onRowClick(e){
-    var go = e.target.closest ? e.target.closest('.pbcg-vh-go') : null;
     var row = e.target.closest ? e.target.closest('.pbcg-vh-row') : null;
     if(!row) return;
-    if(go){
-      e.stopPropagation();
-      report(row, locate(go.getAttribute('data-go')));
-      return;
-    }
     var key = row.getAttribute('data-key');
     if(openKey === key){
       openKey = '';
@@ -323,14 +316,6 @@
     var all = listEl.querySelectorAll('.pbcg-vh-row.on');
     for(var i = 0; i < all.length; i++) all[i].classList.remove('on');
     row.classList.add('on');
-    report(row, locate(row.getAttribute('data-item')));
-  }
-
-  function report(row, ok){
-    var tip = row.querySelector('.pbcg-vh-miss');
-    if(!tip) return;
-    if(ok){ tip.hidden = true; tip.textContent = ''; }
-    else{ tip.hidden = false; tip.textContent = '这个文件不在当前页签的清单里，换个页签再点一次'; }
   }
 
   function locate(itemId){

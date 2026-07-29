@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 660" width="680" height="660" role="img">
+<title>PBC 工作站审计员工作流程</title>
+<defs>
+<marker id="arp2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.4" markerHeight="4.4" orient="auto-start-reverse"><path d="M2.5 2L8 5L2.5 8" fill="none" stroke="context-stroke" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<style>
+text{font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",-apple-system,sans-serif}
+.lh{font-size:13px;font-weight:600;letter-spacing:1.6px}
+.ls{font-size:10px;font-weight:400;letter-spacing:.3px}
+.nm{font-size:8.5px;font-weight:700;letter-spacing:1.8px}
+.tt{font-size:13px;font-weight:600;letter-spacing:.2px}
+.sb{font-size:10.5px;font-weight:400;letter-spacing:.2px}
+.arr{fill:none;stroke:#C4C4CE;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+</style></defs>
+<rect x="0" y="0" width="680" height="660" fill="#F4F4F6"/>
+<rect x="210" y="28" width="230" height="568" rx="14" fill="#2E2E38"/>
+<text class="lh" x="36" y="56" fill="#16161C">客户</text>
+<text class="ls" x="36" y="73" fill="#9A9AA4">放文件，不学新工具</text>
+<rect x="36" y="86" width="152" height="1" fill="#DCDCE4"/>
+<text class="lh" x="222" y="56" fill="#FFFFFF">工作站</text>
+<text class="ls" x="222" y="73" fill="#A8A8B4">扫描、匹配、归档、记录</text>
+<rect x="222" y="86" width="206" height="2" fill="#FFE600"/>
+<text class="lh" x="462" y="56" fill="#16161C">审计员</text>
+<text class="ls" x="462" y="73" fill="#9A9AA4">确认、判断、追溯</text>
+<rect x="462" y="86" width="182" height="1" fill="#DCDCE4"/>
+<path class="arr" d="M188 136 H217" marker-end="url(#arp2)"/>
+<path class="arr" d="M325 168 V182" marker-end="url(#arp2)"/>
+<path class="arr" d="M428 218 H457" marker-end="url(#arp2)"/>
+<path class="arr" d="M553 250 V264" marker-end="url(#arp2)"/>
+<path class="arr" d="M553 332 V346" marker-end="url(#arp2)"/>
+<path class="arr" d="M462 382 H433" marker-end="url(#arp2)"/>
+<path class="arr" d="M325 414 V428" marker-end="url(#arp2)"/>
+<path class="arr" d="M428 464 H457" marker-end="url(#arp2)"/>
+<path class="arr" d="M553 496 V503 H112 V510" marker-end="url(#arp2)"/>
+<path class="arr" d="M36 546 H28 V136 H32" stroke-dasharray="4 4" marker-end="url(#arp2)"/>
+<rect x="36" y="104" width="152" height="64" rx="7" fill="#FFFFFF"/>
+<text class="nm" x="52" y="126" fill="#B4B4BE">1</text>
+<text class="tt" x="52" y="146" fill="#16161C">放文件到共享文件夹</text>
+<text class="sb" x="52" y="161" fill="#82828E">照常用，不用学</text>
+<rect x="222" y="104" width="206" height="64" rx="7" fill="#3A3A45"/>
+<text class="nm" x="238" y="126" fill="#FFE600">2</text>
+<text class="tt" x="238" y="146" fill="#FFFFFF">watchdog 监听 + 扫描</text>
+<text class="sb" x="238" y="161" fill="#A8A8B4">标记 pending，不处理</text>
+<rect x="222" y="186" width="206" height="64" rx="7" fill="#3A3A45"/>
+<text class="nm" x="238" y="208" fill="#FFE600">3</text>
+<text class="tt" x="238" y="228" fill="#FFFFFF">逐级匹配 PBC 清单项</text>
+<text class="sb" x="238" y="243" fill="#A8A8B4">归档建议 + 置信度（可选）</text>
+<rect x="462" y="186" width="182" height="64" rx="7" fill="#FFFFFF"/>
+<text class="nm" x="478" y="208" fill="#B4B4BE">4</text>
+<text class="tt" x="478" y="228" fill="#16161C">逐条确认归档</text>
+<text class="sb" x="478" y="243" fill="#82828E">预览 / 改分类 / 确认</text>
+<rect x="462" y="268" width="182" height="64" rx="7" fill="#FFFFFF"/>
+<text class="nm" x="478" y="290" fill="#B4B4BE">5</text>
+<text class="tt" x="478" y="310" fill="#16161C">看待初检缺料</text>
+<text class="sb" x="478" y="325" fill="#82828E">超期项标红</text>
+<rect x="462" y="350" width="182" height="64" rx="7" fill="#FFFFFF"/>
+<text class="nm" x="478" y="372" fill="#B4B4BE">6</text>
+<text class="tt" x="478" y="392" fill="#16161C">看变更记录追溯</text>
+<text class="sb" x="478" y="407" fill="#82828E">谁改了什么、什么时候</text>
+<rect x="222" y="350" width="206" height="64" rx="7" fill="#3A3A45"/>
+<text class="nm" x="238" y="372" fill="#FFE600">4a</text>
+<text class="tt" x="238" y="392" fill="#FFFFFF">SOP 命名归档</text>
+<text class="sb" x="238" y="407" fill="#A8A8B4">写变更记录 + 更新清单</text>
+<rect x="222" y="432" width="206" height="64" rx="7" fill="#3A3A45"/>
+<text class="nm" x="238" y="454" fill="#FFE600">5a</text>
+<text class="tt" x="238" y="474" fill="#FFFFFF">缺料检测</text>
+<text class="sb" x="238" y="489" fill="#A8A8B4">知识库兜底，不依赖 AI</text>
+<rect x="462" y="432" width="182" height="64" rx="7" fill="#FFFFFF"/>
+<text class="nm" x="478" y="454" fill="#B4B4BE">7</text>
+<text class="tt" x="478" y="474" fill="#16161C">生成缺料汇报</text>
+<text class="sb" x="478" y="489" fill="#82828E">粘到邮件发客户催料</text>
+<rect x="36" y="514" width="152" height="64" rx="7" fill="#FFFFFF"/>
+<text class="nm" x="52" y="536" fill="#B4B4BE">8</text>
+<text class="tt" x="52" y="556" fill="#16161C">客户补料</text>
+<text class="sb" x="52" y="571" fill="#82828E">回到步骤 1</text>
+<rect x="24" y="618" width="3" height="24" fill="#FFE600"/>
+<text x="39" y="634" font-size="11" font-weight="500" letter-spacing=".2" fill="#4E4E59">关掉 AI，前三层匹配照样跑</text>
+</svg>
