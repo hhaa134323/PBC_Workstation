@@ -31,6 +31,10 @@ IMGS = {
     '使用前后': b64img('使用前后对比.png'),
 }
 
+# 泳道图直接内联 SVG（不 base64，保持矢量清晰）
+with open(os.path.join(IMG_DIR, '..', '..', 'design', '泳道图_v2.svg'), 'r', encoding='utf-8') as f:
+    LANE_SVG = f.read().replace('\n', '').strip()
+
 HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -96,6 +100,9 @@ p{margin-bottom:14px;color:var(--text2)}
 .future-card h3{margin-top:0}
 .future-card .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--ey-yellow);color:var(--ey-confident-black);font-weight:600;margin-left:8px}
 .placeholder-box{margin:18px 0;padding:40px 20px;background:var(--ey-off-white);border:2px dashed var(--border);border-radius:10px;text-align:center;color:var(--text3);font-size:14px}
+.lane-wrap{margin:18px 0;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card);box-shadow:0 1px 4px rgba(0,0,0,0.05)}
+.lane-wrap svg{display:block;width:100%;height:auto}
+.lane-wrap .cap{padding:10px 14px;font-size:13px;color:var(--text2);background:var(--ey-off-white);border-top:1px solid var(--border)}
 .foot{margin-top:48px;padding-top:20px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);text-align:center}
 </style>
 </head>
@@ -129,6 +136,13 @@ p{margin-bottom:14px;color:var(--text2)}
 <tr><td>归档命名各人一套，底稿复核难追溯</td><td>按 SOP 规范命名，变更全程留痕</td></tr>
 <tr><td>缺料要临到报告期才发现，临时催</td><td>超期未提供提前标红，带影响分析</td></tr>
 </table>
+
+<h2>整体流程</h2>
+
+<div class="lane-wrap">
+  __LANE_SVG__
+  <div class="cap">三条泳道：客户放文件，工作站自动扫描匹配归档，审计员确认判断追溯。AI 可选，关掉仍可手动分类归档</div>
+</div>
 
 <h2>核心功能</h2>
 
@@ -226,6 +240,7 @@ p{margin-bottom:14px;color:var(--text2)}
 # 替换图片占位符
 for name, b64 in IMGS.items():
     HTML = HTML.replace(f'__IMG_{name}__', b64)
+HTML = HTML.replace('__LANE_SVG__', LANE_SVG)
 
 out_path = os.path.join(os.path.dirname(__file__), '..', '文档', 'PBC工作站说明材料_v2.html')
 with open(out_path, 'w', encoding='utf-8') as f:
